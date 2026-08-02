@@ -95,7 +95,6 @@ fun EkranNotatki(
                 palecRysuje = palecRysuje,
                 onWstecz = onWstecz,
                 onEksport = { oknoEksportu = true },
-                onRozpoznajPismo = { _, _ -> },
             )
             OknoEksportuNotatki(oknoEksportu, model.dokument, sciezka, eksport) { oknoEksportu = false }
         }

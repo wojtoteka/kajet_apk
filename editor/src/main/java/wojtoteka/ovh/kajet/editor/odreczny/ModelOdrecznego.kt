@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
@@ -18,6 +20,8 @@ import wojtoteka.ovh.kajet.editor.strona
 import wojtoteka.ovh.kajet.editor.zeStrona
 import wojtoteka.ovh.kajet.ink.Kresy
 import wojtoteka.ovh.kajet.ink.Narzedzie
+import wojtoteka.ovh.kajet.ink.RozpoznawaniePisma
+import wojtoteka.ovh.kajet.ink.StanRozpoznawania
 import wojtoteka.ovh.kajet.ink.UstawieniaPisaka
 import wojtoteka.ovh.kajet.storage.MagazynUstawien
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
@@ -57,6 +61,14 @@ class ModelOdrecznego(
     val edytowanePole: StateFlow<String?> = _edytowanePole.asStateFlow()
 
     // Zbieranie jednego pociągnięcia gumki albo jednego przesunięcia zaznaczenia
+    private val rozpoznawanie = RozpoznawaniePisma()
+
+    private val _stanRozpoznawania = MutableStateFlow<StanRozpoznawania>(StanRozpoznawania.Gotowy)
+    val stanRozpoznawania: StateFlow<StanRozpoznawania> = _stanRozpoznawania.asStateFlow()
+
+    private val _propozycjeTekstu = MutableStateFlow<List<String>>(emptyList())
+    val propozycjeTekstu: StateFlow<List<String>> = _propozycjeTekstu.asStateFlow()
+
     private var zbieraneUsuniete = mutableListOf<Pair<Int, InkStroke>>()
     private var zbieraneDodane = mutableListOf<InkStroke>()
     private var zbieranaStrona = -1
@@ -286,6 +298,84 @@ class ModelOdrecznego(
 
     fun edytujPole(id: String?) {
         _edytowanePole.value = id
+    }
+
+    // Zamiana pisma na tekst
+
+    /**
+     * Rozpoznaje zaznaczone pismo. Przy pierwszym użyciu pobiera model polski,
+     * potem działa bez internetu.
+     */
+    fun rozpoznajZaznaczone() {
+        val kreski = _zaznaczone.value
+        if (kreski.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                if (!rozpoznawanie.modelPobrany()) {
+                    _stanRozpoznawania.value = StanRozpoznawania.Pobieranie(
+                        "Pobieram model pisma po polsku. Robi się to raz, potem działa bez internetu.",
+                    )
+                    rozpoznawanie.pobierzModel()
+                }
+                _stanRozpoznawania.value = StanRozpoznawania.Pobieranie("Odczytuję pismo...")
+
+                val kartka = dokument.value?.strona(_stronaZaznaczenia.value)
+                val propozycje = rozpoznawanie.rozpoznaj(
+                    kreski = kreski,
+                    szerokoscObszaru = kartka?.width ?: 595f,
+                    wysokoscObszaru = kartka?.height ?: 842f,
+                )
+                _stanRozpoznawania.value = StanRozpoznawania.Gotowy
+                if (propozycje.isEmpty()) {
+                    _stanRozpoznawania.value = StanRozpoznawania.Blad(
+                        "Nie odczytałem tego pisma. Zaznacz mniejszy fragment i spróbuj jeszcze raz.",
+                    )
+                } else {
+                    _propozycjeTekstu.value = propozycje.take(5)
+                }
+            } catch (e: Exception) {
+                _stanRozpoznawania.value = StanRozpoznawania.Blad(
+                    e.message ?: "Nie udało się odczytać pisma.",
+                )
+            }
+        }
+    }
+
+    /**
+     * Zapisuje odczytany tekst obok pisma. Kresek nie kasujemy,
+     * bo notatka odręczna ma zostać odręczna, a tekst służy do szukania.
+     */
+    fun zatwierdzRozpoznanie(tekst: String) {
+        val strona = _stronaZaznaczenia.value
+        val kreski = _zaznaczone.value
+        _propozycjeTekstu.value = emptyList()
+        if (strona < 0 || kreski.isEmpty()) return
+
+        val obszar = wojtoteka.ovh.kajet.ink.Kresy.obszar(kreski) ?: return
+        zmienBezHistorii { dokument ->
+            dokument.zeStrona(strona) { kartka ->
+                kartka.copy(
+                    recognized = kartka.recognized + wojtoteka.ovh.kajet.core.model.RecognizedText(
+                        id = UUID.randomUUID().toString(),
+                        text = tekst,
+                        x = obszar.left,
+                        y = obszar.top,
+                        width = obszar.width,
+                        height = obszar.height,
+                        strokeIds = kreski.map { it.id },
+                    ),
+                )
+            }
+        }
+        odznacz()
+    }
+
+    fun odrzucPropozycje() {
+        _propozycjeTekstu.value = emptyList()
+    }
+
+    fun schowajStanRozpoznawania() {
+        _stanRozpoznawania.value = StanRozpoznawania.Gotowy
     }
 
     private fun odswiezStanPrzyciskow() {

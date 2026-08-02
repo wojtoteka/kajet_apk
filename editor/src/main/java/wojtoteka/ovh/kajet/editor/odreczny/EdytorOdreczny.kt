@@ -41,6 +41,7 @@ import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.EtykietaSekcji
 import wojtoteka.ovh.kajet.core.design.component.IkonaPrzycisk
+import wojtoteka.ovh.kajet.core.design.component.Komunikat
 import wojtoteka.ovh.kajet.core.design.component.LiniaPozioma
 import wojtoteka.ovh.kajet.core.design.component.PrzyciskWtorny
 import wojtoteka.ovh.kajet.core.design.component.liniaMarginesu
@@ -67,7 +68,6 @@ fun EdytorOdreczny(
     palecRysuje: Boolean,
     onWstecz: () -> Unit,
     onEksport: () -> Unit,
-    onRozpoznajPismo: (strona: Int, kreski: List<InkStroke>) -> Unit,
 ) {
     val dokument by model.dokument.collectAsStateWithLifecycle()
     val narzedzie by model.narzedzie.collectAsStateWithLifecycle()
@@ -79,6 +79,8 @@ fun EdytorOdreczny(
     val mozePonowic by model.mozePonowic.collectAsStateWithLifecycle()
     val blad by model.blad.collectAsStateWithLifecycle()
     val edytowanePole by model.edytowanePole.collectAsStateWithLifecycle()
+    val stanRozpoznawania by model.stanRozpoznawania.collectAsStateWithLifecycle()
+    val propozycje by model.propozycjeTekstu.collectAsStateWithLifecycle()
 
     val kolory = Kajet.colors
     var panelKoloru by remember { mutableStateOf(false) }
@@ -239,9 +241,29 @@ fun EdytorOdreczny(
                         .align(Alignment.BottomStart)
                         .padding(16.dp),
                     onSkasuj = model::skasujZaznaczenie,
-                    onRozpoznaj = { onRozpoznajPismo(stronaZaznaczenia, zaznaczone) },
+                    onRozpoznaj = model::rozpoznajZaznaczone,
                     onOdznacz = model::odznacz,
                 )
+            }
+
+            when (val stan = stanRozpoznawania) {
+                is wojtoteka.ovh.kajet.ink.StanRozpoznawania.Pobieranie -> Komunikat(
+                    ikona = KajetIcons.RozpoznajPismo,
+                    tekst = stan.opis,
+                    kolor = kolory.accent,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+
+                is wojtoteka.ovh.kajet.ink.StanRozpoznawania.Blad -> Komunikat(
+                    ikona = KajetIcons.Blad,
+                    tekst = stan.komunikat,
+                    kolor = kolory.danger,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) {
+                    PrzyciskWtorny("Rozumiem", model::schowajStanRozpoznawania)
+                }
+
+                else -> Unit
             }
 
             if (panelKoloru) {
@@ -274,6 +296,14 @@ fun EdytorOdreczny(
                 )
             }
         }
+    }
+
+    if (propozycje.isNotEmpty()) {
+        OknoPropozycji(
+            propozycje = propozycje,
+            onWybierz = model::zatwierdzRozpoznanie,
+            onZamknij = model::odrzucPropozycje,
+        )
     }
 }
 
@@ -565,5 +595,44 @@ private fun PanelTla(
         }
         LiniaPozioma()
         PrzyciskWtorny("Dopasuj szerokość", onDopasuj, ikona = KajetIcons.Dopasuj)
+    }
+}
+
+/** Wybór odczytanego tekstu. Model podaje kilka propozycji, decyduje człowiek. */
+@Composable
+private fun OknoPropozycji(
+    propozycje: List<String>,
+    onWybierz: (String) -> Unit,
+    onZamknij: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onZamknij) {
+        Column(
+            Modifier
+                .width(460.dp)
+                .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
+                .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Odczytane pismo", style = Kajet.type.title, color = Kajet.colors.text)
+            Text(
+                text = "Wybierz zapis, który pasuje. Pismo zostanie na kartce, a tekst posłuży do wyszukiwania.",
+                style = Kajet.type.meta,
+                color = Kajet.colors.muted,
+            )
+            propozycje.forEach { propozycja ->
+                Text(
+                    text = propozycja,
+                    style = Kajet.type.bodyLarge,
+                    color = Kajet.colors.text,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Kajet.colors.desk, RoundedCornerShape(Kajet.dimens.corner))
+                        .clickable { onWybierz(propozycja) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+            PrzyciskWtorny("Anuluj", onZamknij)
+        }
     }
 }

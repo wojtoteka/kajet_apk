@@ -49,6 +49,10 @@ dependencies {
     // Rysowanie po froncie bufora, potrzebne do niskiego opoznienia kreski
     implementation(libs.androidx.graphics.core)
 
+    // Zamiana pisma odrecznego na tekst, model polski dziala bez internetu
+    api(libs.mlkit.digital.ink)
+    implementation(libs.kotlinx.coroutines.play.services)
+
     testImplementation(libs.junit)
     testImplementation(libs.truth)
 }
