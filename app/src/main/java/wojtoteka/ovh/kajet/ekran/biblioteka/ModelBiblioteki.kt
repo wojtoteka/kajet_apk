@@ -18,6 +18,8 @@ import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.export.FormatEksportu
+import wojtoteka.ovh.kajet.export.UslugaEksportu
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
 import wojtoteka.ovh.kajet.storage.WpisKosza
 
@@ -48,7 +50,10 @@ data class WezelDrzewa(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class ModelBiblioteki(private val repo: RepozytoriumBiblioteki) : ViewModel() {
+class ModelBiblioteki(
+    private val repo: RepozytoriumBiblioteki,
+    private val eksport: UslugaEksportu,
+) : ViewModel() {
 
     private val _sciezka = MutableStateFlow("")
     val sciezka: StateFlow<String> = _sciezka.asStateFlow()
@@ -216,6 +221,16 @@ class ModelBiblioteki(private val repo: RepozytoriumBiblioteki) : ViewModel() {
         _kosz.value = repo.wypiszKosz()
     }
 
+    /** Zapisuje cały folder do jednego pliku ZIP i otwiera okno wysyłania. */
+    fun eksportujFolder(wpis: LibraryItem, format: FormatEksportu) = wTle {
+        _przebudowa.value = "Zapisuję folder ${wpis.name}"
+        val plik = eksport.eksportujFolder(wpis.path, format) { zrobione, wszystkich ->
+            _przebudowa.value = "Zapisuję notatkę $zrobione z $wszystkich"
+        }
+        _przebudowa.value = null
+        eksport.udostepnij(plik, "application/zip", wpis.name)
+    }
+
     // Indeks
 
     fun przebudujIndeks() = wTle {
@@ -249,9 +264,12 @@ class ModelBiblioteki(private val repo: RepozytoriumBiblioteki) : ViewModel() {
         return wynik
     }
 
-    class Fabryka(private val repo: RepozytoriumBiblioteki) : ViewModelProvider.Factory {
+    class Fabryka(
+        private val repo: RepozytoriumBiblioteki,
+        private val eksport: UslugaEksportu,
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = ModelBiblioteki(repo) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = ModelBiblioteki(repo, eksport) as T
     }
 }
 

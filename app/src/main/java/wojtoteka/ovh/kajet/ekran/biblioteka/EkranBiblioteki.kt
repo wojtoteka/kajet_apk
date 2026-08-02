@@ -50,6 +50,7 @@ import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.export.FormatEksportu
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
 import wojtoteka.ovh.kajet.storage.WpisKosza
 
@@ -211,6 +212,10 @@ fun EkranBiblioteki(
             onPrzenies = { menuWpisu = null; przeniesienie = wpis },
             onKopiuj = { menuWpisu = null; model.kopiuj(wpis) },
             onWyglad = { menuWpisu = null; wygladFolderu = wpis },
+            onEksportFolderu = { format ->
+                menuWpisu = null
+                model.eksportujFolder(wpis, format)
+            },
             onDoKosza = { menuWpisu = null; model.doKosza(wpis) },
         )
     }
@@ -679,6 +684,7 @@ private fun MenuWpisu(
     onPrzenies: () -> Unit,
     onKopiuj: () -> Unit,
     onWyglad: () -> Unit,
+    onEksportFolderu: (FormatEksportu) -> Unit,
     onDoKosza: () -> Unit,
 ) {
     OknoKajetu(wpis.name, onZamknij, szerokosc = 420) {
@@ -688,6 +694,16 @@ private fun MenuWpisu(
             DzialanieMenu(KajetIcons.Kopiuj, "Zrób kopię", onKopiuj)
             if (wpis.type == ItemType.FOLDER) {
                 DzialanieMenu(KajetIcons.Kolor, "Zmień kolor i ikonę", onWyglad)
+                DzialanieMenu(
+                    ikona = KajetIcons.Eksport,
+                    tekst = "Zapisz cały folder jako PDF",
+                    onKlik = { onEksportFolderu(FormatEksportu.PDF) },
+                )
+                DzialanieMenu(
+                    ikona = KajetIcons.Eksport,
+                    tekst = "Zapisz cały folder jako Markdown",
+                    onKlik = { onEksportFolderu(FormatEksportu.MARKDOWN) },
+                )
             }
             DzialanieMenu(KajetIcons.Kosz, "Wyrzuć do kosza", onDoKosza, Kajet.colors.danger)
         }

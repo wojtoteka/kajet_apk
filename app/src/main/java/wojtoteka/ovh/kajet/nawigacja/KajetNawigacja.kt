@@ -43,7 +43,7 @@ fun KajetNawigacja(kontener: Kontener, ustawienia: UstawieniaKajetu) {
     val zakres = rememberCoroutineScope()
 
     val model: ModelBiblioteki = viewModel(
-        factory = ModelBiblioteki.Fabryka(kontener.biblioteka),
+        factory = ModelBiblioteki.Fabryka(kontener.biblioteka, kontener.eksport),
     )
 
     val start = if (ustawienia.katalogBiblioteki.isNullOrBlank()) Trasy.START else Trasy.BIBLIOTEKA
@@ -84,6 +84,7 @@ fun KajetNawigacja(kontener: Kontener, ustawienia: UstawieniaKajetu) {
                 sciezka = sciezka,
                 repo = kontener.biblioteka,
                 ustawienia = kontener.ustawienia,
+                eksport = kontener.eksport,
                 palecRysuje = ustawienia.zachowaniePalca == ZachowaniePalca.RYSUJE,
                 onWstecz = {
                     model.odswiezPoZmianie()

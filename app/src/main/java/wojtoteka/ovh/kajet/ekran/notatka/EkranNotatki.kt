@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -31,6 +32,8 @@ import wojtoteka.ovh.kajet.editor.odreczny.EdytorOdreczny
 import wojtoteka.ovh.kajet.editor.odreczny.ModelOdrecznego
 import wojtoteka.ovh.kajet.editor.tekst.EdytorTekstowy
 import wojtoteka.ovh.kajet.editor.tekst.ModelTekstowy
+import wojtoteka.ovh.kajet.export.OknoEksportu
+import wojtoteka.ovh.kajet.export.UslugaEksportu
 import wojtoteka.ovh.kajet.storage.MagazynUstawien
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
 
@@ -45,9 +48,11 @@ fun EkranNotatki(
     sciezka: String,
     repo: RepozytoriumBiblioteki,
     ustawienia: MagazynUstawien,
+    eksport: UslugaEksportu,
     palecRysuje: Boolean,
     onWstecz: () -> Unit,
 ) {
+    var oknoEksportu by remember(sciezka) { mutableStateOf(false) }
     var rodzaj by remember(sciezka) { mutableStateOf<NoteKind?>(null) }
     var problem by remember(sciezka) { mutableStateOf<String?>(null) }
 
@@ -89,9 +94,10 @@ fun EkranNotatki(
                 model = model,
                 palecRysuje = palecRysuje,
                 onWstecz = onWstecz,
-                onEksport = { },
+                onEksport = { oknoEksportu = true },
                 onRozpoznajPismo = { _, _ -> },
             )
+            OknoEksportuNotatki(oknoEksportu, model.dokument, sciezka, eksport) { oknoEksportu = false }
         }
 
         rodzaj == NoteKind.TEKSTOWA -> {
@@ -125,7 +131,7 @@ fun EkranNotatki(
             EdytorTekstowy(
                 model = model,
                 onWstecz = onWstecz,
-                onEksport = { },
+                onEksport = { oknoEksportu = true },
                 onZdjecieZGalerii = { zGalerii.launch("image/*") },
                 onZdjecieZAparatu = {
                     val (plik, uri) = Zdjecia.plikNaZdjecie(kontekst)
@@ -133,6 +139,7 @@ fun EkranNotatki(
                     zAparatu.launch(uri)
                 },
             )
+            OknoEksportuNotatki(oknoEksportu, model.dokument, sciezka, eksport) { oknoEksportu = false }
         }
 
         rodzaj == NoteKind.MAPA -> {
@@ -140,7 +147,8 @@ fun EkranNotatki(
                 key = "mapa-$sciezka",
                 factory = ModelMapy.Fabryka(repo, ustawienia, sciezka),
             )
-            EdytorMapy(model = model, onWstecz = onWstecz, onEksport = { })
+            EdytorMapy(model = model, onWstecz = onWstecz, onEksport = { oknoEksportu = true })
+            OknoEksportuNotatki(oknoEksportu, model.dokument, sciezka, eksport) { oknoEksportu = false }
         }
 
         rodzaj != null -> Column(
@@ -168,4 +176,19 @@ fun EkranNotatki(
             Text("Otwieram notatkę", style = Kajet.type.body, color = kolory.muted)
         }
     }
+}
+
+/** Okno eksportu pokazywane nad edytorem. Czeka, aż notatka będzie wczytana. */
+@Composable
+private fun OknoEksportuNotatki(
+    widoczne: Boolean,
+    dokument: kotlinx.coroutines.flow.StateFlow<wojtoteka.ovh.kajet.core.model.NoteDocument?>,
+    sciezka: String,
+    eksport: UslugaEksportu,
+    onZamknij: () -> Unit,
+) {
+    if (!widoczne) return
+    val tresc by dokument.collectAsStateWithLifecycle()
+    val gotowa = tresc ?: return
+    OknoEksportu(dokument = gotowa, sciezka = sciezka, usluga = eksport, onZamknij = onZamknij)
 }

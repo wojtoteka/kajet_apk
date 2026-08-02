@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import wojtoteka.ovh.kajet.code.RejestrUruchamiania
 import wojtoteka.ovh.kajet.code.SerwerKodu
 import wojtoteka.ovh.kajet.kod.PythonNaTablecie
+import wojtoteka.ovh.kajet.export.UslugaEksportu
 import wojtoteka.ovh.kajet.storage.Magazyn
 import wojtoteka.ovh.kajet.storage.MagazynUstawien
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
@@ -27,6 +28,8 @@ class Kontener(context: Context) {
     val ustawienia: MagazynUstawien = Magazyn.ustawienia(context)
 
     val biblioteka: RepozytoriumBiblioteki = Magazyn.biblioteka(context, ustawienia)
+
+    val eksport: UslugaEksportu = UslugaEksportu(context.applicationContext, biblioteka)
 
     private val zakres = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
