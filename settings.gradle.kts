@@ -19,5 +19,11 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Notatnik"
+rootProject.name = "Kajet"
 include(":app")
+include(":core")
+include(":storage")
+include(":ink")
+include(":editor")
+include(":code")
+include(":export")

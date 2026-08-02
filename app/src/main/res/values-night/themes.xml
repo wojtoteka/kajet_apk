@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Motyw startowy. Kolory ekranu ustawia Compose, tu chodzi tylko o tlo
-         okna przed pierwszym rysowaniem, zeby nie mrugalo bialym. -->
-    <style name="Theme.Kajet" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Kajet" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/kajet_biurko</item>
         <item name="android:navigationBarColor">@color/kajet_biurko</item>
         <item name="android:statusBarColor">@color/kajet_biurko</item>
