@@ -139,6 +139,11 @@ class ModelBiblioteki(private val repo: RepozytoriumBiblioteki) : ViewModel() {
         }
     }
 
+    /** Wywoływane po powrocie z edytora, żeby lista pokazała nowy podgląd i datę. */
+    fun odswiezPoZmianie() {
+        repo.odswiez()
+    }
+
     fun schowajBlad() {
         _blad.value = null
     }

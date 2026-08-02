@@ -5,12 +5,15 @@ import android.content.Intent
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.model.ItemType
@@ -39,6 +42,9 @@ class RepozytoriumBiblioteki(
 
     /** Rośnie po każdej zmianie w plikach. Listy folderów słuchają tej liczby. */
     private val odswiezenie = MutableStateFlow(0)
+
+    /** Zakres, który żyje tak długo jak aplikacja. Kończy zapisy zaczęte przy wyjściu z notatki. */
+    private val zakresTla = CoroutineScope(SupervisorJob() + io)
 
     private var pamiec: Pair<String, MagazynBiblioteki>? = null
 
@@ -164,6 +170,17 @@ class RepozytoriumBiblioteki(
         wymagajMagazyn().czytajNotatke(sciezka)
     }
 
+    /**
+     * Rodzaj notatki, potrzebny do wybrania edytora przed jej wczytaniem.
+     * Najpierw pytamy indeks, bo to jedno zapytanie do bazy. Dopiero gdy
+     * indeksu brakuje, sięgamy do pliku.
+     */
+    suspend fun rodzajNotatki(sciezka: String): NoteKind? = withContext(io) {
+        dao.znajdzPoSciezce(sciezka)?.noteKind?.let { nazwa ->
+            runCatching { NoteKind.valueOf(nazwa) }.getOrNull()
+        } ?: runCatching { czytajNotatke(sciezka).kind }.getOrNull()
+    }
+
     suspend fun zapiszNotatke(sciezka: String, dokument: NoteDocument) = withContext(io) {
         val magazyn = wymagajMagazyn()
         magazyn.zapiszNotatke(sciezka, dokument)
@@ -183,6 +200,16 @@ class RepozytoriumBiblioteki(
                 ),
                 dokument,
             )
+        }
+    }
+
+    /**
+     * Zapis, który ma się dokończyć nawet wtedy, gdy ekran notatki już zniknął.
+     * Używane przy wyjściu z edytora, żeby ostatnie kreski nie przepadły.
+     */
+    fun zapiszWTle(sciezka: String, dokument: NoteDocument) {
+        zakresTla.launch {
+            runCatching { zapiszNotatke(sciezka, dokument) }
         }
     }
 

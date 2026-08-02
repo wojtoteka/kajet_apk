@@ -5,18 +5,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.Kontener
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.ekran.biblioteka.EkranBiblioteki
 import wojtoteka.ovh.kajet.ekran.biblioteka.ModelBiblioteki
+import wojtoteka.ovh.kajet.ekran.notatka.EkranNotatki
 import wojtoteka.ovh.kajet.ekran.start.EkranWyboruKatalogu
 import wojtoteka.ovh.kajet.ekran.ustawienia.EkranUstawien
 import wojtoteka.ovh.kajet.storage.UstawieniaKajetu
+import wojtoteka.ovh.kajet.storage.ZachowaniePalca
 
 /** Adresy ekranów. Ścieżki plików wędrują w adresie zakodowane, bo mają ukośniki. */
 object Trasy {
@@ -66,6 +70,23 @@ fun KajetNawigacja(kontener: Kontener, ustawienia: UstawieniaKajetu) {
                 domyslneTlo = ustawienia.domyslneTlo,
                 onOtworzWpis = { wpis -> otworz(nawigacja, wpis) },
                 onUstawienia = { nawigacja.navigate(Trasy.USTAWIENIA) },
+            )
+        }
+
+        composable(
+            route = Trasy.NOTATKA,
+            arguments = listOf(navArgument("sciezka") { type = NavType.StringType }),
+        ) { wpis ->
+            val sciezka = Uri.decode(wpis.arguments?.getString("sciezka").orEmpty())
+            EkranNotatki(
+                sciezka = sciezka,
+                repo = kontener.biblioteka,
+                ustawienia = kontener.ustawienia,
+                palecRysuje = ustawienia.zachowaniePalca == ZachowaniePalca.RYSUJE,
+                onWstecz = {
+                    model.odswiezPoZmianie()
+                    nawigacja.popBackStack()
+                },
             )
         }
 
