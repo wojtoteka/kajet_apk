@@ -25,6 +25,8 @@ import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.PrzyciskWtorny
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NoteKind
+import wojtoteka.ovh.kajet.editor.mapa.EdytorMapy
+import wojtoteka.ovh.kajet.editor.mapa.ModelMapy
 import wojtoteka.ovh.kajet.editor.odreczny.EdytorOdreczny
 import wojtoteka.ovh.kajet.editor.odreczny.ModelOdrecznego
 import wojtoteka.ovh.kajet.editor.tekst.EdytorTekstowy
@@ -131,6 +133,14 @@ fun EkranNotatki(
                     zAparatu.launch(uri)
                 },
             )
+        }
+
+        rodzaj == NoteKind.MAPA -> {
+            val model: ModelMapy = viewModel(
+                key = "mapa-$sciezka",
+                factory = ModelMapy.Fabryka(repo, ustawienia, sciezka),
+            )
+            EdytorMapy(model = model, onWstecz = onWstecz, onEksport = { })
         }
 
         rodzaj != null -> Column(
