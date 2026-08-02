@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.chaquopy)
 }
 
 android {
@@ -19,6 +20,19 @@ android {
         versionName = "0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Tlumacz Pythona jest kodem natywnym. Budujemy tylko dla arm64,
+        // bo wszystkie tablety z ostatnich lat maja taki procesor,
+        // a kazda kolejna architektura to kilkadziesiat megabajtow wiecej.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    chaquopy {
+        defaultConfig {
+            version = "3.11"
+        }
     }
 
     buildTypes {

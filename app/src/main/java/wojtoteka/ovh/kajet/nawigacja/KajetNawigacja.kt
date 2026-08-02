@@ -12,6 +12,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.Kontener
+import wojtoteka.ovh.kajet.code.EdytorKodu
+import wojtoteka.ovh.kajet.code.ModelKodu
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.ekran.biblioteka.EkranBiblioteki
@@ -83,6 +85,29 @@ fun KajetNawigacja(kontener: Kontener, ustawienia: UstawieniaKajetu) {
                 repo = kontener.biblioteka,
                 ustawienia = kontener.ustawienia,
                 palecRysuje = ustawienia.zachowaniePalca == ZachowaniePalca.RYSUJE,
+                onWstecz = {
+                    model.odswiezPoZmianie()
+                    nawigacja.popBackStack()
+                },
+            )
+        }
+
+        composable(
+            route = Trasy.KOD,
+            arguments = listOf(navArgument("sciezka") { type = NavType.StringType }),
+        ) { wpis ->
+            val sciezka = Uri.decode(wpis.arguments?.getString("sciezka").orEmpty())
+            val modelKodu: ModelKodu = viewModel(
+                key = "kod-$sciezka",
+                factory = ModelKodu.Fabryka(
+                    repo = kontener.biblioteka,
+                    ustawienia = kontener.ustawienia,
+                    rejestr = kontener.uruchamianie,
+                    sciezka = sciezka,
+                ),
+            )
+            EdytorKodu(
+                model = modelKodu,
                 onWstecz = {
                     model.odswiezPoZmianie()
                     nawigacja.popBackStack()

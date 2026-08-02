@@ -29,6 +29,7 @@ import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.IkonaPrzycisk
 import wojtoteka.ovh.kajet.core.design.component.PodgladKresek
+import wojtoteka.ovh.kajet.core.design.icon.IkonyJezykow
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.ItemType
@@ -184,10 +185,11 @@ private fun ZnakWiersza(wpis: LibraryItem) {
                 modifier = Modifier.size(20.dp),
             )
 
-            ItemType.PLIK_KODU -> Text(
-                text = skrotJezyka(wpis),
-                style = Kajet.type.eyebrow,
-                color = kolory.accent,
+            ItemType.PLIK_KODU -> Icon(
+                imageVector = IkonyJezykow.dla(wpis.language),
+                contentDescription = null,
+                tint = kolory.accent,
+                modifier = Modifier.size(21.dp),
             )
 
             ItemType.INNY_PLIK -> Icon(
@@ -240,9 +242,6 @@ private fun MiniaturaPisma(wpis: LibraryItem, repo: RepozytoriumBiblioteki) {
         }
     }
 }
-
-private fun skrotJezyka(wpis: LibraryItem): String =
-    wpis.name.substringAfterLast('.', "").uppercase().take(4)
 
 private fun opisFolderu(ile: Int): String = when (ile) {
     0 -> "Pusty folder"

@@ -221,6 +221,11 @@ class RepozytoriumBiblioteki(
         wymagajMagazyn().zapiszTekst(sciezka, tresc)
     }
 
+    /** Zapis pliku tekstowego, który ma się dokończyć po zamknięciu edytora. */
+    fun zapiszTekstWTle(sciezka: String, tresc: String) {
+        zakresTla.launch { runCatching { zapiszTekst(sciezka, tresc) } }
+    }
+
     suspend fun zapiszZalacznik(sciezkaNotatki: String, nazwa: String, dane: ByteArray, mime: String): String =
         withContext(io) { wymagajMagazyn().zapiszZalacznik(sciezkaNotatki, nazwa, dane, mime) }
 
