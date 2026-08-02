@@ -158,7 +158,7 @@ object EksportPdf {
                 przyciety.startsWith("- ") || przyciety.startsWith("* ") ->
                     Triple("•  " + przyciety.drop(2), 11f, false)
                 Regex("^[-*+] \\[[ xX]] ").containsMatchIn(przyciety) ->
-                    Triple(przyciety.replace(Regex("^[-*+] \\[ ] "), "☐  ").replace(Regex("^[-*+] \\[[xX]] "), "☑  "), 11f, false)
+                    Triple(przyciety.replace(Regex("^[-*+] \\[ ] "), "[ ]  ").replace(Regex("^[-*+] \\[[xX]] "), "[x]  "), 11f, false)
                 przyciety.startsWith("> ") -> Triple("    " + przyciety.drop(2), 11f, false)
                 else -> Triple(przyciety, 11f, false)
             }

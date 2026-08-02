@@ -56,7 +56,7 @@ object EksportDocx {
                 Regex("^[-*+] \\[[ xX]] ").containsMatchIn(przyciety) -> {
                     val zrobione = przyciety.contains("[x]", ignoreCase = true)
                     val tresc = przyciety.replace(Regex("^[-*+] \\[[ xX]] "), "")
-                    append(akapit((if (zrobione) "☑  " else "☐  ") + tresc, styl = "ListParagraph"))
+                    append(akapit((if (zrobione) "[x]  " else "[ ]  ") + tresc, styl = "ListParagraph"))
                 }
 
                 przyciety.startsWith("- ") || przyciety.startsWith("* ") ->
