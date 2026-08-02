@@ -150,6 +150,11 @@ open class ModelNotatki(
         _blad.value = null
     }
 
+    /** Komunikat dla użytkownika z modelu pochodnego. Mówi, co się stało i co zrobić. */
+    protected fun ustawBlad(tekst: String) {
+        _blad.value = tekst
+    }
+
     override fun onCleared() {
         // Ostatnia szansa na zapis. Zakres modelu już się kończy,
         // więc zapis idzie przez repozytorium w zakresie aplikacji.

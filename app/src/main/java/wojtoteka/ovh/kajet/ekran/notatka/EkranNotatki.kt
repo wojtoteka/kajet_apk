@@ -1,5 +1,8 @@
 package wojtoteka.ovh.kajet.ekran.notatka
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import wojtoteka.ovh.kajet.core.design.InkPalette
@@ -23,6 +27,8 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.editor.odreczny.EdytorOdreczny
 import wojtoteka.ovh.kajet.editor.odreczny.ModelOdrecznego
+import wojtoteka.ovh.kajet.editor.tekst.EdytorTekstowy
+import wojtoteka.ovh.kajet.editor.tekst.ModelTekstowy
 import wojtoteka.ovh.kajet.storage.MagazynUstawien
 import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
 
@@ -83,6 +89,47 @@ fun EkranNotatki(
                 onWstecz = onWstecz,
                 onEksport = { },
                 onRozpoznajPismo = { _, _ -> },
+            )
+        }
+
+        rodzaj == NoteKind.TEKSTOWA -> {
+            val model: ModelTekstowy = viewModel(
+                key = "tekstowa-$sciezka",
+                factory = ModelTekstowy.Fabryka(repo, ustawienia, sciezka),
+            )
+            val kontekst = LocalContext.current
+            var plikAparatu by remember { mutableStateOf<java.io.File?>(null) }
+
+            val zGalerii = rememberLauncherForActivityResult(
+                ActivityResultContracts.GetContent(),
+            ) { uri: Uri? ->
+                if (uri != null) {
+                    val dane = Zdjecia.wczytaj(kontekst, uri)
+                    if (dane != null) model.wstawZdjecie(dane, Zdjecia.rozszerzenie(kontekst, uri), model.markdown.length)
+                }
+            }
+
+            val zAparatu = rememberLauncherForActivityResult(
+                ActivityResultContracts.TakePicture(),
+            ) { udane: Boolean ->
+                val plik = plikAparatu
+                if (udane && plik != null && plik.exists()) {
+                    model.wstawZdjecie(plik.readBytes(), "jpg", model.markdown.length)
+                    plik.delete()
+                }
+                plikAparatu = null
+            }
+
+            EdytorTekstowy(
+                model = model,
+                onWstecz = onWstecz,
+                onEksport = { },
+                onZdjecieZGalerii = { zGalerii.launch("image/*") },
+                onZdjecieZAparatu = {
+                    val (plik, uri) = Zdjecia.plikNaZdjecie(kontekst)
+                    plikAparatu = plik
+                    zAparatu.launch(uri)
+                },
             )
         }
 

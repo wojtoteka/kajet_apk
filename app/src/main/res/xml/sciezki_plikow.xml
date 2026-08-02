@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Katalog na zdjecie prosto z aparatu. Plik zyje tylko do czasu
+     przepisania go do notatki, dlatego lezy w pamieci podrecznej. -->
+<paths>
+    <cache-path name="aparat" path="aparat/" />
+    <cache-path name="eksport" path="eksport/" />
+</paths>
