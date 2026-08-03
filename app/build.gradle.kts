@@ -78,6 +78,7 @@ dependencies {
     implementation(project(":editor"))
     implementation(project(":code"))
     implementation(project(":export"))
+    implementation(project(":cloud"))
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

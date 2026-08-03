@@ -2,70 +2,44 @@ package wojtoteka.ovh.kajet.code
 
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 
-/**
- * Wynik jednego uruchomienia programu.
- *
- * Trzymamy osobno to, co program wypisał, i to, co poszło źle, bo w panelu
- * pod edytorem są to dwie różne zakładki. Czas mierzymy po naszej stronie,
- * więc przy uruchomieniu przez sieć zawiera on także drogę tam i z powrotem.
- */
-data class WynikUruchomienia(
-    val jezyk: CodeLanguage,
-    val wyjscie: String,
-    val bledy: String,
-    val kodWyjscia: Int?,
-    val czasMs: Long,
-    val przezSiec: Boolean,
+data class RunResult(
+    val language: CodeLanguage,
+    val output: String,
+    val errors: String,
+    val exitCode: Int?,
+    val durationMs: Long,
+    val viaNetwork: Boolean,
 ) {
-    val udane: Boolean get() = kodWyjscia == 0 && bledy.isBlank()
+    val succeeded: Boolean get() = exitCode == 0 && errors.isBlank()
 }
 
-/** Uruchomienie się nie powiodło. Komunikat mówi, co zrobić dalej. */
-class BladUruchomienia(
-    val komunikatDlaUzytkownika: String,
-    przyczyna: Throwable? = null,
-) : Exception(komunikatDlaUzytkownika, przyczyna)
+class RunException(
+    val userMessage: String,
+    cause: Throwable? = null,
+) : Exception(userMessage, cause)
 
-/**
- * Sposób uruchamiania kodu. Reszta aplikacji zna tylko ten interfejs
- * i nie wie, czy program liczy się na tablecie, czy na serwerze.
- */
 interface CodeRunner {
 
-    /** Nazwa pokazywana użytkownikowi, na przykład "na tablecie" albo "na serwerze". */
-    val nazwa: String
+    val name: String
 
-    /** Języki, które ten sposób obsługuje. */
-    fun obsluguje(jezyk: CodeLanguage): Boolean
+    fun supports(language: CodeLanguage): Boolean
 
-    /** Czy do uruchomienia potrzebny jest internet. */
-    val wymagaInternetu: Boolean
+    val requiresInternet: Boolean
 
-    /**
-     * Uruchamia kod i czeka na wynik.
-     * Rzuca [BladUruchomienia], kiedy nie da się nawet zacząć,
-     * na przykład przy braku internetu.
-     */
-    suspend fun uruchom(
-        jezyk: CodeLanguage,
-        kod: String,
-        wejscie: String,
-        nazwaPliku: String,
-    ): WynikUruchomienia
+    suspend fun run(
+        language: CodeLanguage,
+        code: String,
+        input: String,
+        fileName: String,
+    ): RunResult
 }
 
-/**
- * Wybiera sposób uruchomienia dla danego języka.
- *
- * Pierwszeństwo ma to, co działa bez internetu. Dopiero gdy takiego sposobu
- * nie ma, sięgamy po serwer. Dzięki temu Python nigdy nie idzie przez sieć.
- */
-class RejestrUruchamiania(private val sposoby: List<CodeRunner>) {
+class RunnerRegistry(private val runners: List<CodeRunner>) {
 
-    fun dla(jezyk: CodeLanguage): CodeRunner? =
-        sposoby.firstOrNull { it.obsluguje(jezyk) && !it.wymagaInternetu }
-            ?: sposoby.firstOrNull { it.obsluguje(jezyk) }
+    fun forLanguage(language: CodeLanguage): CodeRunner? =
+        runners.firstOrNull { it.supports(language) && !it.requiresInternet }
+            ?: runners.firstOrNull { it.supports(language) }
 
-    fun offline(jezyk: CodeLanguage): Boolean =
-        sposoby.any { it.obsluguje(jezyk) && !it.wymagaInternetu }
+    fun runsOffline(language: CodeLanguage): Boolean =
+        runners.any { it.supports(language) && !it.requiresInternet }
 }

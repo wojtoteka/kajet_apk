@@ -14,10 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 
-/**
- * Motyw aplikacji. Nie korzysta z kolorów dynamicznych Androida,
- * bo wtedy tablet sam wybrałby paletę, a ta jest wybrana świadomie.
- */
 @Composable
 fun KajetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -49,7 +45,6 @@ fun KajetTheme(
     }
 }
 
-/** Skrót do kolorów, typografii i wymiarów bez pisania LocalXxx.current za każdym razem. */
 object Kajet {
     val colors: KajetColors
         @Composable @ReadOnlyComposable get() = LocalKajetColors.current
@@ -61,10 +56,6 @@ object Kajet {
         @Composable @ReadOnlyComposable get() = LocalKajetDimens.current
 }
 
-/**
- * Fałsz, kiedy w ustawieniach systemu wyłączono animacje.
- * Sprawdzamy raz przy budowie motywu, bo zmiana wymaga ponownego wejścia do aplikacji.
- */
 val LocalAnimationsEnabled = staticCompositionLocalOf { true }
 
 private fun systemAnimationsEnabled(context: android.content.Context): Boolean {
@@ -76,10 +67,6 @@ private fun systemAnimationsEnabled(context: android.content.Context): Boolean {
     return scale > 0f
 }
 
-/**
- * Material 3 dostaje te same kolory, żeby pola tekstowe, okna i przełączniki
- * nie wprowadzały własnych odcieni.
- */
 private fun KajetColors.toMaterialScheme() = if (isDark) {
     darkColorScheme(
         primary = accent,

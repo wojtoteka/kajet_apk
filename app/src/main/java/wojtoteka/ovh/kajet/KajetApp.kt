@@ -2,63 +2,51 @@ package wojtoteka.ovh.kajet
 
 import android.app.Application
 import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import wojtoteka.ovh.kajet.code.RejestrUruchamiania
-import wojtoteka.ovh.kajet.code.SerwerKodu
-import wojtoteka.ovh.kajet.kod.PythonNaTablecie
-import wojtoteka.ovh.kajet.export.UslugaEksportu
-import wojtoteka.ovh.kajet.storage.Magazyn
-import wojtoteka.ovh.kajet.storage.MagazynUstawien
-import wojtoteka.ovh.kajet.storage.RepozytoriumBiblioteki
-import wojtoteka.ovh.kajet.storage.UstawieniaKajetu
+import wojtoteka.ovh.kajet.cloud.Cloud
+import wojtoteka.ovh.kajet.cloud.CloudCode
+import wojtoteka.ovh.kajet.code.RunnerRegistry
+import wojtoteka.ovh.kajet.runner.KajetServerRunner
+import wojtoteka.ovh.kajet.runner.TabletPythonRunner
+import wojtoteka.ovh.kajet.export.ExportService
+import wojtoteka.ovh.kajet.storage.Storage
+import wojtoteka.ovh.kajet.storage.SettingsStore
+import wojtoteka.ovh.kajet.storage.LibraryRepository
 
-/**
- * Wszystkie wspólne obiekty aplikacji w jednym miejscu.
- *
- * Bez biblioteki do wstrzykiwania zależności. Przy kilku obiektach
- * ręczne złożenie jest krótsze i widać z niego, co od czego zależy.
- */
-class Kontener(context: Context) {
+class AppContainer(context: Context) {
 
-    val ustawienia: MagazynUstawien = Magazyn.ustawienia(context)
+    val settings: SettingsStore = Storage.settings(context)
 
-    val biblioteka: RepozytoriumBiblioteki = Magazyn.biblioteka(context, ustawienia)
+    val library: LibraryRepository = Storage.library(context, settings)
 
-    val eksport: UslugaEksportu = UslugaEksportu(context.applicationContext, biblioteka)
+    val export: ExportService = ExportService(context.applicationContext, library)
 
-    private val zakres = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val cloud: Cloud.Parts = Cloud.parts(context, library)
 
-    /** Adres serwera trzymany pod ręką, żeby uruchomienie nie czekało na odczyt ustawień. */
-    private val adresSerwera = ustawienia.ustawienia
-        .map { it.adresSerweraKodu }
-        .stateIn(zakres, SharingStarted.Eagerly, UstawieniaKajetu.DOMYSLNY_SERWER_KODU)
-
-    /**
-     * Sposoby uruchamiania kodu. Python liczy się na tablecie, reszta na serwerze.
-     * Kolejność ma znaczenie: pierwszy pasujący bez internetu wygrywa.
-     */
-    val uruchamianie: RejestrUruchamiania = RejestrUruchamiania(
+    val runners: RunnerRegistry = RunnerRegistry(
         listOf(
-            PythonNaTablecie(context),
-            SerwerKodu(context) { adresSerwera.value },
+            TabletPythonRunner(context),
+            KajetServerRunner(CloudCode(cloud.account, cloud.client)),
         ),
     )
+
+    init {
+        // The repository only reports that something was saved; the container decides
+        // that it goes to the cloud.
+        library.onNoteSaved = { path, id ->
+            cloud.sync.reportChange(path, id)
+        }
+    }
 }
 
 class KajetApp : Application() {
-    lateinit var kontener: Kontener
+    lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
         super.onCreate()
-        kontener = Kontener(this)
+        container = AppContainer(this)
     }
 }
 
-val Context.kontener: Kontener
-    get() = (applicationContext as KajetApp).kontener
+val Context.container: AppContainer
+    get() = (applicationContext as KajetApp).container

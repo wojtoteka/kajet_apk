@@ -3,52 +3,53 @@ package wojtoteka.ovh.kajet.core.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Narzędzie, którym powstała kreska. */
 @Serializable
 enum class InkTool {
-    @SerialName("pioro")
-    PIORO,
+    @SerialName("pen")
+    PEN,
 
-    @SerialName("zakreslacz")
-    ZAKRESLACZ,
+    @SerialName("highlighter")
+    HIGHLIGHTER,
+
+    @SerialName("fineliner")
+    FINELINER,
+
+    @SerialName("pencil")
+    PENCIL,
+
+    @SerialName("dashed")
+    DASHED,
+    ;
+
+    val labelPl: String
+        get() = when (this) {
+            PEN -> "Pióro"
+            HIGHLIGHTER -> "Zakreślacz"
+            FINELINER -> "Cienkopis"
+            PENCIL -> "Ołówek"
+            DASHED -> "Linia przerywana"
+        }
 }
 
-/**
- * Kreska zapisana jako surowe punkty wejściowe z rysika, a nie jako gotowy kształt.
- *
- * Dzięki temu przy wczytaniu można ją narysować ponownie w pełnej jakości,
- * przeliczyć na inny rozmiar strony albo wysłać do rozpoznawania pisma.
- *
- * Punkty są spakowane w jedną listę liczb, po [WARTOSCI_NA_PUNKT] na punkt,
- * w kolejności: x, y, czas w milisekundach od początku kreski, nacisk,
- * pochylenie w radianach, obrót w radianach.
- * Wartość -1 oznacza, że rysik nie podał tej danej.
- * Taki zapis jest kilka razy mniejszy od listy obiektów i wczytuje się szybciej.
- */
 @Serializable
 data class InkStroke(
     val id: String,
-    val tool: InkTool = InkTool.PIORO,
-    /** Kolor w formacie ARGB. */
+    val tool: InkTool = InkTool.PEN,
     val color: Int,
-    /** Grubość pisaka w punktach strony. */
     val size: Float,
-    /** Dokładność uproszczenia toru kreski w punktach strony. */
     val epsilon: Float = 0.1f,
-    /** Czy kreska powstała rysikiem, palcem czy myszą. */
-    val input: InputKind = InputKind.RYSIK,
+    val input: InputKind = InputKind.STYLUS,
     val points: List<Float> = emptyList(),
 ) {
-    val pointCount: Int get() = points.size / WARTOSCI_NA_PUNKT
+    val pointCount: Int get() = points.size / VALUES_PER_POINT
 
-    fun x(i: Int): Float = points[i * WARTOSCI_NA_PUNKT]
-    fun y(i: Int): Float = points[i * WARTOSCI_NA_PUNKT + 1]
-    fun timeMs(i: Int): Float = points[i * WARTOSCI_NA_PUNKT + 2]
-    fun pressure(i: Int): Float = points[i * WARTOSCI_NA_PUNKT + 3]
-    fun tilt(i: Int): Float = points[i * WARTOSCI_NA_PUNKT + 4]
-    fun orientation(i: Int): Float = points[i * WARTOSCI_NA_PUNKT + 5]
+    fun x(i: Int): Float = points[i * VALUES_PER_POINT]
+    fun y(i: Int): Float = points[i * VALUES_PER_POINT + 1]
+    fun timeMs(i: Int): Float = points[i * VALUES_PER_POINT + 2]
+    fun pressure(i: Int): Float = points[i * VALUES_PER_POINT + 3]
+    fun tilt(i: Int): Float = points[i * VALUES_PER_POINT + 4]
+    fun orientation(i: Int): Float = points[i * VALUES_PER_POINT + 5]
 
-    /** Prostokąt otaczający kreskę, bez uwzględnienia grubości. */
     fun bounds(): Rect {
         if (pointCount == 0) return Rect(0f, 0f, 0f, 0f)
         var minX = Float.MAX_VALUE
@@ -66,11 +67,10 @@ data class InkStroke(
         return Rect(minX, minY, maxX, maxY)
     }
 
-    /** Przesuwa kreskę o zadany wektor. Używane przy przenoszeniu zaznaczenia. */
     fun translated(dx: Float, dy: Float): InkStroke {
         val moved = ArrayList<Float>(points.size)
         for (i in points.indices) {
-            moved += when (i % WARTOSCI_NA_PUNKT) {
+            moved += when (i % VALUES_PER_POINT) {
                 0 -> points[i] + dx
                 1 -> points[i] + dy
                 else -> points[i]
@@ -80,25 +80,23 @@ data class InkStroke(
     }
 
     companion object {
-        const val WARTOSCI_NA_PUNKT = 6
-        const val BRAK = -1f
+        const val VALUES_PER_POINT = 6
+        const val MISSING = -1f
     }
 }
 
-/** Czym narysowano kreskę. Potrzebne przy odrzucaniu dłoni i przy rozpoznawaniu pisma. */
 @Serializable
 enum class InputKind {
-    @SerialName("rysik")
-    RYSIK,
+    @SerialName("stylus")
+    STYLUS,
 
-    @SerialName("palec")
-    PALEC,
+    @SerialName("finger")
+    FINGER,
 
-    @SerialName("mysz")
-    MYSZ,
+    @SerialName("mouse")
+    MOUSE,
 }
 
-/** Prostokąt w układzie strony. Osobny od typu z Compose, bo model nie zależy od interfejsu. */
 @Serializable
 data class Rect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
     val width: Float get() = right - left

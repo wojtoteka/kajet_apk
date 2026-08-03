@@ -6,66 +6,59 @@ import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.FolderMeta
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 
-/** Zawartość pliku jest uszkodzona albo pochodzi z nowszej wersji Kajetu. */
-class BladFormatuException(
-    val komunikatDlaUzytkownika: String,
-    przyczyna: Throwable? = null,
-) : Exception(komunikatDlaUzytkownika, przyczyna)
+class FormatException(
+    val userMessage: String,
+    cause: Throwable? = null,
+) : Exception(userMessage, cause)
 
-/**
- * Zamiana notatki na tekst pliku content.json i z powrotem.
- *
- * Ta klasa nie dotyka dysku. Dzięki temu da się ją przetestować bez urządzenia,
- * a to jest miejsce, w którym błąd oznacza utratę notatki.
- */
 object NoteCodec {
 
     val json = Json {
-        // Plik zapisany przez nowszą wersję nie może wywalić starszej aplikacji.
+        // A file written by a newer version must not crash an older app.
         ignoreUnknownKeys = true
-        // Wartości domyślne zapisujemy, żeby plik dało się przeczytać bez znajomości kodu.
+        // Defaults are written out so the file can be read without knowing the code.
         encodeDefaults = true
-        // Pola puste pomijamy, bo w notatce odręcznej większość gałęzi jest pusta.
+        // Empty fields are skipped, because in a handwritten note most branches are empty.
         explicitNulls = false
         prettyPrint = false
         allowSpecialFloatingPointValues = false
     }
 
-    fun zapiszNotatke(dokument: NoteDocument): String = json.encodeToString(dokument)
+    fun encodeNote(document: NoteDocument): String = json.encodeToString(document)
 
-    fun czytajNotatke(tresc: String): NoteDocument {
-        if (tresc.isBlank()) {
-            throw BladFormatuException("Plik notatki jest pusty. Otwórz kopię z kosza albo utwórz notatkę na nowo.")
+    fun decodeNote(content: String): NoteDocument {
+        if (content.isBlank()) {
+            throw FormatException("Plik notatki jest pusty. Otwórz kopię z kosza albo utwórz notatkę na nowo.")
         }
-        val dokument = try {
-            json.decodeFromString<NoteDocument>(tresc)
+        val document = try {
+            json.decodeFromString<NoteDocument>(content)
         } catch (e: SerializationException) {
-            throw BladFormatuException(
+            throw FormatException(
                 "Nie da się odczytać pliku content.json. Plik jest uszkodzony albo nie należy do Kajetu.",
                 e,
             )
         }
-        if (dokument.format > NoteDocument.FORMAT_BIEZACY) {
-            throw BladFormatuException(
+        if (document.format > NoteDocument.FORMAT_CURRENT) {
+            throw FormatException(
                 "Ta notatka pochodzi z nowszej wersji Kajetu. Zaktualizuj aplikację, żeby ją otworzyć.",
             )
         }
-        return dokument
+        return document
     }
 
-    fun zapiszRysunek(rysunek: DrawingSource): String = json.encodeToString(rysunek)
+    fun encodeDrawing(drawing: DrawingSource): String = json.encodeToString(drawing)
 
-    fun czytajRysunek(tresc: String): DrawingSource = try {
-        json.decodeFromString<DrawingSource>(tresc)
+    fun decodeDrawing(content: String): DrawingSource = try {
+        json.decodeFromString<DrawingSource>(content)
     } catch (e: SerializationException) {
-        throw BladFormatuException("Nie da się odczytać rysunku wstawionego w tekst.", e)
+        throw FormatException("Nie da się odczytać rysunku wstawionego w tekst.", e)
     }
 
-    fun zapiszFolder(meta: FolderMeta): String = json.encodeToString(meta)
+    fun encodeFolder(meta: FolderMeta): String = json.encodeToString(meta)
 
-    fun czytajFolder(tresc: String): FolderMeta = try {
-        json.decodeFromString<FolderMeta>(tresc)
+    fun decodeFolder(content: String): FolderMeta = try {
+        json.decodeFromString<FolderMeta>(content)
     } catch (e: SerializationException) {
-        throw BladFormatuException("Nie da się odczytać opisu folderu.", e)
+        throw FormatException("Nie da się odczytać opisu folderu.", e)
     }
 }

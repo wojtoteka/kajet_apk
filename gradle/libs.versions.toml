@@ -14,6 +14,7 @@ room = "2.8.4"
 datastore = "1.1.7"
 documentfile = "1.1.0"
 work = "2.10.5"
+security = "1.1.0-beta01"
 ink = "1.0.0"
 graphicsCore = "1.0.4"
 mlkitInk = "19.0.0"
@@ -64,6 +65,9 @@ androidx-documentfile = { group = "androidx.documentfile", name = "documentfile"
 
 # Zadania w tle, przebudowa indeksu i eksport calego folderu
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+
+# Zaszyfrowany magazyn na token konta. Klucz lezy w sprzetowym magazynie systemu.
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security" }
 
 # Silnik kreski rysika, nacisk, pochylenie, rysowanie po froncie bufora
 androidx-ink-authoring = { group = "androidx.ink", name = "ink-authoring", version.ref = "ink" }

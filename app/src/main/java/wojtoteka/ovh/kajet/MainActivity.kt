@@ -15,9 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.KajetTheme
-import wojtoteka.ovh.kajet.nawigacja.KajetNawigacja
-import wojtoteka.ovh.kajet.storage.UstawieniaKajetu
-import wojtoteka.ovh.kajet.storage.WyborMotywu
+import wojtoteka.ovh.kajet.navigation.KajetNavigation
+import wojtoteka.ovh.kajet.storage.KajetSettings
+import wojtoteka.ovh.kajet.storage.ThemeChoice
 
 class MainActivity : ComponentActivity() {
 
@@ -25,36 +25,36 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        val kontener = (application as KajetApp).kontener
+        val container = (application as KajetApp).container
 
         setContent {
-            AplikacjaKajet(kontener)
+            KajetAppRoot(container)
         }
     }
 }
 
 @Composable
-private fun AplikacjaKajet(kontener: Kontener) {
-    val ustawienia by kontener.ustawienia.ustawienia.collectAsStateWithLifecycle(null)
+private fun KajetAppRoot(container: AppContainer) {
+    val settings by container.settings.settings.collectAsStateWithLifecycle(null)
 
-    // Dopoki ustawienia nie wczytaja sie z dysku, nie wiemy, czy katalog jest juz
-    // wybrany. Pokazujemy wtedy samo tlo, zeby nie mrugnac ekranem powitalnym.
-    val wczytane = ustawienia ?: return
+    // Dopóki ustawienia nie wczytają się z dysku, nie wiemy, czy katalog jest już
+    // wybrany. Pokazujemy wtedy samo tło, żeby nie mrugnąć ekranem powitalnym.
+    val loaded = settings ?: return
 
-    val ciemny = when (wczytane.motyw) {
-        WyborMotywu.SYSTEM -> isSystemInDarkTheme()
-        WyborMotywu.JASNY -> false
-        WyborMotywu.CIEMNY -> true
+    val dark = when (loaded.theme) {
+        ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+        ThemeChoice.LIGHT -> false
+        ThemeChoice.DARK -> true
     }
 
-    KajetTheme(darkTheme = ciemny) {
+    KajetTheme(darkTheme = dark) {
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Kajet.colors.desk)
                 .systemBarsPadding(),
         ) {
-            KajetNawigacja(kontener = kontener, ustawienia = wczytane)
+            KajetNavigation(container = container, settings = loaded)
         }
     }
 }

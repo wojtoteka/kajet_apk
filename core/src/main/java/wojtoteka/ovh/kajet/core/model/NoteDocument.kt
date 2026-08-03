@@ -3,14 +3,9 @@ package wojtoteka.ovh.kajet.core.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * Zawartość jednej notatki. To jest dokładnie to, co leży w pliku content.json
- * wewnątrz katalogu notatki. Opis formatu znajdziesz w pliku FORMAT.md.
- */
 @Serializable
 data class NoteDocument(
-    /** Numer wersji formatu. Rośnie, kiedy zmiana psuje zgodność wstecz. */
-    val format: Int = FORMAT_BIEZACY,
+    val format: Int = FORMAT_CURRENT,
     val id: String,
     val kind: NoteKind,
     val title: String,
@@ -18,42 +13,39 @@ data class NoteDocument(
     val updatedAt: Long,
     val tags: List<String> = emptyList(),
     val favorite: Boolean = false,
-    /** Wypełnione tylko dla notatek odręcznych. */
     val handwriting: HandwritingContent? = null,
-    /** Wypełnione tylko dla notatek tekstowych. */
     val text: TextContent? = null,
-    /** Wypełnione tylko dla map myśli. */
     val mindMap: MindMapContent? = null,
 ) {
     companion object {
-        const val FORMAT_BIEZACY = 1
-        const val PLIK_TRESCI = "content.json"
-        const val KATALOG_ZALACZNIKOW = "assets"
-        const val ROZSZERZENIE = ".note"
+        const val FORMAT_CURRENT = 1
+        const val CONTENT_FILE = "content.json"
+        const val ASSETS_DIRECTORY = "assets"
+        const val EXTENSION = ".note"
     }
 }
 
 @Serializable
 enum class NoteKind {
-    @SerialName("odreczna")
-    ODRECZNA,
+    @SerialName("handwritten")
+    HANDWRITTEN,
 
-    @SerialName("tekstowa")
-    TEKSTOWA,
+    @SerialName("text")
+    TEXT,
 
-    @SerialName("mapa")
-    MAPA,
+    @SerialName("mindmap")
+    MINDMAP,
     ;
 
-    val nazwaPl: String
+    val labelPl: String
         get() = when (this) {
-            ODRECZNA -> "Notatka odręczna"
-            TEKSTOWA -> "Notatka tekstowa"
-            MAPA -> "Mapa myśli"
+            HANDWRITTEN -> "Notatka odręczna"
+            TEXT -> "Notatka tekstowa"
+            MINDMAP -> "Mapa myśli"
         }
 }
 
-// Notatka odręczna
+// Handwritten note
 
 @Serializable
 data class HandwritingContent(
@@ -64,78 +56,107 @@ data class HandwritingContent(
 
 @Serializable
 enum class PageMode {
-    /** Osobne strony A4. Tak wychodzi na drukarce. */
     @SerialName("a4")
     A4,
 
-    /** Jedna strona, która rośnie w dół bez końca. */
-    @SerialName("wstega")
-    WSTEGA,
+    @SerialName("scroll")
+    SCROLL,
     ;
 
-    val nazwaPl: String
+    val labelPl: String
         get() = when (this) {
             A4 -> "Strony A4"
-            WSTEGA -> "Nieskończona strona w dół"
+            SCROLL -> "Nieskończona strona w dół"
         }
 }
 
 @Serializable
 enum class PageBackground {
-    @SerialName("gladkie")
-    GLADKIE,
+    @SerialName("plain")
+    PLAIN,
 
-    @SerialName("linie")
-    LINIE,
+    @SerialName("lined")
+    LINED,
 
-    @SerialName("kratka")
-    KRATKA,
+    @SerialName("grid")
+    GRID,
 
-    @SerialName("kropki")
-    KROPKI,
+    @SerialName("dots")
+    DOTS,
 
-    @SerialName("pieciolinia")
-    PIECIOLINIA,
+    @SerialName("stave")
+    STAVE,
     ;
 
-    val nazwaPl: String
+    val labelPl: String
         get() = when (this) {
-            GLADKIE -> "Gładkie"
-            LINIE -> "W linie"
-            KRATKA -> "W kratkę"
-            KROPKI -> "W kropki"
-            PIECIOLINIA -> "Pięciolinia"
+            PLAIN -> "Gładkie"
+            LINED -> "W linie"
+            GRID -> "W kratkę"
+            DOTS -> "W kropki"
+            STAVE -> "Pięciolinia"
         }
 }
 
-/**
- * Jedna strona notatki odręcznej. Współrzędne są w punktach typograficznych,
- * czyli 1/72 cala, tak jak w pliku PDF. Strona A4 to 595 na 842 punkty.
- * Dzięki temu wydruk i eksport nie wymagają przeliczania jednostek.
- */
 @Serializable
 data class NotePage(
     val id: String,
-    val width: Float = SZEROKOSC_A4,
-    val height: Float = WYSOKOSC_A4,
-    /** Tło tylko tej strony. Puste oznacza tło ustawione dla całej notatki. */
+    val width: Float = A4_WIDTH,
+    val height: Float = A4_HEIGHT,
     val background: PageBackground? = null,
     val strokes: List<InkStroke> = emptyList(),
     val texts: List<TextBoxElement> = emptyList(),
     val images: List<ImageElement> = emptyList(),
-    /** Pismo zamienione na tekst. Trzymane obok kresek, nie zamiast nich. */
     val recognized: List<RecognizedText> = emptyList(),
 ) {
     companion object {
-        const val SZEROKOSC_A4 = 595f
-        const val WYSOKOSC_A4 = 842f
+        const val A4_WIDTH = 595f
+        const val A4_HEIGHT = 842f
 
-        /** Wysokość jednego przewinięcia wstęgi. Strona rośnie o tyle, gdy dopiszesz na dole. */
-        const val PRZYROST_WSTEGI = 842f
+        const val SCROLL_STEP = 842f
     }
 }
 
-/** Pole tekstowe położone na stronie notatki odręcznej. */
+@Serializable
+enum class NoteFont {
+    @SerialName("heading")
+    HEADING,
+
+    @SerialName("body")
+    BODY,
+
+    @SerialName("mono")
+    MONO,
+    ;
+
+    val labelPl: String
+        get() = when (this) {
+            HEADING -> "Nagłówkowy"
+            BODY -> "Tekstowy"
+            MONO -> "Maszynowy"
+        }
+}
+
+@Serializable
+enum class NoteAlign {
+    @SerialName("left")
+    LEFT,
+
+    @SerialName("center")
+    CENTER,
+
+    @SerialName("right")
+    RIGHT,
+    ;
+
+    val labelPl: String
+        get() = when (this) {
+            LEFT -> "Do lewej"
+            CENTER -> "Do środka"
+            RIGHT -> "Do prawej"
+        }
+}
+
 @Serializable
 data class TextBoxElement(
     val id: String,
@@ -148,9 +169,12 @@ data class TextBoxElement(
     val color: Int,
     val bold: Boolean = false,
     val italic: Boolean = false,
+    val underline: Boolean = false,
+    val font: NoteFont = NoteFont.BODY,
+    val align: NoteAlign = NoteAlign.LEFT,
+    val background: Int = 0,
 )
 
-/** Zdjęcie wstawione na stronę. Plik leży w katalogu assets wewnątrz notatki. */
 @Serializable
 data class ImageElement(
     val id: String,
@@ -162,7 +186,6 @@ data class ImageElement(
     val rotation: Float = 0f,
 )
 
-/** Wynik rozpoznawania pisma. Służy do wyszukiwania i do eksportu tekstu. */
 @Serializable
 data class RecognizedText(
     val id: String,
@@ -171,43 +194,44 @@ data class RecognizedText(
     val y: Float,
     val width: Float,
     val height: Float,
-    /** Kreski, z których powstał ten tekst. */
     val strokeIds: List<String> = emptyList(),
 )
 
-// Notatka tekstowa
+// Text note
 
-/**
- * Treść notatki tekstowej to zwykły Markdown. Rysunki wstawione w środek tekstu
- * są w nim zapisane jako obrazki, a obok leży ich wersja wektorowa,
- * żeby dało się je później poprawić.
- */
 @Serializable
 data class TextContent(
     val markdown: String = "",
     val drawings: List<InlineDrawing> = emptyList(),
-)
+    val font: NoteFont = NoteFont.BODY,
+    val fontSize: Float = 0f,
+    val textColor: Int = 0,
+    val align: NoteAlign = NoteAlign.LEFT,
+) {
+    companion object {
+        const val DEFAULT_SIZE = 17f
+        const val SMALLEST_SIZE = 10f
+        const val LARGEST_SIZE = 48f
+    }
+}
 
 @Serializable
 data class InlineDrawing(
-    /** Nazwa obrazka w katalogu assets, na przykład rysunek-1.png. */
     val asset: String,
-    /** Nazwa pliku z kreskami w katalogu assets, na przykład rysunek-1.strokes.json. */
     val source: String,
     val width: Float,
     val height: Float,
 )
 
-/** Kreski rysunku wstawionego w tekst. Osobny plik, żeby content.json nie puchł. */
 @Serializable
 data class DrawingSource(
-    val format: Int = NoteDocument.FORMAT_BIEZACY,
+    val format: Int = NoteDocument.FORMAT_CURRENT,
     val width: Float,
     val height: Float,
     val strokes: List<InkStroke> = emptyList(),
 )
 
-// Mapa myśli
+// Mind map
 
 @Serializable
 data class MindMapContent(
@@ -225,25 +249,30 @@ data class MindNode(
     val y: Float,
     val width: Float = 160f,
     val height: Float = 64f,
-    val shape: NodeShape = NodeShape.PROSTOKAT,
+    val shape: NodeShape = NodeShape.RECTANGLE,
     val text: String = "",
-    /** Podpis pisany rysikiem. Współrzędne liczone od lewego górnego rogu węzła. */
     val ink: List<InkStroke> = emptyList(),
     val colorId: String = "grafit",
-    /** Zwinięty węzeł chowa swoje dzieci, ale ich nie kasuje. */
+    val customColor: Int = 0,
+    val fontSize: Float = 15f,
+    val font: NoteFont = NoteFont.BODY,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val align: NoteAlign = NoteAlign.CENTER,
+    val textColor: Int = 0,
     val collapsed: Boolean = false,
 )
 
 @Serializable
 enum class NodeShape {
-    @SerialName("prostokat")
-    PROSTOKAT,
+    @SerialName("rectangle")
+    RECTANGLE,
 
-    @SerialName("owal")
-    OWAL,
+    @SerialName("oval")
+    OVAL,
     ;
 
-    val nazwaPl: String get() = if (this == PROSTOKAT) "Prostokąt" else "Owal"
+    val labelPl: String get() = if (this == RECTANGLE) "Prostokąt" else "Owal"
 }
 
 @Serializable

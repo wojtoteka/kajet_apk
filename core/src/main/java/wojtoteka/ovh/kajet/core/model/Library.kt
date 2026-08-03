@@ -2,48 +2,33 @@ package wojtoteka.ovh.kajet.core.model
 
 import kotlinx.serialization.Serializable
 
-/**
- * Opis folderu, zapisany w pliku folder.json wewnątrz katalogu.
- *
- * Nazwa katalogu na dysku bywa okrojona, bo nie każdy system plików przyjmie
- * dwukropek albo znak zapytania. Prawdziwa nazwa, ta którą wpisał użytkownik,
- * leży tutaj i to ją pokazuje aplikacja.
- */
 @Serializable
 data class FolderMeta(
-    val format: Int = NoteDocument.FORMAT_BIEZACY,
+    val format: Int = NoteDocument.FORMAT_CURRENT,
     val id: String,
     val displayName: String,
     val colorId: String = "grafit",
     val iconId: String = "folder",
     val createdAt: Long = 0L,
-    /** Kolejność ustawiona przez użytkownika. Mniejsza liczba jest wyżej. */
     val order: Int = 0,
 ) {
     companion object {
-        const val PLIK = "folder.json"
+        const val FILE = "folder.json"
     }
 }
 
-/** Rodzaj wpisu w drzewie biblioteki. */
 enum class ItemType {
     FOLDER,
-    NOTATKA,
-    PLIK_KODU,
-    INNY_PLIK,
+    NOTE,
+    CODE_FILE,
+    OTHER_FILE,
 }
 
-/**
- * Jeden wiersz w bibliotece. Powstaje z indeksu albo z odczytu katalogu.
- * Trzyma adres dokumentu w systemie plików, bo po nim otwieramy zawartość.
- */
 data class LibraryItem(
     val id: String,
-    /** Ścieżka względem katalogu głównego biblioteki, na przykład Matematyka/Całki. */
     val path: String,
     val name: String,
     val type: ItemType,
-    /** Adres dokumentu w Storage Access Framework, w postaci tekstu. */
     val documentUri: String,
     val updatedAt: Long = 0L,
     val noteKind: NoteKind? = null,
@@ -52,25 +37,51 @@ data class LibraryItem(
     val iconId: String? = null,
     val favorite: Boolean = false,
     val tags: List<String> = emptyList(),
-    /** Kilka pierwszych słów treści, pokazywane na liście i w wynikach wyszukiwania. */
     val preview: String? = null,
-    /** Liczba wpisów wewnątrz, tylko dla folderów. */
     val childCount: Int = 0,
 ) {
     val parentPath: String get() = path.substringBeforeLast('/', "")
 }
 
-/** Ikony do wyboru przy tworzeniu folderu. */
 enum class FolderIcon(val id: String, val labelPl: String) {
     FOLDER("folder", "Folder"),
-    KSIAZKI("ksiazki", "Książki"),
-    LITERY("litery", "Litery"),
-    DZIALANIA("dzialania", "Działania"),
-    NUTA("nuta", "Nuta"),
-    KOLBA("kolba", "Kolba"),
-    GLOBUS("globus", "Globus"),
-    KOD("kod", "Kod"),
-    GWIAZDKA("gwiazdka", "Gwiazdka"),
+    BOOKS("ksiazki", "Książki"),
+    LETTERS("litery", "Litery"),
+    OPERATIONS("dzialania", "Działania"),
+    NOTE("nuta", "Nuta"),
+    FLASK("kolba", "Kolba"),
+    GLOBE("globus", "Globus"),
+    CODE("kod", "Kod"),
+    STAR("gwiazdka", "Gwiazdka"),
+    BRUSH("pedzel", "Pędzel"),
+    HEART("serce", "Serce"),
+    ATOM("atom", "Atom"),
+    DNA("dna", "Nić DNA"),
+    MAP("mapa", "Mapa"),
+    COG("zebatka", "Zębatka"),
+    BULB("zarowka", "Żarówka"),
+    COMPASS("kompas", "Kompas"),
+    ROCKET("rakieta", "Rakieta"),
+    CROWN("korona", "Korona"),
+    CUP("filizanka", "Filiżanka"),
+    TREE("drzewo", "Drzewo"),
+    MOUNTAIN("gora", "Góra"),
+    CLOUD("cloud", "Chmura"),
+    KEY("klucz", "Klucz"),
+    CLOCK("zegar", "Zegar"),
+    CALENDAR("kalendarz", "Kalendarz"),
+    FLAG("flaga", "Flaga"),
+    MICROSCOPE("mikroskop", "Mikroskop"),
+    BALL("pilka", "Piłka"),
+    MASK("maska", "Maska"),
+    SCALES("waga", "Waga"),
+    SHIELD("tarcza", "Tarcza"),
+    HOUSE("dom", "Dom"),
+    CAMERA("aparat", "Aparat"),
+    PHOTO("zdjecie", "Zdjęcie"),
+    DRAWING("rysunek", "Rysunek"),
+    NODE("wezel", "Węzeł"),
+    TAG("tag", "Etykieta"),
     ;
 
     companion object {

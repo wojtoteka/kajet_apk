@@ -48,6 +48,8 @@ dependencies {
     api(libs.androidx.compose.material3)
     api(libs.androidx.lifecycle.runtime.compose)
     api(libs.androidx.lifecycle.viewmodel.compose)
+    // Przycisk wstecz systemu obsługiwany wprost w ekranie, przez BackHandler.
+    api(libs.androidx.activity.compose)
     debugApi(libs.androidx.compose.ui.tooling)
     api(libs.androidx.compose.ui.tooling.preview)
 

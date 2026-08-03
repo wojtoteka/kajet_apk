@@ -19,18 +19,14 @@ import wojtoteka.ovh.kajet.core.model.RecognizedText
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.TextContent
 
-/**
- * Format notatki to miejsce, w którym błąd oznacza utratę pracy użytkownika.
- * Te testy sprawdzają, czy zapis i odczyt dają dokładnie to samo.
- */
 class NoteCodecTest {
 
-    private fun przykladowaKreska(id: String) = InkStroke(
+    private fun sampleStroke(id: String) = InkStroke(
         id = id,
-        tool = InkTool.PIORO,
+        tool = InkTool.PEN,
         color = 0xFF23211D.toInt(),
         size = 2.4f,
-        input = InputKind.RYSIK,
+        input = InputKind.STYLUS,
         points = listOf(
             10f, 20f, 0f, 0.35f, 0.9f, 1.2f,
             12.5f, 22.25f, 8f, 0.51f, 0.88f, 1.19f,
@@ -38,9 +34,9 @@ class NoteCodecTest {
         ),
     )
 
-    private fun notatkaOdreczna() = NoteDocument(
+    private fun handwrittenNote() = NoteDocument(
         id = "n-1",
-        kind = NoteKind.ODRECZNA,
+        kind = NoteKind.HANDWRITTEN,
         title = "Całki oznaczone",
         createdAt = 1_700_000_000_000,
         updatedAt = 1_700_000_100_000,
@@ -48,11 +44,11 @@ class NoteCodecTest {
         favorite = true,
         handwriting = HandwritingContent(
             pageMode = PageMode.A4,
-            background = PageBackground.KRATKA,
+            background = PageBackground.GRID,
             pages = listOf(
                 NotePage(
                     id = "s-1",
-                    strokes = listOf(przykladowaKreska("k-1"), przykladowaKreska("k-2")),
+                    strokes = listOf(sampleStroke("k-1"), sampleStroke("k-2")),
                     texts = listOf(
                         TextBoxElement(
                             id = "t-1",
@@ -76,28 +72,28 @@ class NoteCodecTest {
 
     @Test
     fun `notatka odreczna przezywa zapis i odczyt bez zmian`() {
-        val przed = notatkaOdreczna()
-        val po = NoteCodec.czytajNotatke(NoteCodec.zapiszNotatke(przed))
-        assertThat(po).isEqualTo(przed)
+        val before = handwrittenNote()
+        val after = NoteCodec.decodeNote(NoteCodec.encodeNote(before))
+        assertThat(after).isEqualTo(before)
     }
 
     @Test
     fun `punkty kreski nie traca dokladnosci`() {
-        val przed = notatkaOdreczna()
-        val po = NoteCodec.czytajNotatke(NoteCodec.zapiszNotatke(przed))
-        val kreska = po.handwriting!!.pages.first().strokes.first()
-        assertThat(kreska.pointCount).isEqualTo(3)
-        assertThat(kreska.x(1)).isEqualTo(12.5f)
-        assertThat(kreska.y(1)).isEqualTo(22.25f)
-        assertThat(kreska.pressure(2)).isEqualTo(0.62f)
-        assertThat(kreska.tilt(0)).isEqualTo(0.9f)
+        val before = handwrittenNote()
+        val after = NoteCodec.decodeNote(NoteCodec.encodeNote(before))
+        val stroke = after.handwriting!!.pages.first().strokes.first()
+        assertThat(stroke.pointCount).isEqualTo(3)
+        assertThat(stroke.x(1)).isEqualTo(12.5f)
+        assertThat(stroke.y(1)).isEqualTo(22.25f)
+        assertThat(stroke.pressure(2)).isEqualTo(0.62f)
+        assertThat(stroke.tilt(0)).isEqualTo(0.9f)
     }
 
     @Test
     fun `notatka tekstowa przezywa zapis i odczyt`() {
-        val przed = NoteDocument(
+        val before = NoteDocument(
             id = "n-2",
-            kind = NoteKind.TEKSTOWA,
+            kind = NoteKind.TEXT,
             title = "Lista zadań",
             createdAt = 1L,
             updatedAt = 2L,
@@ -105,16 +101,16 @@ class NoteCodecTest {
                 markdown = "# Zadania\n\n- [ ] Przeczytać rozdział 3\n- [x] Zrobić zadanie 12\n\n\$\$a^2 + b^2 = c^2\$\$\n",
             ),
         )
-        val po = NoteCodec.czytajNotatke(NoteCodec.zapiszNotatke(przed))
-        assertThat(po).isEqualTo(przed)
-        assertThat(po.text!!.markdown).contains("- [x] Zrobić zadanie 12")
+        val after = NoteCodec.decodeNote(NoteCodec.encodeNote(before))
+        assertThat(after).isEqualTo(before)
+        assertThat(after.text!!.markdown).contains("- [x] Zrobić zadanie 12")
     }
 
     @Test
     fun `mapa mysli przezywa zapis i odczyt`() {
-        val przed = NoteDocument(
+        val before = NoteDocument(
             id = "n-3",
-            kind = NoteKind.MAPA,
+            kind = NoteKind.MINDMAP,
             title = "Powtórka z fizyki",
             createdAt = 1L,
             updatedAt = 2L,
@@ -127,71 +123,71 @@ class NoteCodecTest {
                 zoom = 1.25f,
             ),
         )
-        val po = NoteCodec.czytajNotatke(NoteCodec.zapiszNotatke(przed))
-        assertThat(po).isEqualTo(przed)
+        val after = NoteCodec.decodeNote(NoteCodec.encodeNote(before))
+        assertThat(after).isEqualTo(before)
     }
 
     @Test
     fun `nieznane pola z nowszej wersji nie psuja odczytu`() {
-        val tekst = """
-            {"format":1,"id":"n-9","kind":"tekstowa","title":"Test","createdAt":1,"updatedAt":2,
+        val text = """
+            {"format":1,"id":"n-9","kind":"text","title":"Test","createdAt":1,"updatedAt":2,
              "cosNowego":{"a":1},"text":{"markdown":"tresc","drawings":[]}}
         """.trimIndent()
-        val po = NoteCodec.czytajNotatke(tekst)
-        assertThat(po.title).isEqualTo("Test")
-        assertThat(po.text!!.markdown).isEqualTo("tresc")
+        val after = NoteCodec.decodeNote(text)
+        assertThat(after.title).isEqualTo("Test")
+        assertThat(after.text!!.markdown).isEqualTo("tresc")
     }
 
     @Test
     fun `notatka z nowszej wersji formatu daje zrozumialy komunikat`() {
-        val tekst = """{"format":99,"id":"n-9","kind":"tekstowa","title":"Test","createdAt":1,"updatedAt":2}"""
-        val blad = assertThrows(BladFormatuException::class.java) { NoteCodec.czytajNotatke(tekst) }
-        assertThat(blad.komunikatDlaUzytkownika).contains("nowszej wersji")
-        assertThat(blad.komunikatDlaUzytkownika).contains("Zaktualizuj")
+        val text = """{"format":99,"id":"n-9","kind":"text","title":"Test","createdAt":1,"updatedAt":2}"""
+        val error = assertThrows(FormatException::class.java) { NoteCodec.decodeNote(text) }
+        assertThat(error.userMessage).contains("nowszej wersji")
+        assertThat(error.userMessage).contains("Zaktualizuj")
     }
 
     @Test
     fun `uszkodzony plik daje zrozumialy komunikat`() {
-        val blad = assertThrows(BladFormatuException::class.java) {
-            NoteCodec.czytajNotatke("{to nie jest json")
+        val error = assertThrows(FormatException::class.java) {
+            NoteCodec.decodeNote("{to nie jest json")
         }
-        assertThat(blad.komunikatDlaUzytkownika).contains("uszkodzony")
+        assertThat(error.userMessage).contains("uszkodzony")
     }
 
     @Test
     fun `pusty plik daje zrozumialy komunikat`() {
-        val blad = assertThrows(BladFormatuException::class.java) { NoteCodec.czytajNotatke("   ") }
-        assertThat(blad.komunikatDlaUzytkownika).contains("pusty")
+        val error = assertThrows(FormatException::class.java) { NoteCodec.decodeNote("   ") }
+        assertThat(error.userMessage).contains("pusty")
     }
 
     @Test
     fun `nazwy pol w pliku sa stale i czytelne`() {
         // Format ma byc czytelny dla czlowieka, gdyby kiedys trzeba bylo ratowac notatke recznie.
-        val tekst = NoteCodec.zapiszNotatke(notatkaOdreczna())
-        assertThat(tekst).contains("\"kind\":\"odreczna\"")
-        assertThat(tekst).contains("\"pageMode\":\"a4\"")
-        assertThat(tekst).contains("\"background\":\"kratka\"")
-        assertThat(tekst).contains("\"tool\":\"pioro\"")
-        assertThat(tekst).contains("\"input\":\"rysik\"")
+        val text = NoteCodec.encodeNote(handwrittenNote())
+        assertThat(text).contains("\"kind\":\"handwritten\"")
+        assertThat(text).contains("\"pageMode\":\"a4\"")
+        assertThat(text).contains("\"background\":\"grid\"")
+        assertThat(text).contains("\"tool\":\"pen\"")
+        assertThat(text).contains("\"input\":\"stylus\"")
     }
 
     @Test
     fun `przesuniecie kreski zmienia tylko wspolrzedne`() {
-        val kreska = przykladowaKreska("k-1")
-        val przesunieta = kreska.translated(5f, -3f)
-        assertThat(przesunieta.x(0)).isEqualTo(15f)
-        assertThat(przesunieta.y(0)).isEqualTo(17f)
-        assertThat(przesunieta.timeMs(0)).isEqualTo(kreska.timeMs(0))
-        assertThat(przesunieta.pressure(0)).isEqualTo(kreska.pressure(0))
-        assertThat(przesunieta.pointCount).isEqualTo(kreska.pointCount)
+        val stroke = sampleStroke("k-1")
+        val shifted = stroke.translated(5f, -3f)
+        assertThat(shifted.x(0)).isEqualTo(15f)
+        assertThat(shifted.y(0)).isEqualTo(17f)
+        assertThat(shifted.timeMs(0)).isEqualTo(stroke.timeMs(0))
+        assertThat(shifted.pressure(0)).isEqualTo(stroke.pressure(0))
+        assertThat(shifted.pointCount).isEqualTo(stroke.pointCount)
     }
 
     @Test
     fun `prostokat otaczajacy kreske obejmuje wszystkie punkty`() {
-        val granice = przykladowaKreska("k-1").bounds()
-        assertThat(granice.left).isEqualTo(10f)
-        assertThat(granice.top).isEqualTo(20f)
-        assertThat(granice.right).isEqualTo(15f)
-        assertThat(granice.bottom).isEqualTo(25f)
+        val bounds = sampleStroke("k-1").bounds()
+        assertThat(bounds.left).isEqualTo(10f)
+        assertThat(bounds.top).isEqualTo(20f)
+        assertThat(bounds.right).isEqualTo(15f)
+        assertThat(bounds.bottom).isEqualTo(25f)
     }
 }

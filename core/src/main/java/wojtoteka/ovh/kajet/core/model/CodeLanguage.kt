@@ -1,21 +1,11 @@
 package wojtoteka.ovh.kajet.core.model
 
-/**
- * Języki, które Kajet umie otworzyć i uruchomić.
- *
- * [offline] mówi, czy program da się uruchomić bez internetu.
- * Dziś offline działa tylko Python, bo jego tłumacz jest wbudowany w aplikację.
- * Reszta idzie przez serwer i wymaga połączenia. Aplikacja pisze to wprost
- * przy każdym języku, żeby nie było niespodzianki w pociągu.
- */
 enum class CodeLanguage(
     val id: String,
     val labelPl: String,
     val extensions: List<String>,
-    /** Nazwa środowiska po stronie serwera Piston. */
-    val pistonRuntime: String?,
+    val serverRuntime: String?,
     val offline: Boolean,
-    /** Nazwa pliku wysyłanego na serwer. Java wymaga zgodności z nazwą klasy. */
     val remoteFileName: String,
     val commentPrefix: String = "//",
 ) {
@@ -33,21 +23,20 @@ enum class CodeLanguage(
     RUBY("ruby", "Ruby", listOf("rb"), "ruby", false, "main.rb", "#"),
     BASH("bash", "Bash", listOf("sh", "bash"), "bash", false, "main.sh", "#"),
     SQL("sql", "SQL", listOf("sql"), "sqlite3", false, "main.sql", "--"),
-    TEKST("tekst", "Zwykły tekst", listOf("txt", "log", "csv"), null, false, "main.txt", "#"),
+    PLAIN_TEXT("text", "Zwykły tekst", listOf("txt", "log", "csv"), null, false, "main.txt", "#"),
     ;
 
-    val uruchamialny: Boolean get() = pistonRuntime != null
+    val runnable: Boolean get() = serverRuntime != null
 
     companion object {
         fun fromExtension(fileName: String): CodeLanguage? {
-            val ext = fileName.substringAfterLast('.', "").lowercase()
-            if (ext.isEmpty()) return null
-            return entries.firstOrNull { ext in it.extensions }
+            val extension = fileName.substringAfterLast('.', "").lowercase()
+            if (extension.isEmpty()) return null
+            return entries.firstOrNull { extension in it.extensions }
         }
 
         fun fromId(id: String?): CodeLanguage? = entries.firstOrNull { it.id == id }
 
-        /** Rozszerzenia, które biblioteka pokazuje jako pliki z kodem. */
-        val wszystkieRozszerzenia: Set<String> = entries.flatMap { it.extensions }.toSet()
+        val allExtensions: Set<String> = entries.flatMap { it.extensions }.toSet()
     }
 }
