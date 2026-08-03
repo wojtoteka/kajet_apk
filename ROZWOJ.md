@@ -74,19 +74,11 @@ remote:  BRAK
 Wszystko stoi tylko na tym dysku. Warto dołożyć zdalne repozytorium
 (choćby prywatne) albo przynajmniej kopię na drugim nośniku.
 
-### Niezacommitowana zmiana
+### Zmiana PL→EN jest już w historii
 
-W drzewie roboczym siedzi duża, nieopisana zmiana: **przemianowanie wszystkich
-plików i klas z polskich nazw na angielskie** (`EkranNotatki.kt` → `NoteScreen.kt`,
-`ModelBiblioteki.kt` → `LibraryViewModel.kt` i tak dalej), a na wierzchu
-poprawki z 3 sierpnia. `git status` pokazuje ponad sto plików.
-
-Przy okazji z drzewa roboczego **zniknęły `FORMAT.md`, `POSTEP.md` i `README.md`**.
-To nie jest to samo co skasowanie — w `HEAD` dalej są, tylko w starej wersji.
-Patrz punkt 5.
-
-Zanim ruszysz cokolwiek nowego, zamknij tę zmianę commitem. Inaczej każda
-następna poprawka mieszka w tym samym worku, co refaktor na dwieście plików.
+Przemianowanie plików i klas na angielskie oraz poprawki synchronizacji z
+3 sierpnia siedzą w commicie `4ad9ff4`. Dokumenty (`FORMAT.md`, `README.md`,
+`POSTEP.md`) są z powrotem w repozytorium i opisują angielskie wartości formatu.
 
 ---
 
@@ -188,32 +180,13 @@ Notatka jest opisana w dwóch miejscach i **te dwa miejsca muszą się zgadzać*
 - tablet: `core/.../model/NoteDocument.kt` (klasy) + `storage/.../NoteCodec.kt` (zapis),
 - serwer: `src/lib/document.ts` — lustro tych samych typów, ale **tylko do czytania**.
 
-### Uwaga: kopie dokumentu rozjechały się
+### Źródło prawdy: `FORMAT.md` w repo aplikacji
 
-Najnowszy opis formatu leży **na serwerze**, nie w aplikacji:
-
-| Wersja | Gdzie | Stan |
-| --- | --- | --- |
-| **najnowsza, 266 wierszy** | `D:\Inne\kajet_server\apka\FORMAT.md` | zgadza się z dzisiejszym kodem |
-| stara, 244 wiersze | `git show HEAD:FORMAT.md` w repo aplikacji | **przestarzała**, ma polskie nazwy wartości |
-| — | drzewo robocze aplikacji | **skasowana** |
-
-Stara wersja mówi `"kind": "odreczna"`, `"tool": "pioro"`, `"background": "kratka"`.
-Dzisiejszy kod zapisuje `"handwritten"`, `"pen"`, `"grid"`. Nie idź za tą z `HEAD`.
-
-**Do zrobienia:** przenieść nowszy `FORMAT.md` z powrotem do repozytorium aplikacji
-i przestać trzymać kopie. Jedno źródło prawdy, a serwer niech go czyta albo ma
-u siebie odnośnik. Kopie zawsze się rozejdą — właśnie się rozeszły.
-
-W tym samym pliku jest jeszcze jeden błąd do poprawienia: przykład węzła mapy
-myśli podaje `"font": "tekstowy"`, a kod zapisuje `heading`, `body` albo `mono`.
-
-### Także do poprawienia w dokumentach
-
-`apka/README.md` pisze, że kod liczy „serwer Piston" i że adres serwera zmienia
-się w ustawieniach. Ani jedno, ani drugie już nie jest prawdą — kod liczy serwer
-Kajetu, adres jest wpisany na stałe, a sekcja z ustawień została skasowana.
-Tabela modułów w tym README nie wymienia `:cloud`.
+Opis formatu leży w korzeniu repozytorium aplikacji: `FORMAT.md`.
+Wartości enumów są angielskie (`handwritten`, `pen`, `grid`, `heading` /
+`body` / `mono`, …) i muszą się zgadzać z `NoteDocument.kt` oraz
+`src/lib/document.ts` na serwerze. Katalog `apka/` na serwerze był tylko
+kopią — nie polegaj na nim.
 
 ---
 
@@ -227,21 +200,13 @@ Dziś strona notatki **tylko czyta** (`src/components/NotePreview.tsx` renderuje
 wszystkie trzy rodzaje). W udostępnianiu jest już `permission: "EDIT"`, którego
 nikt nie używa. Kolejność ma znaczenie:
 
-**Krok 1 — `FORMAT.md` z powrotem na miejsce.** Póki pisze tylko tablet, brak
-spisanego formatu boli mało. Od chwili, gdy pisze też strona, kończy się cichym
-psuciem notatek. W dokumencie jest pole `format: number` — używaj go.
+**Krok 1 — `FORMAT.md`.** Jest z powrotem w repo aplikacji. Przy zapisie ze
+strony trzymaj się pola `format: number` i angielskich wartości enumów.
 
-**Krok 2 — dwie poprawki w aplikacji.** Obie opisane w
-`D:\Inne\kajet_server\donaprawy.md`, obie muszą być gotowe **zanim** strona
-zacznie zapisywać:
-
-- *Konflikty.* Serwer odsyła konflikt jako HTTP 409, a `CloudClient` traktuje
-  wszystko spoza 2xx jako błąd — więc obsługa konfliktu w `Sync.kt` nigdy się nie
-  wykonuje. Dziś nie boli, bo notatkę zmienia jedno urządzenie. Przy dwóch
-  edytorach zmiana z tabletu po cichu utknie w kolejce.
-- *Pobieranie załączników.* `Sync` wysyła zdjęcia na serwer, ale nigdy ich nie
-  ściąga. Notatka utworzona na stronie przyjedzie na tablet z `![zdjęcie](assets/…)`
-  i bez pliku.
+**Krok 2 — poprawki tabletu (zrobione).** Stronicowanie `afterId` / `hasMore`,
+pobieranie załączników przy pullu oraz konflikty jako HTTP 200 z
+`status: "conflict"` (ścieżka `saveVersionAlongside`) są w `Sync.kt` /
+`CloudClient.kt`. Nadal warto przejechać to ręcznie na tablecie.
 
 **Krok 3 — jedna droga zapisu na serwerze.** Strona pisałaby przez server action
 prosto do Prismy i ominęłaby logikę z `PUT /api/v1/notes`: `version: { increment: 1 }`,

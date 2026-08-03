@@ -28,8 +28,9 @@ to kod natywny, a każda kolejna architektura dokłada kilkadziesiąt megabajtó
 | `:storage` | Katalog biblioteki, format `.note`, kosz, spis do wyszukiwania |
 | `:ink` | Silnik kreski, narzędzia, rozpoznawanie pisma |
 | `:editor` | Edytory notatek i historia zmian |
-| `:code` | Edytor kodu i uruchamianie przez serwer |
+| `:code` | Edytor kodu i uruchamianie |
 | `:export` | PDF, DOCX, Markdown, PNG, wydruk, udostępnianie |
+| `:cloud` | Konto, synchronizacja, kolejka wysyłki |
 | `:app` | Nawigacja, biblioteka, ustawienia, Python na tablecie |
 
 Format zapisu opisuje [FORMAT.md](FORMAT.md).
@@ -38,8 +39,9 @@ Stan prac i listę rzeczy do sprawdzenia na tablecie trzyma [POSTEP.md](POSTEP.m
 ## Uruchamianie kodu
 
 Python liczy się na tablecie i działa bez internetu. Pozostałe języki liczy
-serwer Piston, więc potrzebne jest połączenie. Adres serwera zmienisz
-w ustawieniach, także na własny.
+serwer Kajetu (`https://kajet.wojtoteka.ovh`), więc potrzebne jest połączenie.
+Adres serwera jest wpisany na stałe w `cloud/.../AccountStore.kt`
+(stała `SERVER_URL`) i nie da się go zmienić z ustawień.
 
 ## Licencje
 

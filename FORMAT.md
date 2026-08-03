@@ -61,7 +61,7 @@ tu rozbity na wiersze dla czytelności:
 {
   "format": 1,
   "id": "1f0c...",
-  "kind": "odreczna",
+  "kind": "handwritten",
   "title": "Całki oznaczone",
   "createdAt": 1730000000000,
   "updatedAt": 1730000600000,
@@ -69,7 +69,7 @@ tu rozbity na wiersze dla czytelności:
   "favorite": true,
   "handwriting": {
     "pageMode": "a4",
-    "background": "kratka",
+    "background": "grid",
     "pages": [
       {
         "id": "8a1e...",
@@ -78,11 +78,11 @@ tu rozbity na wiersze dla czytelności:
         "strokes": [
           {
             "id": "c41d...",
-            "tool": "pioro",
+            "tool": "pen",
             "color": -14606819,
             "size": 2.4,
             "epsilon": 0.1,
-            "input": "rysik",
+            "input": "stylus",
             "points": [120.5, 300.25, 0.0, 0.35, 0.9, 1.2,
                        122.0, 301.0, 8.0, 0.51, 0.88, 1.19]
           }
@@ -102,7 +102,7 @@ tu rozbity na wiersze dla czytelności:
 | --- | --- |
 | `format` | Numer wersji formatu. Dziś 1. Rośnie, gdy zmiana psuje zgodność wstecz. |
 | `id` | Identyfikator notatki, nadawany raz przy utworzeniu. |
-| `kind` | `odreczna`, `tekstowa` albo `mapa`. |
+| `kind` | `handwritten`, `text` albo `mindmap`. |
 | `title` | Tytuł widoczny w aplikacji, także z polskimi znakami. |
 | `createdAt`, `updatedAt` | Czas w milisekundach od 1 stycznia 1970. |
 | `tags` | Lista tagów. |
@@ -136,17 +136,32 @@ Taki zapis jest kilka razy mniejszy od listy obiektów i szybciej się wczytuje.
 Współrzędne są zaokrąglane do dwóch miejsc po przecinku, nacisk do trzech.
 
 Pole `color` to liczba całkowita w formacie ARGB, ta sama, której używa Android.
-Pole `tool` przyjmuje `pioro` albo `zakreslacz`. Pole `input` mówi, czym pisano:
-`rysik`, `palec` albo `mysz`.
+Krycie kreski siedzi w kanale alfa tego koloru, nie ma osobnego pola.
+
+Pole `tool` przyjmuje `pen`, `highlighter`, `fineliner`, `pencil` albo `dashed`.
+Pole `input` mówi, czym pisano: `stylus`, `finger` albo `mouse`.
+
+### Pole tekstowe na stronie
+
+```json
+{ "id": "p1", "x": 60.0, "y": 120.0, "width": 220.0, "height": 44.0,
+  "text": "Wzór na drodze", "fontSize": 14.0, "color": -14538211,
+  "bold": false, "italic": false, "underline": false,
+  "font": "body", "align": "left", "background": 0 }
+```
+
+Pole `font` przyjmuje `heading`, `body` albo `mono`, a `align`
+przyjmuje `left`, `center` albo `right`. Pole `background` równe zeru oznacza
+brak tła, czyli pisanie wprost na kartce.
 
 ### Tła stron
 
-`gladkie`, `linie`, `kratka`, `kropki`, `pieciolinia`. Tło ustawione przy stronie
+`plain`, `lined`, `grid`, `dots`, `stave`. Tło ustawione przy stronie
 ma pierwszeństwo nad tłem ustawionym dla całej notatki.
 
 ### Tryb strony
 
-`a4` to osobne kartki po 595 na 842 punkty. `wstega` to jedna strona,
+`a4` to osobne kartki po 595 na 842 punkty. `scroll` to jedna strona,
 która rośnie w dół, gdy dopisujesz przy dolnej krawędzi.
 
 ### Notatka tekstowa
@@ -180,7 +195,9 @@ do dalszego poprawiania. Plik z kreskami ma postać:
 "mindMap": {
   "nodes": [
     { "id": "w1", "x": 0.0, "y": 0.0, "width": 160.0, "height": 64.0,
-      "shape": "prostokat", "text": "Ruch", "ink": [], "colorId": "zielen",
+      "shape": "rectangle", "text": "Ruch", "ink": [], "colorId": "zielen",
+      "customColor": 0, "fontSize": 15.0, "font": "body",
+      "bold": false, "italic": false, "align": "center", "textColor": 0,
       "collapsed": false }
   ],
   "edges": [ { "id": "e1", "fromId": "w1", "toId": "w2" } ],
@@ -192,6 +209,10 @@ Rodzic i dziecko wynikają z kierunku linii: `fromId` jest rodzicem. Nie trzymam
 tego drugi raz w węźle, żeby nie dało się doprowadzić do sprzeczności.
 Podpis pisany rysikiem leży w polu `ink` węzła, we współrzędnych liczonych
 od lewego górnego rogu tego węzła.
+
+Pola `customColor` i `textColor` równe zeru oznaczają, że obowiązuje kolor
+z `colorId` i kolor tekstu dobrany do tła. Dzięki temu węzeł, w którym nikt
+nie zmieniał kolorów, sam dopasowuje się do motywu jasnego i ciemnego.
 
 ## Plik folder.json
 
@@ -228,7 +249,7 @@ Wyrzucony wpis trafia do katalogu `.trash/<identyfikator>/`. Obok niego leży
   "originalPath": "Matematyka/Całki.note",
   "fileName": "Całki.note",
   "displayName": "Całki",
-  "type": "NOTATKA",
+  "type": "NOTE",
   "deletedAt": 1730000900000
 }
 ```
