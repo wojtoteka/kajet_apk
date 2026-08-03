@@ -58,7 +58,7 @@ class Sync(
         if (!client.hasNetwork()) {
             _state.value = SyncState.NoNetwork(queue.size())
             return@withLock SyncResult(
-                reason = "Nie ma internetu. Notatki czekają na tablecie i wyślemy je, gdy sieć wróci.",
+                reason = "Nie ma internetu. Notatki czekają na urządzeniu i wyślemy je, gdy sieć wróci.",
                 worthRetrying = true,
             )
         }

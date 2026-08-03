@@ -79,7 +79,7 @@ fun FolderPickerScreen(
             )
 
             Text(
-                text = "Wskaż folder na tablecie. Kajet będzie w nim zapisywał wszystko, " +
+                text = "Wskaż folder na urządzeniu. Kajet będzie w nim zapisywał wszystko, " +
                     "co napiszesz. Każdy folder z aplikacji to zwykły katalog na dysku, " +
                     "a każda notatka to katalog z plikiem w środku.",
                 style = Kajet.type.bodyLarge,
@@ -88,7 +88,7 @@ fun FolderPickerScreen(
             )
 
             Text(
-                text = "Dzięki temu notatki zostaną na tablecie nawet wtedy, gdy odinstalujesz " +
+                text = "Dzięki temu notatki zostaną na urządzeniu nawet wtedy, gdy odinstalujesz " +
                     "Kajet. Możesz je też skopiować na komputer albo otworzyć w innej aplikacji. " +
                     "Najlepszym miejscem jest folder Dokumenty.",
                 style = Kajet.type.body,

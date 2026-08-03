@@ -66,7 +66,7 @@ class LibraryRepository(
 
     private suspend fun requireStore(): LibraryStore = store()
         ?: throw java.io.IOException(
-            "Nie wybrano katalogu na notatki. Otwórz ustawienia i wskaż folder na tablecie.",
+            "Nie wybrano katalogu na notatki. Otwórz ustawienia i wskaż folder na urządzeniu.",
         )
 
     fun refresh() {

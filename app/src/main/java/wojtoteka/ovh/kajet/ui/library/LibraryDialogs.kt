@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -227,7 +228,10 @@ fun NewNoteDialog(
     defaultBackground: PageBackground,
 ) {
     var title by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf(NoteKind.HANDWRITTEN) }
+    val narrowPhone = LocalConfiguration.current.screenWidthDp < 600
+    var kind by remember {
+        mutableStateOf(if (narrowPhone) NoteKind.TEXT else NoteKind.HANDWRITTEN)
+    }
     var mode by remember { mutableStateOf(defaultMode) }
     var background by remember { mutableStateOf(defaultBackground) }
 

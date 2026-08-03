@@ -1,5 +1,6 @@
 package wojtoteka.ovh.kajet
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.KajetTheme
 import wojtoteka.ovh.kajet.navigation.KajetNavigation
@@ -24,12 +26,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        captureAuthIntent(intent)
 
         val container = (application as KajetApp).container
 
         setContent {
             KajetAppRoot(container)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureAuthIntent(intent)
+    }
+
+    private fun captureAuthIntent(intent: Intent?) {
+        DeviceAuthBridge.offer(intent?.data)
     }
 }
 

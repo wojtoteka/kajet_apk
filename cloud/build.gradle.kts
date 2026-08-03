@@ -46,6 +46,9 @@ dependencies {
     // Token konta lezy zaszyfrowany, bo daje pelny dostep do notatek.
     implementation(libs.androidx.security.crypto)
 
+    // Custom Tabs do logowania przez strone (Google / haslo).
+    implementation(libs.androidx.browser)
+
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -79,13 +81,17 @@ fun LibraryScreen(
     var folderLook by remember { mutableStateOf<LibraryItem?>(null) }
 
     val screenWidth = LocalConfiguration.current.screenWidthDp
-    val roomForTree = screenWidth >= 720
+    // Phones and narrow windows: hide the folder tree, keep the main list usable.
+    val roomForTree = screenWidth >= 600
+    val narrow = screenWidth < 600
+    val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
 
     Row(Modifier.fillMaxSize().background(Kajet.colors.desk)) {
         SectionRail(
             selected = section,
             onSelect = model::setSection,
             onSettings = onSettings,
+            railWidth = railWidth,
         )
 
         if (section == LibrarySection.LIBRARY && roomForTree) {
@@ -263,8 +269,9 @@ private fun SectionRail(
     selected: LibrarySection,
     onSelect: (LibrarySection) -> Unit,
     onSettings: () -> Unit,
+    railWidth: androidx.compose.ui.unit.Dp = Kajet.dimens.railWidth,
 ) {
-    MarginRail {
+    MarginRail(width = railWidth) {
         Box(
             Modifier
                 .height(64.dp)
@@ -442,39 +449,78 @@ private fun FolderView(
     onNewFile: () -> Unit,
 ) {
     val placeName = if (path.isEmpty()) "Wszystkie notatki" else path.substringAfterLast('/')
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (path.isNotEmpty() && showPath) {
-                IconAction(KajetIcons.BackArrow, "Folder wyżej", onUp)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(placeName, style = Kajet.type.display, color = Kajet.colors.text)
-                if (path.isNotEmpty()) {
-                    Text(
-                        text = path.substringBeforeLast('/', "Wszystkie notatki"),
-                        style = Kajet.type.meta,
-                        color = Kajet.colors.muted,
-                    )
+        if (narrow) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (path.isNotEmpty() && showPath) {
+                        IconAction(KajetIcons.BackArrow, "Folder wyżej", onUp)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(placeName, style = Kajet.type.title, color = Kajet.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (path.isNotEmpty()) {
+                            Text(
+                                text = path.substringBeforeLast('/', "Wszystkie notatki"),
+                                style = Kajet.type.meta,
+                                color = Kajet.colors.muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus)
+                    SecondaryButton("Folder", onNewFolder, icon = KajetIcons.Folder)
+                    SecondaryButton("Kod", onNewFile, icon = KajetIcons.CodeFile)
                 }
             }
-            PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus)
-            SecondaryButton("Folder", onNewFolder, icon = KajetIcons.Folder)
-            SecondaryButton("Plik z kodem", onNewFile, icon = KajetIcons.CodeFile)
+        } else {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (path.isNotEmpty() && showPath) {
+                    IconAction(KajetIcons.BackArrow, "Folder wyżej", onUp)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(placeName, style = Kajet.type.display, color = Kajet.colors.text)
+                    if (path.isNotEmpty()) {
+                        Text(
+                            text = path.substringBeforeLast('/', "Wszystkie notatki"),
+                            style = Kajet.type.meta,
+                            color = Kajet.colors.muted,
+                        )
+                    }
+                }
+                PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus)
+                SecondaryButton("Folder", onNewFolder, icon = KajetIcons.Folder)
+                SecondaryButton("Plik z kodem", onNewFile, icon = KajetIcons.CodeFile)
+            }
         }
         HorizontalRule()
 
         if (items.isEmpty()) {
             EmptyState(
                 title = "Ten folder jest pusty",
-                description = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze się w katalogu, który wskazałeś na tablecie.",
+                description = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze się w katalogu, który wskazałeś na urządzeniu.",
                 action = { PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus) },
             )
         } else {
@@ -583,7 +629,7 @@ private fun SearchView(
         when {
             query.length < 2 -> EmptyState(
                 title = "Wpisz, czego szukasz",
-                description = "Wystarczą dwie litery. Szukanie działa bez internetu, bo spis notatek leży na tablecie.",
+                description = "Wystarczą dwie litery. Szukanie działa bez internetu, bo spis notatek leży na urządzeniu.",
             )
 
             results.isEmpty() -> EmptyState(

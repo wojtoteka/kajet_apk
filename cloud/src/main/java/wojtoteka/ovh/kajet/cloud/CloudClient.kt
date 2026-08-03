@@ -48,6 +48,25 @@ class CloudClient(
         withToken = false,
     )
 
+    /** Starts browser login (Google or password on the website). */
+    suspend fun createDeviceChallenge(device: String): Result<DeviceChallenge> = request(
+        url = "${account.serverUrl()}/api/v1/signin/device",
+        method = "POST",
+        body = json.encodeToString(DeviceChallengeRequest(device)),
+        withToken = false,
+    )
+
+    /**
+     * Polls until the website challenge is approved. Pending answers use HTTP 202
+     * and decode to [DevicePollResponse] with status "pending".
+     */
+    suspend fun pollDeviceChallenge(code: String): Result<DevicePollResponse> = request(
+        url = "${account.serverUrl()}/api/v1/signin/device?code=${java.net.URLEncoder.encode(code, "UTF-8")}",
+        method = "GET",
+        withToken = false,
+        acceptPending = true,
+    )
+
     suspend fun accountState(): Result<AccountState> = request(
         url = "${account.serverUrl()}/api/v1/account",
         method = "GET",
@@ -137,8 +156,9 @@ class CloudClient(
         method: String,
         body: String? = null,
         withToken: Boolean = true,
+        acceptPending: Boolean = false,
     ): Result<T> = withContext(Dispatchers.IO) {
-        val raw = connect(url, method, "application/json", withToken) { connection ->
+        val raw = connect(url, method, "application/json", withToken, acceptPending) { connection ->
             if (body != null) {
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
@@ -165,11 +185,12 @@ class CloudClient(
         method: String,
         contentType: String,
         withToken: Boolean,
+        acceptPending: Boolean = false,
         sendBody: (HttpURLConnection) -> Unit,
     ): Result<String> {
         if (!hasNetwork()) {
             return Result.Error(
-                "Nie ma połączenia z internetem. Notatka jest zapisana na tablecie i wyślemy ją, gdy sieć wróci.",
+                "Nie ma połączenia z internetem. Notatka jest zapisana na urządzeniu i wyślemy ją, gdy sieć wróci.",
                 worthRetrying = true,
             )
         }
@@ -201,7 +222,16 @@ class CloudClient(
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
-            if (status in 200..299) Result.Ok(body) else toError(status, body)
+            if (status in 200..299) {
+                // Device login poll uses 202 while waiting for approval.
+                if (acceptPending || status != 202 || body.isNotBlank()) {
+                    Result.Ok(body)
+                } else {
+                    Result.Ok("""{"status":"pending"}""")
+                }
+            } else {
+                toError(status, body)
+            }
         } catch (e: UnknownHostException) {
             Result.Error(
                 "Nie mogę połączyć się z serwerem. Sprawdź internet albo adres serwera w ustawieniach.",
@@ -284,6 +314,38 @@ class CloudClient(
 
 @Serializable
 private data class SignInRequest(val email: String, val password: String, val device: String)
+
+@Serializable
+private data class DeviceChallengeRequest(val device: String)
+
+@Serializable
+data class DeviceChallenge(
+    val code: String,
+    val verificationUri: String,
+    val expiresIn: Int = 600,
+    val interval: Int = 2,
+)
+
+@Serializable
+data class DevicePollResponse(
+    val status: String,
+    val token: String? = null,
+    val tokenId: String? = null,
+    val account: AccountData? = null,
+    val storage: Storage? = null,
+) {
+    fun toSignIn(): SignInResponse? {
+        val readyToken = token ?: return null
+        val readyAccount = account ?: return null
+        val readyStorage = storage ?: return null
+        return SignInResponse(
+            token = readyToken,
+            tokenId = tokenId.orEmpty(),
+            account = readyAccount,
+            storage = readyStorage,
+        )
+    }
+}
 
 @Serializable
 data class SignInResponse(

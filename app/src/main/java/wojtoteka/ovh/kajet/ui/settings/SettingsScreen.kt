@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -58,6 +59,9 @@ fun SettingsScreen(
 ) {
     val settings by settingsStore.settings.collectAsStateWithLifecycle(KajetSettings())
     val scope = rememberCoroutineScope()
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
+    val sheetPadding = if (narrow) 16.dp else 32.dp
 
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -77,7 +81,7 @@ fun SettingsScreen(
     ) {
         Column(
             Modifier
-                .width(Kajet.dimens.railWidth)
+                .width(railWidth)
                 .fillMaxHeight()
                 .marginRule(Kajet.colors.line),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,14 +97,14 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .background(Kajet.colors.sheet)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 48.dp),
+                .padding(start = sheetPadding, end = sheetPadding, top = 28.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             Text("Ustawienia", style = Kajet.type.display, color = Kajet.colors.text)
 
             SettingsSection(
                 title = "Konto w chmurze",
-                description = "Bez konta Kajet działa normalnie, a notatki leżą tylko na tablecie. " +
+                description = "Bez konta Kajet działa normalnie, a notatki leżą tylko na tym urządzeniu. " +
                     "Z kontem trafiają też na serwer i otworzysz je na komputerze.",
             ) {
                 SecondaryButton(
@@ -254,5 +258,5 @@ private fun NumberChoice(value: Int, selected: Boolean, onClick: () -> Unit) {
 fun readableFolder(uri: String): String {
     val decoded = Uri.decode(uri)
     val tail = decoded.substringAfterLast("/tree/")
-    return tail.replace("primary:", "Pamięć tabletu / ").ifBlank { decoded }
+    return tail.replace("primary:", "Pamięć urządzenia / ").ifBlank { decoded }
 }

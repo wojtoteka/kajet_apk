@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -46,16 +49,27 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
     val state by model.accountState.collectAsStateWithLifecycle()
     val syncState by model.syncState.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
+    val waitingForBrowser by model.waitingForBrowser.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val waiting by model.waitingInQueue.collectAsStateWithLifecycle()
+    val authUri by DeviceAuthBridge.pending.collectAsStateWithLifecycle()
+
+    LaunchedEffect(authUri) {
+        val uri = authUri ?: return@LaunchedEffect
+        model.onAuthDeepLink(uri)
+        DeviceAuthBridge.clear()
+    }
 
     val colors = Kajet.colors
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    val sheetPadding = if (narrow) 16.dp else 28.dp
+    val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
 
     Row(Modifier.fillMaxSize().background(colors.desk)) {
         Column(
             Modifier
-                .width(Kajet.dimens.railWidth)
+                .width(railWidth)
                 .fillMaxSize()
                 .background(colors.desk)
                 .marginRule(colors.line),
@@ -69,7 +83,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
                 .background(colors.sheet)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp, vertical = 24.dp),
+                .padding(horizontal = sheetPadding, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Text("Konto w chmurze", style = Kajet.type.display, color = colors.text)
@@ -85,7 +99,10 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                 is SignInState.SignedOut -> SignIn(
                     serverUrl = current.serverUrl,
                     busy = busy,
+                    waitingForBrowser = waitingForBrowser,
                     onSignIn = model::signIn,
+                    onSignInWithBrowser = model::signInWithBrowser,
+                    onCancelBrowser = { model.cancelBrowserSignIn() },
                     onSignInWithToken = model::signInWithToken,
                 )
 
@@ -106,7 +123,10 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
 private fun SignIn(
     serverUrl: String,
     busy: Boolean,
+    waitingForBrowser: Boolean,
     onSignIn: (String, String) -> Unit,
+    onSignInWithBrowser: () -> Unit,
+    onCancelBrowser: () -> Unit,
     onSignInWithToken: (String) -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
@@ -114,17 +134,46 @@ private fun SignIn(
     var token by remember { mutableStateOf("") }
     var viaToken by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        Modifier.widthIn(max = Kajet.dimens.readingWidth),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Text(
-            text = "Kajet działa bez konta. Notatki leżą wtedy tylko na tablecie, " +
+            text = "Kajet działa bez konta. Notatki leżą wtedy tylko na tym urządzeniu, " +
                 "w katalogu, który sam wskazałeś. Konto przydaje się, żeby otworzyć " +
-                "je na komputerze i odzyskać po zmianie tabletu.",
+                "je na komputerze i odzyskać po zmianie telefonu albo tabletu.",
             style = Kajet.type.body,
             color = Kajet.colors.muted,
-            modifier = Modifier.width(Kajet.dimens.readingWidth),
         )
 
+        if (waitingForBrowser) {
+            Text(
+                text = "Czekam, aż zatwierdzisz logowanie na stronie. Możesz wrócić do aplikacji " +
+                    "sam albo przyciskiem „Otwórz aplikację” po zatwierdzeniu.",
+                style = Kajet.type.body,
+                color = Kajet.colors.text,
+            )
+            SecondaryButton("Anuluj oczekiwanie", onCancelBrowser)
+            return
+        }
+
         if (!viaToken) {
+            PrimaryButton(
+                text = if (busy) "Otwieram..." else "Zaloguj przez Google",
+                onClick = onSignInWithBrowser,
+                icon = KajetIcons.Account,
+                enabled = !busy,
+            )
+            Text(
+                text = "Otworzy stronę $serverUrl w aplikacji. Tam wybierzesz konto Google " +
+                    "(albo hasło) i zatwierdzisz to urządzenie — zwykle wystarczą trzy tapnięcia.",
+                style = Kajet.type.meta,
+                color = Kajet.colors.muted,
+            )
+
+            HorizontalRule()
+            SectionLabel("Albo adres i hasło")
+
             Field("Adres e-mail", email, { email = it }, KeyboardType.Email)
             Field("Hasło", password, { password = it }, KeyboardType.Password, hidden = true)
 
@@ -135,16 +184,15 @@ private fun SignIn(
                     icon = KajetIcons.Account,
                     enabled = !busy,
                 )
-                SecondaryButton("Logowanie przez token", { viaToken = true })
+                SecondaryButton("Token z przeglądarki", { viaToken = true })
             }
         } else {
             Text(
                 text = "Zamiast hasła możesz wkleić token urządzenia. Otwórz w przeglądarce " +
                     "stronę $serverUrl/account, wydaj token dla tego urządzenia i przepisz go tutaj. " +
-                    "Przydaje się to zwłaszcza przy koncie bez hasła (np. założonym przez Google w przeglądarce).",
+                    "Przydaje się jako awaryjne wejście, gdy logowanie przez stronę nie zadziała.",
                 style = Kajet.type.body,
                 color = Kajet.colors.muted,
-                modifier = Modifier.width(Kajet.dimens.readingWidth),
             )
             Field("Token ze strony", token, { token = it }, KeyboardType.Ascii)
 
@@ -155,7 +203,7 @@ private fun SignIn(
                     icon = KajetIcons.Confirm,
                     enabled = !busy,
                 )
-                SecondaryButton("Wolę hasło", { viaToken = false })
+                SecondaryButton("Wróć", { viaToken = false })
             }
         }
     }
@@ -172,7 +220,10 @@ private fun SignedIn(
 ) {
     val colors = Kajet.colors
 
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(
+        Modifier.widthIn(max = Kajet.dimens.readingWidth),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -252,7 +303,7 @@ private fun SignedIn(
 
             Text(
                 text = "Notatki wysyłają się same po każdym zapisie. Kiedy nie ma internetu, " +
-                    "czekają na tablecie i idą, gdy sieć wróci.",
+                    "czekają na urządzeniu i idą, gdy sieć wróci.",
                 style = Kajet.type.meta,
                 color = colors.muted,
             )
@@ -269,11 +320,10 @@ private fun SignedIn(
         }
 
         Text(
-            text = "Wylogowanie odcina chmurę, ale nie kasuje niczego z tabletu. " +
+            text = "Wylogowanie odcina chmurę, ale nie kasuje niczego z urządzenia. " +
                 "Notatki zostają w katalogu, który wskazałeś.",
             style = Kajet.type.meta,
             color = colors.muted,
-            modifier = Modifier.width(Kajet.dimens.readingWidth),
         )
     }
 }
@@ -301,7 +351,7 @@ private fun Field(
     kind: KeyboardType,
     hidden: Boolean = false,
 ) {
-    Column(Modifier.width(Kajet.dimens.readingWidth)) {
+    Column(Modifier.fillMaxWidth()) {
         SectionLabel(label)
         BasicTextField(
             value = value,

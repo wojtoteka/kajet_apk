@@ -2,13 +2,17 @@ package wojtoteka.ovh.kajet.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
@@ -23,6 +27,7 @@ import wojtoteka.ovh.kajet.ui.note.NoteScreen
 import wojtoteka.ovh.kajet.ui.start.FolderPickerScreen
 import wojtoteka.ovh.kajet.cloud.AccountScreen
 import wojtoteka.ovh.kajet.cloud.AccountViewModel
+import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
 import wojtoteka.ovh.kajet.ui.settings.SettingsScreen
 import wojtoteka.ovh.kajet.storage.KajetSettings
 
@@ -43,12 +48,24 @@ object Routes {
 fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val authUri by DeviceAuthBridge.pending.collectAsStateWithLifecycle()
+    val backStack by navController.currentBackStackEntryAsState()
 
     val model: LibraryViewModel = viewModel(
         factory = LibraryViewModel.Factory(container.library, container.export),
     )
 
     val start = if (settings.libraryFolder.isNullOrBlank()) Routes.START else Routes.LIBRARY
+
+    // Deep link from the website after device approval → open account screen.
+    LaunchedEffect(authUri, backStack?.destination?.route) {
+        if (authUri == null) return@LaunchedEffect
+        if (settings.libraryFolder.isNullOrBlank()) return@LaunchedEffect
+        if (backStack?.destination?.route == Routes.ACCOUNT) return@LaunchedEffect
+        navController.navigate(Routes.ACCOUNT) {
+            launchSingleTop = true
+        }
+    }
 
     NavHost(navController = navController, startDestination = start) {
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -78,6 +79,8 @@ fun TextEditor(
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
 
     val colors = Kajet.colors
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
 
     var field by remember(document?.id) {
         mutableStateOf(TextFieldValue(document?.text?.markdown.orEmpty()))
@@ -147,7 +150,7 @@ fun TextEditor(
 
         Column(
             Modifier
-                .width(Kajet.dimens.railWidth)
+                .width(railWidth)
                 .fillMaxSize()
                 .background(colors.desk)
                 .marginRule(colors.line)
