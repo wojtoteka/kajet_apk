@@ -135,12 +135,13 @@ private fun SignIn(
                     icon = KajetIcons.Account,
                     enabled = !busy,
                 )
-                SecondaryButton("Mam konto Google", { viaToken = true })
+                SecondaryButton("Logowanie przez token", { viaToken = true })
             }
         } else {
             Text(
-                text = "Konto założone przez Google nie ma hasła. Otwórz na komputerze " +
-                    "stronę $serverUrl/account, wydaj token dla tego tabletu i przepisz go tutaj.",
+                text = "Zamiast hasła możesz wkleić token urządzenia. Otwórz na komputerze " +
+                    "stronę $serverUrl/account, wydaj token dla tego tabletu i przepisz go tutaj. " +
+                    "Przydaje się to zwłaszcza przy koncie bez hasła (np. założonym przez Google w przeglądarce).",
                 style = Kajet.type.body,
                 color = Kajet.colors.muted,
                 modifier = Modifier.width(Kajet.dimens.readingWidth),
