@@ -3,7 +3,7 @@
 Ten plik służy do wracania do pracy po przerwie. Trzyma stan projektu,
 zapadłe decyzje i to, co zostało do zrobienia.
 
-Ostatnia aktualizacja: 3 sierpnia 2026.
+Ostatnia aktualizacja: 4 sierpnia 2026.
 
 ## Czym jest Kajet
 
@@ -338,6 +338,74 @@ Opis wszystkich zapór, razem z tym, przed czym każda broni, jest w README
 serwera. Obraz jest w `docker/Dockerfile`: Python, JavaScript, TypeScript,
 powłoka, C, C++, PHP, Ruby i SQL. Javy, Kotlina, Go, Rusta i C# tam nie ma,
 bo każdy dokłada od kilkuset megabajtów do kilku gigabajtów.
+
+## Etap 15: poprawki po pierwszym użyciu na telefonie
+
+Zgłoszenia z 4 sierpnia 2026 i to, co z nimi zrobiono. Wersja podniesiona
+do 1.0 (versionCode 2).
+
+**Wydanie release było zepsute u korzenia.** `proguard-rules.pro` był pustym
+szablonem, a release budował się z pełnym odchudzaniem R8, które zmienia nazwy
+klas odnajdywanych po nazwie przez kotlinx.serialization i natywny silnik
+kreski. Stąd „debug działa, zainstalowana aplikacja nie". Odchudzanie jest
+wyłączone; kilkanaście megabajtów więcej to cena za działającą całość.
+
+**Udostępnianie zamykało aplikację.** Eksport zapisywał pliki do
+`cache/export`, a FileProvider znał tylko `eksport/` — jedna litera różnicy
+i `getUriForFile` rzucał wyjątkiem prosto z przycisku. Katalog nazywa się
+teraz tak jak w `sciezki_plikow.xml`, a „Wyślij", „Otwórz" i „Drukuj" oddają
+zdanie po polsku zamiast wyjątku. Drukowanie dostaje kontekst ekranu,
+bo systemowy druk odmawia pracy bez Activity.
+
+**Pisanie ręczne na telefonie.** Dwie przyczyny „pustej kartki": palec
+domyślnie tylko przewijał (na telefonie bez rysika nie dało się postawić
+kreski), a edytor odręczny jako jedyny nie miał układu na wąski ekran —
+kolory ginęły za tytułem, a powrót był w bocznym pasku ikon. Teraz domyślne
+zachowanie palca zależy od sprzętu (bez rysika w systemie palec rysuje),
+a poniżej 600 dp edytor składa się w pion: powrót i kolory na górze,
+narzędzia w przewijanym pasku na dole, panele pisaka i ustawień wjeżdżają
+od dołu na całą szerokość. Silnik kreski został ten sam — architektura
+była zdrowa, wymieniony jest układ, nie fundament.
+
+**Synchronizacja jak na dysku w chmurze.** Wysyłka szła wyłącznie z kolejki,
+a do kolejki trafiały tylko notatki zapisane po zalogowaniu — biblioteka
+sprzed zalogowania nigdy nie jechała na serwer, stąd „synchronizuję i nic
+się nie dzieje". Po pobraniu zmian synchronizacja uzgadnia teraz całą
+bibliotekę: notatki, o których serwer nic nie wie, dopisują się do kolejki
+i jadą od razu. Do tego magazyn konta sam leczy rozjazd między plikiem
+szyfrowanym a zapasowym (to od niego logowanie „raz było, raz znikało"),
+a ekran konta przy każdym wejściu sprawdza token i stan miejsca na serwerze.
+
+**Notatka tekstowa.** Okno rysowania miało sztywne 640 dp i pasek bez
+przewijania — na telefonie zostawało „puste pole", a w ciemnym motywie
+z czterech kolorów widać było tylko biały. Teraz okno mieści się w ekranie,
+pasek się przewija, paleta jest pełna, a kropki mają obwódki zależne od
+jasności. Zdjęcia: kolizja nazw załączników dawała „zdjecie (2).jpg" ze
+spacją, której nie czytał wzorzec bloku obrazka — użytkownik widział surowy
+Markdown. Nazwy idą teraz z zegara (bez kolizji), wzorce w blokach
+i podglądzie znoszą spacje i nawiasy ze starych notatek, a zdjęcie wstawia
+się za blokiem z kursorem, nie na końcu notatki.
+
+**Zapis od razu.** Zamiast odstępu 3/5/10/20 s zapis rusza po każdej zmianie:
+krótkie sklejanie 400 ms łączy serię szybkich zmian w jeden zapis, a przy
+pisaniu bez przerwy treść i tak ląduje na dysku co najwyżej co 2 s. Raz
+zaczęty zapis nie daje się przerwać w połowie pliku. Wybór odstępu zniknął
+z ustawień.
+
+**Mapa myśli dorównała stronie.** Uchwyt zmiany rozmiaru węzła, „Zmieść całą
+mapę w oknie" liczone z obwiedni, dodawanie węzła obok (rodzeństwo), pełne
+dziedziczenie stylu rodzica, podwójne dotknięcie tła zakłada węzeł w tym
+miejscu, przyciski zoomu z odczytem procentu, licznik ukrytych węzłów na
+zwiniętej gałęzi, linie w kolorze gałęzi, pole „Tekst węzła" w panelu
+(limit 500 znaków jak na stronie), panel węzła na telefonie jako dolny
+pasek na całą szerokość, stopka z liczbą węzłów i połączeń. Przewagi
+aplikacji (podpisy rysikiem, łączenie przeciąganiem, rozłączanie z paska
+linii) zostały nietknięte.
+
+**Biblioteka.** „Wszystkie notatki" idą od najnowszej do najstarszej
+(foldery zostają alfabetycznie na górze), daty bierze się ze spisu, nie
+z SAF. Dialogi mieszczą się na wąskim ekranie, nagłówek kosza ma wariant
+pionowy.
 
 ## Co zostało
 

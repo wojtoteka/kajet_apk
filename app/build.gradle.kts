@@ -16,8 +16,8 @@ android {
         applicationId = "wojtoteka.ovh.kajet"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,8 +37,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Bez odchudzania R8. Plik reguł był pustym szablonem, a R8 zmieniał
+            // nazwy klas, które kotlinx.serialization i natywny silnik kreski
+            // (androidx.ink) odnajdują po nazwie — wydanie release psuło
+            // logowanie, synchronizację i pisanie, choć debug działał.
+            // Kilkanaście megabajtów więcej to uczciwa cena za działającą całość.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

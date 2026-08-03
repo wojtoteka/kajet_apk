@@ -81,7 +81,10 @@ class LibraryRepository(
                 withContext(io) {
                     val store = store() ?: return@withContext emptyList()
                     val fromDisk = store.list(path)
+                    // Sortujemy jeszcze raz, bo indeks ma pewniejsze daty niż SAF,
+                    // który potrafi oddać zero w lastModified.
                     fromDisk.map { item -> enrichFromIndex(item) }
+                        .sortedWith(LibraryStore.libraryOrder)
                 }
             }
 
@@ -94,6 +97,7 @@ class LibraryRepository(
             favorite = indexed.favorite,
             tags = indexed.tags.split('|').filter { it.isNotBlank() },
             preview = indexed.preview.ifBlank { null },
+            updatedAt = if (indexed.updatedAt > 0) indexed.updatedAt else item.updatedAt,
         )
     }
 
@@ -102,6 +106,15 @@ class LibraryRepository(
 
     fun recent(count: Int = 20): Flow<List<LibraryItem>> =
         dao.recent(count).map { list -> list.map { it.toLibraryItem() } }
+
+    /**
+     * Ścieżka i identyfikator każdej notatki ze spisu. Synchronizacja używa
+     * tego do uzgodnienia całej biblioteki, a nie tylko notatek zapisanych
+     * po zalogowaniu.
+     */
+    suspend fun allNoteIds(): List<Pair<String, String>> = withContext(io) {
+        dao.allNotes().map { it.path to it.documentId }
+    }
 
     suspend fun search(query: String): List<LibraryItem> = withContext(io) {
         val trimmed = query.trim()
@@ -142,6 +155,10 @@ class LibraryRepository(
         val document = store.readNote(item.path)
         writeToIndex(item, document)
         refresh()
+        // Świeża notatka też musi pojechać do chmury. Bez tego trafiała tam
+        // dopiero po pierwszej poprawce, a notatka założona i zostawiona pusta
+        // nie pojawiała się na stronie w ogóle.
+        onNoteSaved?.invoke(item.path, document.id)
         item
     }
 

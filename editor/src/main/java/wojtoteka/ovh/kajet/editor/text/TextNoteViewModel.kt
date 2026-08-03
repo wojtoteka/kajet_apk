@@ -117,13 +117,30 @@ class TextNoteViewModel(
 
     // Zdjęcia i rysunki
 
+    // Wybór zdjęcia w galerii albo aparacie trwa dłuższą chwilę i dzieje się
+    // poza edytorem, więc miejsce wstawienia zapamiętuje się w chwili
+    // naciśnięcia przycisku, a nie w chwili powrotu z wynikiem.
+    private var photoPosition: Int? = null
+
+    fun rememberPhotoPosition(at: Int) {
+        photoPosition = at
+    }
+
+    fun takePhotoPosition(): Int {
+        val at = photoPosition ?: markdown.length
+        photoPosition = null
+        return at.coerceIn(0, markdown.length)
+    }
+
     fun insertPhoto(data: ByteArray, extension: String, position: Int) {
         viewModelScope.launch {
             _busy.value = "Zapisuję zdjęcie"
             try {
+                // Nazwa z zegara, bo przy kolizji magazyn dokleja " (2)" ze spacją,
+                // a takiego adresu nie czyta blok obrazka w podglądzie.
                 val name = repo.writeAttachment(
                     notePath = path,
-                    name = "zdjecie.$extension",
+                    name = "zdjecie-${System.currentTimeMillis()}.$extension",
                     data = data,
                     mime = if (extension == "png") "image/png" else "image/jpeg",
                 )
@@ -145,7 +162,8 @@ class TextNoteViewModel(
             _busy.value = "Zapisuję rysunek"
             try {
                 val png = DrawingToImage.png(strokes, width, height)
-                val imageName = repo.writeAttachment(path, "rysunek.png", png, "image/png")
+                val imageName =
+                    repo.writeAttachment(path, "rysunek-${System.currentTimeMillis()}.png", png, "image/png")
                 val sourceName = imageName.removeSuffix(".png") + ".strokes.json"
 
                 val store = repo.store()

@@ -8,7 +8,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.storage.SettingsStore
@@ -75,11 +74,10 @@ class CodeViewModel(
 
     private var saveJob: Job? = null
     private var runJob: Job? = null
-    private var autosaveInterval = 5
+    private var pendingSince = 0L
 
     init {
         viewModelScope.launch {
-            autosaveInterval = runCatching { settings.settings.first().autosaveInterval }.getOrDefault(5)
             try {
                 _code.value = repo.readText(path)
             } catch (e: Exception) {
@@ -92,9 +90,17 @@ class CodeViewModel(
         _code.value = text
         _saved.value = false
         refreshMatches()
+
+        // Zapis rusza zaraz po zmianie: krótka zwłoka skleja szybkie pisanie
+        // w jeden zapis, a górna granica pilnuje, żeby przy pisaniu bez przerwy
+        // kod i tak szedł na dysk. Ta sama zasada co w NoteViewModel.
+        val now = System.currentTimeMillis()
+        if (pendingSince == 0L) pendingSince = now
+        val wait = if (now - pendingSince >= 2_000L) 0L else 400L
+
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
-            delay(autosaveInterval * 1000L)
+            delay(wait)
             save()
         }
     }
@@ -139,8 +145,13 @@ class CodeViewModel(
 
     private suspend fun save() {
         if (_saved.value) return
+        pendingSince = 0L
         try {
-            repo.writeText(path, _code.value)
+            // Raz zaczęty zapis ma dojść do końca, nawet gdy kolejna zmiana
+            // właśnie kasuje to zadanie.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                repo.writeText(path, _code.value)
+            }
             _saved.value = true
         } catch (e: Exception) {
             _error.value = e.message ?: "Nie udało się zapisać pliku."

@@ -8,7 +8,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.storage.SettingsStore
@@ -59,13 +58,10 @@ open class NoteViewModel(
     val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
 
     private var saveJob: Job? = null
-    private var autosaveInterval = 5
+    private var pendingSince = 0L
 
     init {
-        viewModelScope.launch {
-            autosaveInterval = runCatching { settings.settings.first().autosaveInterval }.getOrDefault(5)
-            load()
-        }
+        viewModelScope.launch { load() }
     }
 
     private suspend fun load() {
@@ -123,9 +119,17 @@ open class NoteViewModel(
 
     private fun markChanged() {
         _saveState.value = SaveState.CHANGED
+
+        // Zapis rusza zaraz po zmianie. Krótka zwłoka skleja serię szybkich
+        // zmian (pisane słowo, ciągnięta kreska) w jeden zapis, a górna granica
+        // pilnuje, żeby przy pisaniu bez przerwy treść i tak szła na dysk.
+        val now = System.currentTimeMillis()
+        if (pendingSince == 0L) pendingSince = now
+        val wait = if (now - pendingSince >= MAX_DEFER_MS) 0L else COALESCE_MS
+
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
-            delay(autosaveInterval * 1000L)
+            delay(wait)
             save()
         }
     }
@@ -138,9 +142,15 @@ open class NoteViewModel(
     private suspend fun save() {
         val document = _document.value ?: return
         if (_saveState.value == SaveState.SAVED) return
+        pendingSince = 0L
         _saveState.value = SaveState.SAVING
         try {
-            repo.writeNote(path, document)
+            // Zapis chodzi teraz przy każdej zmianie, więc kolejna zmiana może
+            // skasować zadanie w połowie pisania pliku. NonCancellable pilnuje,
+            // żeby raz zaczęty zapis zawsze doszedł do końca.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                repo.writeNote(path, document)
+            }
             _saveState.value = SaveState.SAVED
             _lastSave.value = System.currentTimeMillis()
             _error.value = null
@@ -176,5 +186,10 @@ open class NoteViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             NoteViewModel(repo, settings, path) as T
+    }
+
+    private companion object {
+        const val COALESCE_MS = 400L
+        const val MAX_DEFER_MS = 2_000L
     }
 }

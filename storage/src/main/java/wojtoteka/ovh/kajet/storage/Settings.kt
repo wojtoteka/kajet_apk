@@ -50,11 +50,11 @@ data class RememberedPen(
 
 data class KajetSettings(
     val libraryFolder: String? = null,
-    // Rysik pisze, palec przesuwa kartkę. Tak trzyma się tablet w ręku i tak
-    // działa zwykły zeszyt. Kto woli rysować palcem, przestawia to w ustawieniach.
+    // Rysik pisze, palec przesuwa kartkę — jak w zwykłym zeszycie. Ale na
+    // urządzeniu bez rysika ta zasada oznaczałaby, że nie da się pisać wcale,
+    // więc domyślna wartość zależy od sprzętu (patrz SettingsStore).
     val fingerBehavior: FingerBehavior = FingerBehavior.SCROLL,
     val theme: ThemeChoice = ThemeChoice.SYSTEM,
-    val autosaveInterval: Int = 5,
     val defaultPageMode: PageMode = PageMode.A4,
     val defaultBackground: PageBackground = PageBackground.LINED,
     val handwritingModelDownloaded: Boolean = false,
@@ -74,7 +74,6 @@ class SettingsStore(private val context: Context) {
         val folder = stringPreferencesKey("katalog_biblioteki")
         val finger = stringPreferencesKey("zachowanie_palca")
         val theme = stringPreferencesKey("motyw")
-        val autosave = intPreferencesKey("odstep_autozapisu")
         val pageMode = stringPreferencesKey("domyslny_tryb_strony")
         val background = stringPreferencesKey("domyslne_tlo")
         val handwritingModel = booleanPreferencesKey("model_pisma_pobrany")
@@ -90,12 +89,21 @@ class SettingsStore(private val context: Context) {
         val eraserRadius = floatPreferencesKey("gumka_promien")
     }
 
+    // Telefon bez rysika: gdyby palec tylko przewijał, w notatce odręcznej
+    // nie dałoby się postawić ani jednej kreski. Dlatego bez zapisanego wyboru
+    // palec rysuje wszędzie tam, gdzie system nie zgłasza żadnego rysika.
+    private val defaultFinger: FingerBehavior by lazy {
+        val stylusPresent = android.view.InputDevice.getDeviceIds().any { id ->
+            android.view.InputDevice.getDevice(id)?.supportsSource(android.view.InputDevice.SOURCE_STYLUS) == true
+        }
+        if (stylusPresent) FingerBehavior.SCROLL else FingerBehavior.DRAW
+    }
+
     val settings: Flow<KajetSettings> = context.dataStore.data.map { data ->
         KajetSettings(
             libraryFolder = data[Keys.folder],
-            fingerBehavior = data[Keys.finger]?.let(::fingerBehaviorFrom) ?: FingerBehavior.SCROLL,
+            fingerBehavior = data[Keys.finger]?.let(::fingerBehaviorFrom) ?: defaultFinger,
             theme = data[Keys.theme]?.let(::themeChoiceFrom) ?: ThemeChoice.SYSTEM,
-            autosaveInterval = data[Keys.autosave] ?: 5,
             defaultPageMode = data[Keys.pageMode]?.let { name ->
                 runCatching { PageMode.valueOf(name) }.getOrNull()
             } ?: PageMode.A4,
@@ -155,10 +163,6 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setTheme(value: ThemeChoice) {
         context.dataStore.edit { it[Keys.theme] = value.name }
-    }
-
-    suspend fun setAutosaveInterval(seconds: Int) {
-        context.dataStore.edit { it[Keys.autosave] = seconds.coerceIn(2, 60) }
     }
 
     suspend fun setDefaultPageMode(mode: PageMode) {

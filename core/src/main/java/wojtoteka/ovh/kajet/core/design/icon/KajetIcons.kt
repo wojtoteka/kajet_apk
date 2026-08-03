@@ -2,1114 +2,351 @@ package wojtoteka.ovh.kajet.core.design.icon
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathBuilder
-import androidx.compose.ui.graphics.vector.PathData
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
+/*
+  Ikony Material Symbols Rounded z fonts.google.com/icons.
+
+  Plik jest wypisywany przez tools/ikony.mjs — nie poprawiaj go ręcznie.
+  Żeby dołożyć albo zamienić ikonę, dopisz ją w tamtym spisie i uruchom:
+
+      node tools/ikony.mjs
+
+  Rysunki Google są w układzie 960 na 960, liczonym od góry w górę (y od -960
+  do 0). Dlatego każdy leży w grupie przesuniętej o 960 w dół — dzięki temu
+  ImageVector ma zwyczajny układ od lewego górnego rogu, a Icon() rysuje ikonę
+  w kolorze treści, tak jak wszystkie pozostałe.
+*/
 object KajetIcons {
 
-    // Biblioteka i pliki
-    val Library by lazy {
-        icon("Biblioteka") {
-            moveTo(3.5f, 20.5f); lineTo(20.5f, 20.5f)
-            moveTo(5.5f, 20.5f); lineTo(5.5f, 8f); lineTo(9f, 8f); lineTo(9f, 20.5f)
-            moveTo(10.5f, 20.5f); lineTo(10.5f, 4.5f); lineTo(14f, 4.5f); lineTo(14f, 20.5f)
-            moveTo(15.5f, 20.5f); lineTo(15.5f, 11f); lineTo(19f, 11f); lineTo(19f, 20.5f)
-        }
-    }
-
-    val Folder by lazy {
-        icon("Folder") {
-            moveTo(3.5f, 19f); lineTo(3.5f, 6f); lineTo(9.5f, 6f); lineTo(11.5f, 8.5f)
-            lineTo(20.5f, 8.5f); lineTo(20.5f, 19f); close()
-        }
-    }
-
-    val FolderOpen by lazy {
-        icon("Folder otwarty") {
-            moveTo(3.5f, 19f); lineTo(3.5f, 6f); lineTo(9.5f, 6f); lineTo(11.5f, 8.5f)
-            lineTo(19f, 8.5f); lineTo(19f, 11.5f)
-            moveTo(3.5f, 19f); lineTo(6.5f, 11.5f); lineTo(22f, 11.5f); lineTo(19f, 19f); close()
-        }
-    }
-
-    val HandwrittenNote by lazy {
-        icon("Notatka odręczna") {
-            sheet()
-            moveTo(8.5f, 11.5f)
-            curveTo(9.8f, 8.5f, 11.2f, 14.5f, 12.5f, 11.5f)
-            curveTo(13.4f, 9.5f, 14.5f, 11f, 15.5f, 11.5f)
-            moveTo(8.5f, 15.5f); lineTo(15.5f, 15.5f)
-        }
-    }
-
-    val TextNote by lazy {
-        icon("Notatka tekstowa") {
-            sheet()
-            moveTo(8.5f, 8.5f); lineTo(15.5f, 8.5f)
-            moveTo(8.5f, 12f); lineTo(15.5f, 12f)
-            moveTo(8.5f, 15.5f); lineTo(12.5f, 15.5f)
-        }
-    }
-
-    val MindMapIcon by lazy {
-        icon("Mapa myśli") {
-            moveTo(2.5f, 9.5f); lineTo(9f, 9.5f); lineTo(9f, 14.5f); lineTo(2.5f, 14.5f); close()
-            moveTo(15f, 4.5f); lineTo(21.5f, 4.5f); lineTo(21.5f, 9f); lineTo(15f, 9f); close()
-            moveTo(15f, 15f); lineTo(21.5f, 15f); lineTo(21.5f, 19.5f); lineTo(15f, 19.5f); close()
-            moveTo(9f, 11.5f); curveTo(12f, 11.5f, 12f, 6.75f, 15f, 6.75f)
-            moveTo(9f, 12.5f); curveTo(12f, 12.5f, 12f, 17.25f, 15f, 17.25f)
-        }
-    }
-
-    val CodeFile by lazy {
-        icon("Plik z kodem") {
-            sheet()
-            moveTo(10.5f, 9.5f); lineTo(8f, 12f); lineTo(10.5f, 14.5f)
-            moveTo(13.5f, 9.5f); lineTo(16f, 12f); lineTo(13.5f, 14.5f)
-        }
-    }
-
-    val Favourites by lazy {
-        icon("Ulubione") {
-            moveTo(12f, 4.3f); lineTo(14f, 9.55f); lineTo(19.61f, 9.83f); lineTo(15.23f, 13.35f)
-            lineTo(16.7f, 18.77f); lineTo(12f, 15.7f); lineTo(7.3f, 18.77f); lineTo(8.77f, 13.35f)
-            lineTo(4.39f, 9.83f); lineTo(10f, 9.55f); close()
-        }
-    }
-
-    val Recent by lazy {
-        icon("Ostatnio otwarte") {
-            circle(12f, 12f, 8.5f)
-            moveTo(12f, 7f); lineTo(12f, 12.3f); lineTo(15.8f, 14f)
-        }
-    }
-
-    val Tag by lazy {
-        icon("Tag") {
-            moveTo(20.5f, 12.5f); lineTo(12.5f, 20.5f); lineTo(3.5f, 11.5f); lineTo(3.5f, 3.5f)
-            lineTo(11.5f, 3.5f); close()
-            circle(7.4f, 7.4f, 1.3f)
-        }
-    }
-
-    val Bin by lazy {
-        icon("Kosz") {
-            moveTo(4.5f, 6.5f); lineTo(19.5f, 6.5f)
-            moveTo(9.5f, 6.5f); lineTo(9.5f, 4f); lineTo(14.5f, 4f); lineTo(14.5f, 6.5f)
-            moveTo(6.5f, 6.5f); lineTo(7.4f, 20f); lineTo(16.6f, 20f); lineTo(17.5f, 6.5f)
-            moveTo(10.5f, 10f); lineTo(10.8f, 16.5f)
-            moveTo(13.5f, 10f); lineTo(13.2f, 16.5f)
-        }
-    }
-
-    val Search by lazy {
-        icon("Szukaj") {
-            circle(10.5f, 10.5f, 6.2f)
-            moveTo(15.1f, 15.1f); lineTo(20f, 20f)
-        }
-    }
-
-    val Plus by lazy {
-        icon("Dodaj") {
-            moveTo(12f, 5f); lineTo(12f, 19f)
-            moveTo(5f, 12f); lineTo(19f, 12f)
-        }
-    }
-
-    val MoreDots by lazy {
-        icon("Więcej") {
-            dot(12f, 5.6f); dot(12f, 12f); dot(12f, 18.4f)
-        }
-    }
-
-    val ArrowRight by lazy {
-        icon("Rozwiń") {
-            moveTo(9.5f, 5f); lineTo(16.5f, 12f); lineTo(9.5f, 19f)
-        }
-    }
-
-    val ArrowDown by lazy {
-        icon("Zwiń") {
-            moveTo(5f, 9.5f); lineTo(12f, 16.5f); lineTo(19f, 9.5f)
-        }
-    }
-
-    val BackArrow by lazy {
-        icon("Wstecz") {
-            moveTo(19.5f, 12f); lineTo(4.5f, 12f)
-            moveTo(10.5f, 6f); lineTo(4.5f, 12f); lineTo(10.5f, 18f)
-        }
-    }
-
-    val SettingsCog by lazy {
-        icon("Ustawienia") {
-            moveTo(3.5f, 7f); lineTo(20.5f, 7f)
-            moveTo(3.5f, 12f); lineTo(20.5f, 12f)
-            moveTo(3.5f, 17f); lineTo(20.5f, 17f)
-            circle(15f, 7f, 2.1f)
-            circle(8.5f, 12f, 2.1f)
-            circle(16.5f, 17f, 2.1f)
-        }
-    }
-
-    // Narzędzia do pisania
-    val Pen by lazy {
-        icon("Pióro") {
-            moveTo(4.2f, 19.8f); lineTo(5.6f, 15.2f); lineTo(16.6f, 4.2f); lineTo(19.8f, 7.4f)
-            lineTo(8.8f, 18.4f); close()
-            moveTo(5.6f, 15.2f); lineTo(8.8f, 18.4f)
-            moveTo(14.4f, 6.4f); lineTo(17.6f, 9.6f)
-        }
-    }
-
-    val Highlighter by lazy {
-        icon("Zakreślacz") {
-            moveTo(9f, 14.5f); lineTo(15f, 8.5f); lineTo(18.5f, 12f); lineTo(12.5f, 18f); close()
-            moveTo(15f, 8.5f); lineTo(17f, 6.5f); lineTo(20.5f, 10f); lineTo(18.5f, 12f)
-            moveTo(9f, 14.5f); lineTo(6f, 17.5f); lineTo(9.5f, 18f); lineTo(12.5f, 18f)
-            moveTo(4f, 21f); lineTo(20f, 21f)
-        }
-    }
-
-    val Eraser by lazy {
-        icon("Gumka") {
-            moveTo(5f, 18.5f); lineTo(5f, 15.5f); lineTo(14f, 6.5f); lineTo(18.5f, 11f)
-            lineTo(11f, 18.5f); close()
-            moveTo(9.5f, 11f); lineTo(14f, 15.5f)
-            moveTo(4f, 21.2f); lineTo(20f, 21.2f)
-        }
-    }
-
-    val EraserStroke by lazy {
-        icon("Gumka do całej kreski") {
-            moveTo(5f, 18.5f); lineTo(5f, 15.5f); lineTo(14f, 6.5f); lineTo(18.5f, 11f)
-            lineTo(11f, 18.5f); close()
-            moveTo(9.5f, 11f); lineTo(14f, 15.5f)
-            moveTo(4f, 21.2f); lineTo(7f, 21.2f)
-            moveTo(10.5f, 21.2f); lineTo(13.5f, 21.2f)
-            moveTo(17f, 21.2f); lineTo(20f, 21.2f)
-        }
-    }
-
-    val Lasso by lazy {
-        icon("Zaznaczanie") {
-            moveTo(12f, 4.5f)
-            curveTo(17.5f, 4.5f, 21f, 7.4f, 21f, 11f)
-            curveTo(21f, 14.6f, 17.5f, 17.5f, 12f, 17.5f)
-            curveTo(6.5f, 17.5f, 3f, 14.6f, 3f, 11f)
-            curveTo(3f, 7.4f, 6.5f, 4.5f, 12f, 4.5f)
-            close()
-            moveTo(8.6f, 16.9f)
-            curveTo(8f, 19f, 9.5f, 20.6f, 11.2f, 20.6f)
-        }
-    }
-
-    val Ruler by lazy {
-        icon("Linijka") {
-            moveTo(2.5f, 8.5f); lineTo(21.5f, 8.5f); lineTo(21.5f, 15.5f); lineTo(2.5f, 15.5f); close()
-            moveTo(6f, 8.5f); lineTo(6f, 12.5f)
-            moveTo(9f, 8.5f); lineTo(9f, 11f)
-            moveTo(12f, 8.5f); lineTo(12f, 12.5f)
-            moveTo(15f, 8.5f); lineTo(15f, 11f)
-            moveTo(18f, 8.5f); lineTo(18f, 12.5f)
-        }
-    }
-
-    val Undo by lazy {
-        icon("Cofnij") {
-            moveTo(8.5f, 7f); lineTo(4f, 11.5f); lineTo(8.5f, 16f)
-            moveTo(4f, 11.5f); lineTo(13.5f, 11.5f)
-            curveTo(17.5f, 11.5f, 20f, 14f, 20f, 17.5f)
-            lineTo(20f, 19.5f)
-        }
-    }
-
-    val Redo by lazy {
-        icon("Ponów") {
-            moveTo(15.5f, 7f); lineTo(20f, 11.5f); lineTo(15.5f, 16f)
-            moveTo(20f, 11.5f); lineTo(10.5f, 11.5f)
-            curveTo(6.5f, 11.5f, 4f, 14f, 4f, 17.5f)
-            lineTo(4f, 19.5f)
-        }
-    }
-
-    val TextBox by lazy {
-        icon("Pole tekstowe") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f); lineTo(20.5f, 18.5f); lineTo(3.5f, 18.5f); close()
-            moveTo(8.5f, 9.5f); lineTo(15.5f, 9.5f)
-            moveTo(12f, 9.5f); lineTo(12f, 15f)
-        }
-    }
-
-    val PhotoFrame by lazy {
-        icon("Zdjęcie") {
-            moveTo(3.5f, 5f); lineTo(20.5f, 5f); lineTo(20.5f, 19f); lineTo(3.5f, 19f); close()
-            circle(8.5f, 9.5f, 1.5f)
-            moveTo(3.5f, 16f); lineTo(9f, 10.5f); lineTo(14f, 15.5f); lineTo(16.5f, 13f); lineTo(20.5f, 17f)
-        }
-    }
-
-    val CameraBody by lazy {
-        icon("Aparat") {
-            moveTo(3.5f, 7.5f); lineTo(8f, 7.5f); lineTo(9.5f, 5.5f); lineTo(14.5f, 5.5f)
-            lineTo(16f, 7.5f); lineTo(20.5f, 7.5f); lineTo(20.5f, 19f); lineTo(3.5f, 19f); close()
-            circle(12f, 13f, 3.6f)
-        }
-    }
-
-    val DrawingPad by lazy {
-        icon("Rysunek") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f); lineTo(20.5f, 18.5f); lineTo(3.5f, 18.5f); close()
-            moveTo(6.5f, 14.5f)
-            curveTo(9f, 8.5f, 11f, 17f, 13.5f, 12f)
-            curveTo(15f, 9f, 16.5f, 11.5f, 17.5f, 10f)
-        }
-    }
-
-    val ColorSwatch by lazy {
-        icon("Kolor") {
-            moveTo(12f, 3.2f)
-            curveTo(12f, 3.2f, 5.5f, 11f, 5.5f, 15f)
-            curveTo(5.5f, 18.6f, 8.4f, 21f, 12f, 21f)
-            curveTo(15.6f, 21f, 18.5f, 18.6f, 18.5f, 15f)
-            curveTo(18.5f, 11f, 12f, 3.2f, 12f, 3.2f)
-            close()
-        }
-    }
-
-    val PageRuling by lazy {
-        icon("Tło strony") {
-            moveTo(4.5f, 3.5f); lineTo(19.5f, 3.5f); lineTo(19.5f, 20.5f); lineTo(4.5f, 20.5f); close()
-            moveTo(4.5f, 9.2f); lineTo(19.5f, 9.2f)
-            moveTo(4.5f, 14.8f); lineTo(19.5f, 14.8f)
-            moveTo(9.5f, 3.5f); lineTo(9.5f, 20.5f)
-            moveTo(14.5f, 3.5f); lineTo(14.5f, 20.5f)
-        }
-    }
-
-    val AddPage by lazy {
-        icon("Dodaj stronę") {
-            moveTo(5f, 3.5f); lineTo(19f, 3.5f); lineTo(19f, 20.5f); lineTo(5f, 20.5f); close()
-            moveTo(12f, 8.5f); lineTo(12f, 15.5f)
-            moveTo(8.5f, 12f); lineTo(15.5f, 12f)
-        }
-    }
-
-    val FingerDraws by lazy {
-        icon("Palec rysuje") {
-            moveTo(9f, 12.5f); lineTo(9f, 5.8f)
-            curveTo(9f, 4.2f, 11.4f, 4.2f, 11.4f, 5.8f)
-            lineTo(11.4f, 11.5f)
-            moveTo(11.4f, 8.6f)
-            curveTo(11.4f, 7.2f, 13.7f, 7.2f, 13.7f, 8.6f)
-            lineTo(13.7f, 11.8f)
-            moveTo(13.7f, 9.6f)
-            curveTo(13.7f, 8.3f, 16f, 8.3f, 16f, 9.6f)
-            lineTo(16f, 14.5f)
-            curveTo(16f, 19f, 13.2f, 20.8f, 10.6f, 20.8f)
-            curveTo(8f, 20.8f, 6.6f, 19f, 5.8f, 16.6f)
-            lineTo(4.6f, 13.4f)
-            curveTo(4.1f, 12f, 6.2f, 11.2f, 6.9f, 12.6f)
-            lineTo(9f, 16.2f)
-            moveTo(17.5f, 4.5f); lineTo(21f, 4.5f)
-        }
-    }
-
-    val FingerScrolls by lazy {
-        icon("Palec przewija stronę") {
-            moveTo(9f, 12.5f); lineTo(9f, 5.8f)
-            curveTo(9f, 4.2f, 11.4f, 4.2f, 11.4f, 5.8f)
-            lineTo(11.4f, 11.5f)
-            moveTo(11.4f, 8.6f)
-            curveTo(11.4f, 7.2f, 13.7f, 7.2f, 13.7f, 8.6f)
-            lineTo(13.7f, 11.8f)
-            moveTo(13.7f, 9.6f)
-            curveTo(13.7f, 8.3f, 16f, 8.3f, 16f, 9.6f)
-            lineTo(16f, 14.5f)
-            curveTo(16f, 19f, 13.2f, 20.8f, 10.6f, 20.8f)
-            curveTo(8f, 20.8f, 6.6f, 19f, 5.8f, 16.6f)
-            lineTo(4.6f, 13.4f)
-            curveTo(4.1f, 12f, 6.2f, 11.2f, 6.9f, 12.6f)
-            lineTo(9f, 16.2f)
-            moveTo(19.5f, 3.5f); lineTo(19.5f, 9.5f)
-            moveTo(17.5f, 7.5f); lineTo(19.5f, 9.5f); lineTo(21.5f, 7.5f)
-        }
-    }
-
-    val RecogniseText by lazy {
-        icon("Zamień pismo na tekst") {
-            moveTo(2.8f, 15f)
-            curveTo(4.4f, 9.5f, 6.4f, 17.5f, 8.4f, 12.5f)
-            moveTo(10.5f, 13.5f); lineTo(14f, 13.5f)
-            moveTo(12.6f, 11.8f); lineTo(14.3f, 13.5f); lineTo(12.6f, 15.2f)
-            moveTo(16.2f, 9f); lineTo(21.2f, 9f)
-            moveTo(18.7f, 9f); lineTo(18.7f, 17.5f)
-        }
-    }
-
-    // Eksport i udostępnianie
-    val Export by lazy {
-        icon("Eksportuj") {
-            moveTo(4.5f, 14.5f); lineTo(4.5f, 20f); lineTo(19.5f, 20f); lineTo(19.5f, 14.5f)
-            moveTo(12f, 15.5f); lineTo(12f, 4f)
-            moveTo(7.5f, 8.5f); lineTo(12f, 4f); lineTo(16.5f, 8.5f)
-        }
-    }
-
-    val ShareArrow by lazy {
-        icon("Udostępnij") {
-            circle(6f, 12f, 2.4f)
-            circle(17.2f, 6.4f, 2.4f)
-            circle(17.2f, 17.6f, 2.4f)
-            moveTo(8.15f, 10.93f); lineTo(15.05f, 7.47f)
-            moveTo(8.15f, 13.07f); lineTo(15.05f, 16.53f)
-        }
-    }
-
-    val Printer by lazy {
-        icon("Drukuj") {
-            moveTo(7.5f, 8.5f); lineTo(7.5f, 3.5f); lineTo(16.5f, 3.5f); lineTo(16.5f, 8.5f)
-            moveTo(4.5f, 8.5f); lineTo(19.5f, 8.5f); lineTo(19.5f, 16.5f); lineTo(4.5f, 16.5f); close()
-            moveTo(7.5f, 13.5f); lineTo(16.5f, 13.5f); lineTo(16.5f, 20.5f); lineTo(7.5f, 20.5f); close()
-            dot(16.8f, 11f)
-        }
-    }
-
-    val Close by lazy {
-        icon("Zamknij") {
-            moveTo(6f, 6f); lineTo(18f, 18f)
-            moveTo(18f, 6f); lineTo(6f, 18f)
-        }
-    }
-
-    val Confirm by lazy {
-        icon("Zatwierdź") {
-            moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 6.5f)
-        }
-    }
-
-    // Kod
-    val PlayRun by lazy {
-        icon("Uruchom") {
-            moveTo(7.5f, 4.5f); lineTo(19.5f, 12f); lineTo(7.5f, 19.5f); close()
-        }
-    }
-
-    val StopSquare by lazy {
-        icon("Zatrzymaj") {
-            moveTo(6.5f, 6.5f); lineTo(17.5f, 6.5f); lineTo(17.5f, 17.5f); lineTo(6.5f, 17.5f); close()
-        }
-    }
-
-    val OutputPanel by lazy {
-        icon("Wynik") {
-            moveTo(3.5f, 4.5f); lineTo(20.5f, 4.5f); lineTo(20.5f, 19.5f); lineTo(3.5f, 19.5f); close()
-            moveTo(7f, 9.5f); lineTo(10f, 12.5f); lineTo(7f, 15.5f)
-            moveTo(12.5f, 15.5f); lineTo(17f, 15.5f)
-        }
-    }
-
-    val ErrorMark by lazy {
-        icon("Błędy") {
-            moveTo(12f, 4f); lineTo(21.5f, 20f); lineTo(2.5f, 20f); close()
-            moveTo(12f, 10f); lineTo(12f, 15f)
-            dot(12f, 17.6f)
-        }
-    }
-
-    val InputArrow by lazy {
-        icon("Wejście") {
-            moveTo(12f, 3.5f); lineTo(12f, 13.5f)
-            moveTo(8f, 9.5f); lineTo(12f, 13.5f); lineTo(16f, 9.5f)
-            moveTo(4.5f, 17f); lineTo(4.5f, 20.5f); lineTo(19.5f, 20.5f); lineTo(19.5f, 17f)
-        }
-    }
-
-    val WordWrap by lazy {
-        icon("Zawijanie wierszy") {
-            moveTo(4f, 6.5f); lineTo(20f, 6.5f)
-            moveTo(4f, 12f); lineTo(16f, 12f)
-            curveTo(19f, 12f, 19f, 16.5f, 16f, 16.5f)
-            lineTo(11.5f, 16.5f)
-            moveTo(13.5f, 14.5f); lineTo(11.5f, 16.5f); lineTo(13.5f, 18.5f)
-        }
-    }
-
-    val Offline by lazy {
-        icon("Brak internetu") {
-            moveTo(3.5f, 9.5f); curveTo(6f, 7.2f, 9f, 6f, 12f, 6f)
-            curveTo(15f, 6f, 18f, 7.2f, 20.5f, 9.5f)
-            moveTo(7f, 13f); curveTo(8.5f, 11.7f, 10.2f, 11f, 12f, 11f)
-            curveTo(13.2f, 11f, 14.4f, 11.3f, 15.5f, 11.9f)
-            dot(12f, 17.5f)
-            moveTo(3.5f, 3.5f); lineTo(20.5f, 20.5f)
-        }
-    }
-
-    // Działania na plikach
-    val Move by lazy {
-        icon("Przenieś") {
-            moveTo(3.5f, 19f); lineTo(3.5f, 6f); lineTo(9.5f, 6f); lineTo(11.5f, 8.5f)
-            lineTo(20.5f, 8.5f); lineTo(20.5f, 19f); close()
-            moveTo(8f, 13.8f); lineTo(15.5f, 13.8f)
-            moveTo(13f, 11.3f); lineTo(15.5f, 13.8f); lineTo(13f, 16.3f)
-        }
-    }
-
-    val Copy by lazy {
-        icon("Kopiuj") {
-            moveTo(8.5f, 3.5f); lineTo(20.5f, 3.5f); lineTo(20.5f, 15.5f); lineTo(8.5f, 15.5f); close()
-            moveTo(15.5f, 15.5f); lineTo(15.5f, 20.5f); lineTo(3.5f, 20.5f); lineTo(3.5f, 8.5f)
-            lineTo(8.5f, 8.5f)
-        }
-    }
-
-    val Restore by lazy {
-        icon("Przywróć") {
-            moveTo(4.5f, 12f)
-            curveTo(4.5f, 7.9f, 7.9f, 4.5f, 12f, 4.5f)
-            curveTo(16.1f, 4.5f, 19.5f, 7.9f, 19.5f, 12f)
-            curveTo(19.5f, 16.1f, 16.1f, 19.5f, 12f, 19.5f)
-            curveTo(9.4f, 19.5f, 7.1f, 18.2f, 5.8f, 16.2f)
-            moveTo(2.2f, 9.4f); lineTo(4.5f, 12.2f); lineTo(6.8f, 9.4f)
-        }
-    }
-
-    val FitToView by lazy {
-        icon("Dopasuj do ekranu") {
-            moveTo(4f, 9f); lineTo(4f, 4f); lineTo(9f, 4f)
-            moveTo(15f, 4f); lineTo(20f, 4f); lineTo(20f, 9f)
-            moveTo(20f, 15f); lineTo(20f, 20f); lineTo(15f, 20f)
-            moveTo(9f, 20f); lineTo(4f, 20f); lineTo(4f, 15f)
-        }
-    }
-
-    val NodeDot by lazy {
-        icon("Nowy węzeł") {
-            moveTo(3.5f, 8.5f); lineTo(14.5f, 8.5f); lineTo(14.5f, 15.5f); lineTo(3.5f, 15.5f); close()
-            moveTo(19f, 8.5f); lineTo(19f, 15.5f)
-            moveTo(15.5f, 12f); lineTo(22.5f, 12f)
-        }
-    }
-
-    // Ikony do wyboru przy folderze przedmiotu
-
-    val Letters by lazy {
-        icon("Litery") {
-            moveTo(5f, 17.5f); lineTo(11f, 4f); lineTo(17f, 17.5f)
-            moveTo(7.5f, 12.2f); lineTo(14.5f, 12.2f)
-            moveTo(4f, 20.8f); lineTo(20f, 20.8f)
-        }
-    }
-
-    val Operations by lazy {
-        icon("Działania") {
-            moveTo(7f, 4f); lineTo(7f, 10f)
-            moveTo(4f, 7f); lineTo(10f, 7f)
-            moveTo(14f, 7f); lineTo(20f, 7f)
-            moveTo(4.9f, 14.9f); lineTo(9.1f, 19.1f)
-            moveTo(9.1f, 14.9f); lineTo(4.9f, 19.1f)
-            moveTo(14f, 17f); lineTo(20f, 17f)
-            dot(17f, 14.2f)
-            dot(17f, 19.8f)
-        }
-    }
-
-    val MusicNote by lazy {
-        icon("Nuta") {
-            circle(7.4f, 17.4f, 2.6f)
-            circle(17f, 15.4f, 2.6f)
-            moveTo(10f, 17.4f); lineTo(10f, 5.6f)
-            moveTo(19.6f, 15.4f); lineTo(19.6f, 3.6f)
-            moveTo(10f, 5.6f); lineTo(19.6f, 3.6f)
-            moveTo(10f, 8.6f); lineTo(19.6f, 6.6f)
-        }
-    }
-
-    val Flask by lazy {
-        icon("Kolba") {
-            moveTo(9.5f, 3.5f); lineTo(9.5f, 9.5f); lineTo(4.6f, 18.4f)
-            curveTo(3.8f, 19.9f, 4.7f, 21f, 6f, 21f)
-            lineTo(18f, 21f)
-            curveTo(19.3f, 21f, 20.2f, 19.9f, 19.4f, 18.4f)
-            lineTo(14.5f, 9.5f); lineTo(14.5f, 3.5f)
-            moveTo(8f, 3.5f); lineTo(16f, 3.5f)
-            moveTo(7.2f, 14.5f); lineTo(16.8f, 14.5f)
-        }
-    }
-
-    val Globe by lazy {
-        icon("Globus") {
-            circle(12f, 12f, 8.5f)
-            moveTo(12f, 3.5f)
-            curveTo(15.2f, 6.2f, 15.2f, 17.8f, 12f, 20.5f)
-            curveTo(8.8f, 17.8f, 8.8f, 6.2f, 12f, 3.5f)
-            moveTo(3.5f, 12f); lineTo(20.5f, 12f)
-            moveTo(5.4f, 7.4f); curveTo(8.2f, 9f, 15.8f, 9f, 18.6f, 7.4f)
-            moveTo(5.4f, 16.6f); curveTo(8.2f, 15f, 15.8f, 15f, 18.6f, 16.6f)
-        }
-    }
-
-    val BrushTip by lazy {
-        icon("Pędzel") {
-            moveTo(19.5f, 3.5f); lineTo(9.5f, 13.5f)
-            moveTo(10.5f, 14.5f); lineTo(20.5f, 4.5f)
-            moveTo(9.5f, 13.5f); lineTo(10.5f, 14.5f)
-            moveTo(8.5f, 14.5f)
-            curveTo(6.5f, 14.5f, 5.5f, 16f, 5.5f, 17.5f)
-            curveTo(5.5f, 19f, 4.5f, 19.5f, 3.5f, 20f)
-            curveTo(5f, 21f, 9.5f, 21f, 9.5f, 17.5f)
-            curveTo(9.5f, 16f, 9.5f, 14.5f, 8.5f, 14.5f)
-            close()
-        }
-    }
-
-    val Heart by lazy {
-        icon("Serce") {
-            moveTo(12f, 20.2f)
-            lineTo(4.3f, 12.6f)
-            curveTo(2.2f, 10.5f, 2.6f, 6.7f, 5.4f, 5.1f)
-            curveTo(7.6f, 3.9f, 10.3f, 4.7f, 12f, 7f)
-            curveTo(13.7f, 4.7f, 16.4f, 3.9f, 18.6f, 5.1f)
-            curveTo(21.4f, 6.7f, 21.8f, 10.5f, 19.7f, 12.6f)
-            close()
-        }
-    }
-
-    val Atom by lazy {
-        icon("Atom") {
-            circle(12f, 12f, 2.2f)
-            moveTo(12f, 3.2f)
-            curveTo(17.5f, 3.2f, 21.5f, 7.2f, 21.5f, 12f)
-            curveTo(21.5f, 16.8f, 17.5f, 20.8f, 12f, 20.8f)
-            curveTo(6.5f, 20.8f, 2.5f, 16.8f, 2.5f, 12f)
-            curveTo(2.5f, 7.2f, 6.5f, 3.2f, 12f, 3.2f)
-            close()
-            moveTo(5.2f, 5.2f)
-            curveTo(8.5f, 2.4f, 15.5f, 2.4f, 18.8f, 5.2f)
-        }
-    }
-
-    val Dna by lazy {
-        icon("Nić DNA") {
-            moveTo(7f, 3.5f)
-            curveTo(7f, 8f, 17f, 8f, 17f, 12f)
-            curveTo(17f, 16f, 7f, 16f, 7f, 20.5f)
-            moveTo(17f, 3.5f)
-            curveTo(17f, 8f, 7f, 8f, 7f, 12f)
-            curveTo(7f, 16f, 17f, 16f, 17f, 20.5f)
-            moveTo(8.6f, 6.5f); lineTo(15.4f, 6.5f)
-            moveTo(8.6f, 17.5f); lineTo(15.4f, 17.5f)
-        }
-    }
-
-    val MapPin by lazy {
-        icon("Mapa") {
-            moveTo(3.5f, 6.5f); lineTo(9f, 4f); lineTo(15f, 7f); lineTo(20.5f, 4.5f)
-            lineTo(20.5f, 17.5f); lineTo(15f, 20f); lineTo(9f, 17f); lineTo(3.5f, 19.5f)
-            close()
-            moveTo(9f, 4f); lineTo(9f, 17f)
-            moveTo(15f, 7f); lineTo(15f, 20f)
-        }
-    }
-
-    val Cog by lazy {
-        icon("Zębatka") {
-            circle(12f, 12f, 3.2f)
-            moveTo(12f, 2.8f); lineTo(12f, 5.4f)
-            moveTo(12f, 18.6f); lineTo(12f, 21.2f)
-            moveTo(2.8f, 12f); lineTo(5.4f, 12f)
-            moveTo(18.6f, 12f); lineTo(21.2f, 12f)
-            moveTo(5.5f, 5.5f); lineTo(7.3f, 7.3f)
-            moveTo(16.7f, 16.7f); lineTo(18.5f, 18.5f)
-            moveTo(18.5f, 5.5f); lineTo(16.7f, 7.3f)
-            moveTo(7.3f, 16.7f); lineTo(5.5f, 18.5f)
-        }
-    }
-
-    val Bulb by lazy {
-        icon("Żarówka") {
-            moveTo(9f, 17.5f)
-            curveTo(9f, 15f, 5.5f, 13.5f, 5.5f, 10f)
-            curveTo(5.5f, 6.4f, 8.4f, 3.5f, 12f, 3.5f)
-            curveTo(15.6f, 3.5f, 18.5f, 6.4f, 18.5f, 10f)
-            curveTo(18.5f, 13.5f, 15f, 15f, 15f, 17.5f)
-            close()
-            moveTo(9.5f, 20.5f); lineTo(14.5f, 20.5f)
-        }
-    }
-
-    val Compass by lazy {
-        icon("Kompas") {
-            circle(12f, 12f, 8.5f)
-            moveTo(15.5f, 8.5f); lineTo(13.5f, 13.5f); lineTo(8.5f, 15.5f); lineTo(10.5f, 10.5f)
-            close()
-        }
-    }
-
-    val Rocket by lazy {
-        icon("Rakieta") {
-            moveTo(12f, 3f)
-            curveTo(15.5f, 6f, 16.5f, 10f, 16f, 14.5f)
-            lineTo(8f, 14.5f)
-            curveTo(7.5f, 10f, 8.5f, 6f, 12f, 3f)
-            close()
-            circle(12f, 9f, 1.8f)
-            moveTo(8f, 12f); lineTo(5f, 15f); lineTo(5f, 18f); lineTo(8.4f, 16.4f)
-            moveTo(16f, 12f); lineTo(19f, 15f); lineTo(19f, 18f); lineTo(15.6f, 16.4f)
-            moveTo(10.5f, 17.5f); lineTo(12f, 21f); lineTo(13.5f, 17.5f)
-        }
-    }
-
-    val Crown by lazy {
-        icon("Korona") {
-            moveTo(4f, 18.5f); lineTo(20f, 18.5f)
-            moveTo(4f, 15.5f); lineTo(2.8f, 6.5f); lineTo(8f, 11f); lineTo(12f, 4.5f)
-            lineTo(16f, 11f); lineTo(21.2f, 6.5f); lineTo(20f, 15.5f)
-            close()
-        }
-    }
-
-    val Cup by lazy {
-        icon("Filiżanka") {
-            moveTo(4.5f, 8.5f); lineTo(16.5f, 8.5f); lineTo(16.5f, 15f)
-            curveTo(16.5f, 17.5f, 14.5f, 19.5f, 12f, 19.5f)
-            lineTo(9f, 19.5f)
-            curveTo(6.5f, 19.5f, 4.5f, 17.5f, 4.5f, 15f)
-            close()
-            moveTo(16.5f, 10.5f); lineTo(19f, 10.5f)
-            curveTo(20.9f, 10.5f, 20.9f, 15.5f, 19f, 15.5f)
-            lineTo(16.5f, 15.5f)
-            moveTo(8f, 3.5f); lineTo(8f, 5.5f)
-            moveTo(12f, 3.5f); lineTo(12f, 5.5f)
-        }
-    }
-
-    val Tree by lazy {
-        icon("Drzewo") {
-            moveTo(12f, 21f); lineTo(12f, 14f)
-            moveTo(12f, 14f)
-            curveTo(8.5f, 14f, 6f, 11.8f, 6f, 9f)
-            curveTo(6f, 5.8f, 8.7f, 3.2f, 12f, 3.2f)
-            curveTo(15.3f, 3.2f, 18f, 5.8f, 18f, 9f)
-            curveTo(18f, 11.8f, 15.5f, 14f, 12f, 14f)
-            close()
-            moveTo(12f, 17f); lineTo(9f, 14.5f)
-            moveTo(12f, 18.5f); lineTo(15f, 16f)
-        }
-    }
-
-    val Mountain by lazy {
-        icon("Góra") {
-            moveTo(2.5f, 19.5f); lineTo(9f, 7f); lineTo(13f, 14f); lineTo(15.5f, 10f)
-            lineTo(21.5f, 19.5f)
-            close()
-            moveTo(7f, 10.6f); lineTo(11f, 10.6f)
-        }
-    }
-
-    val CloudMark by lazy {
-        icon("Chmura") {
-            moveTo(7.5f, 18.5f)
-            curveTo(4.7f, 18.5f, 2.5f, 16.3f, 2.5f, 13.5f)
-            curveTo(2.5f, 10.9f, 4.5f, 8.8f, 7f, 8.5f)
-            curveTo(7.9f, 5.9f, 10.3f, 4.2f, 13f, 4.5f)
-            curveTo(16.1f, 4.8f, 18.4f, 7.4f, 18.5f, 10.4f)
-            curveTo(20.4f, 11f, 21.6f, 12.9f, 21.4f, 14.9f)
-            curveTo(21.2f, 16.9f, 19.5f, 18.5f, 17.5f, 18.5f)
-            close()
-        }
-    }
-
-    val KeyShape by lazy {
-        icon("Klucz") {
-            circle(7.5f, 14.5f, 4f)
-            moveTo(10.4f, 11.6f); lineTo(20.5f, 3.5f)
-            moveTo(17.5f, 6f); lineTo(19.5f, 8f)
-            moveTo(15f, 8f); lineTo(17f, 10f)
-        }
-    }
-
-    val Clock by lazy {
-        icon("Zegar") {
-            circle(12f, 12f, 8.5f)
-            moveTo(12f, 6.8f); lineTo(12f, 12f); lineTo(15.6f, 14.2f)
-        }
-    }
-
-    val Calendar by lazy {
-        icon("Kalendarz") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f); lineTo(20.5f, 20.5f); lineTo(3.5f, 20.5f); close()
-            moveTo(3.5f, 10f); lineTo(20.5f, 10f)
-            moveTo(8f, 3f); lineTo(8f, 7.5f)
-            moveTo(16f, 3f); lineTo(16f, 7.5f)
-            dot(8f, 14f)
-            dot(12f, 14f)
-            dot(16f, 14f)
-            dot(8f, 17.5f)
-            dot(12f, 17.5f)
-        }
-    }
-
-    val Flag by lazy {
-        icon("Flaga") {
-            moveTo(5.5f, 21f); lineTo(5.5f, 3.5f)
-            moveTo(5.5f, 4.5f); lineTo(19f, 4.5f); lineTo(16f, 9f); lineTo(19f, 13.5f); lineTo(5.5f, 13.5f)
-        }
-    }
-
-    val Microscope by lazy {
-        icon("Mikroskop") {
-            moveTo(6.5f, 20.5f); lineTo(20.5f, 20.5f)
-            moveTo(9f, 20.5f)
-            curveTo(9f, 16.5f, 11.5f, 13.5f, 15.5f, 13.5f)
-            curveTo(19.5f, 13.5f, 20.5f, 17f, 20.5f, 20.5f)
-            moveTo(8f, 6f); lineTo(12.5f, 3.5f); lineTo(15.5f, 9f); lineTo(11f, 11.5f); close()
-            moveTo(6f, 9.5f); lineTo(9.5f, 7.5f)
-            moveTo(11f, 11.5f); lineTo(9.5f, 14f)
-        }
-    }
-
-    val Ball by lazy {
-        icon("Piłka") {
-            circle(12f, 12f, 8.5f)
-            moveTo(12f, 7f); lineTo(16.2f, 10.1f); lineTo(14.6f, 15.1f); lineTo(9.4f, 15.1f)
-            lineTo(7.8f, 10.1f)
-            close()
-            moveTo(12f, 3.5f); lineTo(12f, 7f)
-            moveTo(20.1f, 9.4f); lineTo(16.2f, 10.1f)
-            moveTo(17f, 19.3f); lineTo(14.6f, 15.1f)
-            moveTo(7f, 19.3f); lineTo(9.4f, 15.1f)
-            moveTo(3.9f, 9.4f); lineTo(7.8f, 10.1f)
-        }
-    }
-
-    val Mask by lazy {
-        icon("Maska") {
-            moveTo(4f, 5.5f)
-            curveTo(9f, 4f, 15f, 4f, 20f, 5.5f)
-            curveTo(20f, 14f, 17f, 20.5f, 12f, 20.5f)
-            curveTo(7f, 20.5f, 4f, 14f, 4f, 5.5f)
-            close()
-            dot(9f, 10.5f)
-            dot(15f, 10.5f)
-            moveTo(9.5f, 15.5f)
-            curveTo(10.8f, 16.8f, 13.2f, 16.8f, 14.5f, 15.5f)
-        }
-    }
-
-    val Scales by lazy {
-        icon("Waga") {
-            moveTo(12f, 4f); lineTo(12f, 20.5f)
-            moveTo(6f, 20.5f); lineTo(18f, 20.5f)
-            moveTo(4f, 7f); lineTo(20f, 7f)
-            moveTo(4f, 7f); lineTo(1.8f, 13f); lineTo(6.2f, 13f); close()
-            moveTo(20f, 7f); lineTo(17.8f, 13f); lineTo(22.2f, 13f); close()
-            circle(12f, 4f, 1.4f)
-        }
-    }
-
-    val Shield by lazy {
-        icon("Tarcza") {
-            moveTo(12f, 3f); lineTo(19.5f, 6f)
-            curveTo(19.5f, 14f, 16.5f, 19f, 12f, 21f)
-            curveTo(7.5f, 19f, 4.5f, 14f, 4.5f, 6f)
-            close()
-            moveTo(8.8f, 12f); lineTo(11f, 14.4f); lineTo(15.4f, 9.5f)
-        }
-    }
-
-    val House by lazy {
-        icon("Dom") {
-            moveTo(3.5f, 10.5f); lineTo(12f, 3.5f); lineTo(20.5f, 10.5f)
-            moveTo(5.5f, 9f); lineTo(5.5f, 20.5f); lineTo(18.5f, 20.5f); lineTo(18.5f, 9f)
-            moveTo(9.8f, 20.5f); lineTo(9.8f, 14f); lineTo(14.2f, 14f); lineTo(14.2f, 20.5f)
-        }
-    }
-
-    // Formatowanie tekstu
-
-    val Bold by lazy {
-        icon("Pogrubienie") {
-            moveTo(6.5f, 4f); lineTo(6.5f, 20f)
-            moveTo(6.5f, 4f); lineTo(13f, 4f)
-            curveTo(16f, 4f, 16f, 11.5f, 13f, 11.5f)
-            lineTo(6.5f, 11.5f)
-            moveTo(6.5f, 11.5f); lineTo(14f, 11.5f)
-            curveTo(17.5f, 11.5f, 17.5f, 20f, 14f, 20f)
-            lineTo(6.5f, 20f)
-        }
-    }
-
-    val Italic by lazy {
-        icon("Kursywa") {
-            moveTo(9f, 4.5f); lineTo(18f, 4.5f)
-            moveTo(6f, 19.5f); lineTo(15f, 19.5f)
-            moveTo(14f, 4.5f); lineTo(10f, 19.5f)
-        }
-    }
-
-    val Underline by lazy {
-        icon("Podkreślenie") {
-            moveTo(6.5f, 3.5f); lineTo(6.5f, 11.5f)
-            curveTo(6.5f, 18f, 17.5f, 18f, 17.5f, 11.5f)
-            lineTo(17.5f, 3.5f)
-            moveTo(5f, 20.5f); lineTo(19f, 20.5f)
-        }
-    }
-
-    val Strikethrough by lazy {
-        icon("Przekreślenie") {
-            moveTo(7.5f, 5.5f)
-            curveTo(9f, 3.8f, 15f, 3.8f, 16f, 6.5f)
-            moveTo(16.5f, 16.5f)
-            curveTo(15.5f, 19.5f, 8f, 19.8f, 7f, 16.5f)
-            moveTo(9.5f, 12f); lineTo(15.5f, 12f)
-            moveTo(3.5f, 12f); lineTo(20.5f, 12f)
-        }
-    }
-
-    val TextColour by lazy {
-        icon("Kolor pisma") {
-            moveTo(5.5f, 15f); lineTo(11f, 3.8f); lineTo(16.5f, 15f)
-            moveTo(7.6f, 11f); lineTo(14.4f, 11f)
-            moveTo(4.5f, 19.5f); lineTo(19.5f, 19.5f)
-        }
-    }
-
-    val Highlight by lazy {
-        icon("Wyróżnienie tekstu") {
-            moveTo(8f, 13.5f); lineTo(14f, 4.5f); lineTo(19f, 8f); lineTo(13f, 17f); close()
-            moveTo(8f, 13.5f); lineTo(5.5f, 16.5f); lineTo(9.5f, 17f); lineTo(13f, 17f)
-            moveTo(3.5f, 20.5f); lineTo(20.5f, 20.5f)
-        }
-    }
-
-    val TextSize by lazy {
-        icon("Rozmiar pisma") {
-            moveTo(2.8f, 19.5f); lineTo(8.4f, 5.5f); lineTo(14f, 19.5f)
-            moveTo(5f, 14.5f); lineTo(11.8f, 14.5f)
-            moveTo(15.5f, 19.5f); lineTo(18.4f, 11.5f); lineTo(21.3f, 19.5f)
-            moveTo(16.6f, 16.7f); lineTo(20.2f, 16.7f)
-        }
-    }
-
-    val DividerLine by lazy {
-        icon("Linia oddzielająca") {
-            moveTo(3.5f, 12f); lineTo(20.5f, 12f)
-            moveTo(5.5f, 6.5f); lineTo(18.5f, 6.5f)
-            moveTo(5.5f, 17.5f); lineTo(18.5f, 17.5f)
-        }
-    }
-
-    val AlignLeft by lazy {
-        icon("Wyrównaj do lewej") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f)
-            moveTo(3.5f, 10.5f); lineTo(14f, 10.5f)
-            moveTo(3.5f, 15.5f); lineTo(20.5f, 15.5f)
-            moveTo(3.5f, 20.5f); lineTo(14f, 20.5f)
-        }
-    }
-
-    val AlignCentre by lazy {
-        icon("Wyrównaj do środka") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f)
-            moveTo(6.8f, 10.5f); lineTo(17.2f, 10.5f)
-            moveTo(3.5f, 15.5f); lineTo(20.5f, 15.5f)
-            moveTo(6.8f, 20.5f); lineTo(17.2f, 20.5f)
-        }
-    }
-
-    val AlignRight by lazy {
-        icon("Wyrównaj do prawej") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f)
-            moveTo(10f, 10.5f); lineTo(20.5f, 10.5f)
-            moveTo(3.5f, 15.5f); lineTo(20.5f, 15.5f)
-            moveTo(10f, 20.5f); lineTo(20.5f, 20.5f)
-        }
-    }
-
-    val BulletList by lazy {
-        icon("Lista punktowana") {
-            dot(4.5f, 6.5f)
-            dot(4.5f, 12f)
-            dot(4.5f, 17.5f)
-            moveTo(9f, 6.5f); lineTo(20.5f, 6.5f)
-            moveTo(9f, 12f); lineTo(20.5f, 12f)
-            moveTo(9f, 17.5f); lineTo(20.5f, 17.5f)
-        }
-    }
-
-    val NumberedList by lazy {
-        icon("Lista numerowana") {
-            moveTo(3.4f, 4.6f); lineTo(4.6f, 4f); lineTo(4.6f, 8.4f)
-            moveTo(3.2f, 12f)
-            curveTo(3.2f, 10.6f, 5.6f, 10.6f, 5.6f, 12f)
-            curveTo(5.6f, 13.2f, 3.2f, 13.8f, 3.2f, 15.4f)
-            lineTo(5.8f, 15.4f)
-            moveTo(3.3f, 18.4f)
-            curveTo(4.4f, 17.6f, 5.8f, 18.2f, 5.6f, 19.2f)
-            curveTo(5.5f, 19.9f, 4.7f, 20.1f, 4.2f, 20.1f)
-            curveTo(4.7f, 20.1f, 5.7f, 20.3f, 5.7f, 21.2f)
-            moveTo(9f, 6.2f); lineTo(20.5f, 6.2f)
-            moveTo(9f, 13.4f); lineTo(20.5f, 13.4f)
-            moveTo(9f, 19.8f); lineTo(20.5f, 19.8f)
-        }
-    }
-
-    val TaskList by lazy {
-        icon("Lista zadań") {
-            moveTo(3.5f, 4.5f); lineTo(7.5f, 4.5f); lineTo(7.5f, 8.5f); lineTo(3.5f, 8.5f); close()
-            moveTo(3.5f, 15.5f); lineTo(7.5f, 15.5f); lineTo(7.5f, 19.5f); lineTo(3.5f, 19.5f); close()
-            moveTo(4.3f, 17.5f); lineTo(5.4f, 18.6f); lineTo(7.2f, 16.2f)
-            moveTo(10.5f, 6.5f); lineTo(20.5f, 6.5f)
-            moveTo(10.5f, 17.5f); lineTo(20.5f, 17.5f)
-        }
-    }
-
-    val TableGrid by lazy {
-        icon("Tabela") {
-            moveTo(3.5f, 4.5f); lineTo(20.5f, 4.5f); lineTo(20.5f, 19.5f); lineTo(3.5f, 19.5f); close()
-            moveTo(3.5f, 9.5f); lineTo(20.5f, 9.5f)
-            moveTo(3.5f, 14.5f); lineTo(20.5f, 14.5f)
-            moveTo(9.5f, 4.5f); lineTo(9.5f, 19.5f)
-            moveTo(15f, 4.5f); lineTo(15f, 19.5f)
-        }
-    }
-
-    val HeadingMark by lazy {
-        icon("Nagłówek") {
-            moveTo(4.5f, 4f); lineTo(4.5f, 20f)
-            moveTo(13.5f, 4f); lineTo(13.5f, 20f)
-            moveTo(4.5f, 12f); lineTo(13.5f, 12f)
-            moveTo(17f, 12.5f); lineTo(18.8f, 11.5f); lineTo(18.8f, 20f)
-        }
-    }
-
-    val Quote by lazy {
-        icon("Cytat") {
-            moveTo(9.5f, 6f)
-            curveTo(6f, 6f, 4.5f, 8.5f, 4.5f, 12f)
-            curveTo(4.5f, 15f, 6f, 16.5f, 8f, 16.5f)
-            curveTo(10f, 16.5f, 11f, 15f, 11f, 13.3f)
-            curveTo(11f, 11.5f, 9.7f, 10.3f, 8f, 10.3f)
-            moveTo(20f, 6f)
-            curveTo(16.5f, 6f, 15f, 8.5f, 15f, 12f)
-            curveTo(15f, 15f, 16.5f, 16.5f, 18.5f, 16.5f)
-            curveTo(20.5f, 16.5f, 21.5f, 15f, 21.5f, 13.3f)
-            curveTo(21.5f, 11.5f, 20.2f, 10.3f, 18.5f, 10.3f)
-        }
-    }
-
-    val LinkChain by lazy {
-        icon("Odnośnik") {
-            moveTo(10f, 14f)
-            curveTo(11.6f, 15.6f, 14f, 15.6f, 15.5f, 14f)
-            lineTo(19f, 10.5f)
-            curveTo(20.6f, 9f, 20.6f, 6.5f, 19f, 5f)
-            curveTo(17.5f, 3.4f, 15f, 3.4f, 13.5f, 5f)
-            lineTo(12f, 6.5f)
-            moveTo(14f, 10f)
-            curveTo(12.4f, 8.4f, 10f, 8.4f, 8.5f, 10f)
-            lineTo(5f, 13.5f)
-            curveTo(3.4f, 15f, 3.4f, 17.5f, 5f, 19f)
-            curveTo(6.5f, 20.6f, 9f, 20.6f, 10.5f, 19f)
-            lineTo(12f, 17.5f)
-        }
-    }
-
-    val Opacity by lazy {
-        icon("Krycie") {
-            circle(12f, 12f, 8.5f)
-            moveTo(12f, 3.5f)
-            lineTo(12f, 20.5f)
-            moveTo(12f, 5.5f); lineTo(18.2f, 5.5f)
-            moveTo(12f, 9f); lineTo(20.4f, 9f)
-            moveTo(12f, 12.5f); lineTo(20.5f, 12.5f)
-            moveTo(12f, 16f); lineTo(19.2f, 16f)
-            moveTo(12f, 19.5f); lineTo(15.5f, 19.5f)
-        }
-    }
-
-    val Thickness by lazy {
-        icon("Grubość kreski") {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f)
-            moveTo(3.5f, 10f); lineTo(20.5f, 10f)
-            moveTo(3.5f, 15f); lineTo(20.5f, 15f)
-            moveTo(3.5f, 20f); lineTo(20.5f, 20f)
-        }
-    }
-
-    val Fineliner by lazy {
-        icon("Cienkopis") {
-            moveTo(8f, 20.5f); lineTo(4f, 20.5f); lineTo(4f, 16.5f); lineTo(16.5f, 4f)
-            lineTo(20.5f, 8f); lineTo(8f, 20.5f)
-            close()
-            moveTo(14f, 6.5f); lineTo(18f, 10.5f)
-        }
-    }
-
-    val Pencil by lazy {
-        icon("Ołówek") {
-            moveTo(4f, 20.5f); lineTo(5.6f, 15.6f); lineTo(16.6f, 4.6f)
-            curveTo(17.4f, 3.8f, 18.6f, 3.8f, 19.4f, 4.6f)
-            curveTo(20.2f, 5.4f, 20.2f, 6.6f, 19.4f, 7.4f)
-            lineTo(8.4f, 18.4f)
-            close()
-            moveTo(15f, 6.2f); lineTo(17.8f, 9f)
-            moveTo(5.6f, 15.6f); lineTo(8.4f, 18.4f)
-        }
-    }
-
-    val DashedLine by lazy {
-        icon("Linia przerywana") {
-            moveTo(3.5f, 12f); lineTo(6.5f, 12f)
-            moveTo(10.5f, 12f); lineTo(13.5f, 12f)
-            moveTo(17.5f, 12f); lineTo(20.5f, 12f)
-        }
-    }
-
-    val Connect by lazy {
-        icon("Połącz węzły") {
-            circle(5.5f, 6f, 2.5f)
-            circle(18.5f, 18f, 2.5f)
-            moveTo(7.6f, 7.4f); lineTo(16.4f, 16.6f)
-        }
-    }
-
-    val Saved by lazy {
-        icon("Zapisano") {
-            circle(12f, 12f, 8.5f)
-            moveTo(8.2f, 12.2f); lineTo(11f, 15f); lineTo(15.9f, 9.2f)
-        }
-    }
-
-    val CloudDone by lazy {
-        icon("W chmurze") {
-            moveTo(7.5f, 17.5f)
-            curveTo(4.7f, 17.5f, 2.5f, 15.3f, 2.5f, 12.5f)
-            curveTo(2.5f, 9.9f, 4.5f, 7.8f, 7f, 7.5f)
-            curveTo(7.9f, 4.9f, 10.3f, 3.2f, 13f, 3.5f)
-            curveTo(16.1f, 3.8f, 18.4f, 6.4f, 18.5f, 9.4f)
-            curveTo(20.4f, 10f, 21.6f, 11.9f, 21.4f, 13.9f)
-            curveTo(21.2f, 15.9f, 19.5f, 17.5f, 17.5f, 17.5f)
-            close()
-            moveTo(9.5f, 13f); lineTo(12f, 15.5f); lineTo(16f, 10.5f)
-        }
-    }
-
-    val Account by lazy {
-        icon("Konto") {
-            circle(12f, 8f, 4f)
-            moveTo(4.5f, 20.5f)
-            curveTo(4.5f, 16.4f, 7.9f, 14f, 12f, 14f)
-            curveTo(16.1f, 14f, 19.5f, 16.4f, 19.5f, 20.5f)
-        }
-    }
+    /** local_library */
+    val Library by lazy { icon("local_library", "M120-274v-286q0-32 23.5-54t55.5-20q79 12 150.5 46.5T480-498q59-55 130.5-89.5T761-634q32-2 55.5 20t23.5 54v286q0 32-21 54.5T766-195q-64 10-124 33t-112 61q-11 9-23.5 13.5T480-83q-14 0-26.5-4.5T430-101q-52-38-112-61t-124-33q-32-2-53-24.5T120-274Zm360 110q63-47 134-75t146-37v-276q-73 13-143.5 52.5T480-394q-66-66-136.5-105.5T200-552v276q75 9 146 37t134 75ZM367-647q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47Zm169.5-56.5Q560-727 560-760t-23.5-56.5Q513-840 480-840t-56.5 23.5Q400-793 400-760t23.5 56.5Q447-680 480-680t56.5-23.5ZM480-760Zm0 366Z") }
+
+    /** folder */
+    val Folder by lazy { icon("folder", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h207q16 0 30.5 6t25.5 17l57 57h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Z") }
+
+    /** folder_open */
+    val FolderOpen by lazy { icon("folder_open", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h207q16 0 30.5 6t25.5 17l57 57h360q17 0 28.5 11.5T880-680q0 17-11.5 28.5T840-640H447l-80-80H160v480l79-263q8-26 29.5-41.5T316-560h516q41 0 64.5 32.5T909-457l-72 240q-8 26-29.5 41.5T760-160H160Zm84-80h516l72-240H316l-72 240Zm-84-262v-218 218Zm84 262 72-240-72 240Z") }
+
+    /** draw */
+    val HandwrittenNote by lazy { icon("draw", "M200-120q-17 0-28.5-11.5T160-160v-97q0-16 6-30.5t17-25.5l504-503q12-12 27-18t30-6q16 0 30.5 6t25.5 18l56 56q12 11 18 25.5t6 30.5q0 15-6 30t-18 27L353-143q-11 11-25.5 17t-30.5 6h-97Zm40-80h56l393-392-28-29-29-28-392 393v56Zm560-503-57-57 57 57Zm-139 82-29-28 57 57-28-29ZM560-120q74 0 137-37t63-103q0-32-16-55.5T702-359q-14-10-30-10t-27 12q-11 12-11 29.5t14 27.5q14 11 23 20t9 20q0 23-36.5 41.5T560-200q-17 0-28.5 11.5T520-160q0 17 11.5 28.5T560-120ZM360-720q0 14-17.5 25.5T262-654q-80 35-111 63.5T120-520q0 26 12 46t31 35q13 11 29 9.5t27-14.5q11-13 10-29t-14-27q-7-5-11-10t-4-10q0-12 18-24t76-37q88-38 117-69t29-70q0-55-44-87.5T280-840q-45 0-80.5 16T145-785q-11 13-9 29t15 26q13 11 29 9t27-13q14-14 31-20t42-6q41 0 60.5 12t19.5 28Z") }
+
+    /** article */
+    val TextNote by lazy { icon("article", "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Zm120 480h200q17 0 28.5-11.5T560-320q0-17-11.5-28.5T520-360H320q-17 0-28.5 11.5T280-320q0 17 11.5 28.5T320-280Zm0-160h320q17 0 28.5-11.5T680-480q0-17-11.5-28.5T640-520H320q-17 0-28.5 11.5T280-480q0 17 11.5 28.5T320-440Zm0-160h320q17 0 28.5-11.5T680-640q0-17-11.5-28.5T640-680H320q-17 0-28.5 11.5T280-640q0 17 11.5 28.5T320-600Z") }
+
+    /** account_tree */
+    val MindMapIcon by lazy { icon("account_tree", "M600-200v-40h-80q-33 0-56.5-23.5T440-320v-320h-80v40q0 33-23.5 56.5T280-520H160q-33 0-56.5-23.5T80-600v-160q0-33 23.5-56.5T160-840h120q33 0 56.5 23.5T360-760v40h240v-40q0-33 23.5-56.5T680-840h120q33 0 56.5 23.5T880-760v160q0 33-23.5 56.5T800-520H680q-33 0-56.5-23.5T600-600v-40h-80v320h80v-40q0-33 23.5-56.5T680-440h120q33 0 56.5 23.5T880-360v160q0 33-23.5 56.5T800-120H680q-33 0-56.5-23.5T600-200ZM160-760v160-160Zm520 400v160-160Zm0-400v160-160Zm0 160h120v-160H680v160Zm0 400h120v-160H680v160ZM160-600h120v-160H160v160Z") }
+
+    /** code */
+    val CodeFile by lazy { icon("code", "m193-479 155 155q11 11 11 28t-11 28q-11 11-28 11t-28-11L108-452q-6-6-8.5-13T97-480q0-8 2.5-15t8.5-13l184-184q12-12 28.5-12t28.5 12q12 12 12 28.5T349-635L193-479Zm574-2L612-636q-11-11-11-28t11-28q11-11 28-11t28 11l184 184q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L668-268q-12 12-28 11.5T612-269q-12-12-12-28.5t12-28.5l155-155Z") }
+
+    /** star */
+    val Favourites by lazy { icon("star", "m354-287 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143Zm126 18L314-169q-11 7-23 6t-21-8q-9-7-14-17.5t-2-23.5l44-189-147-127q-10-9-12.5-20.5T140-571q4-11 12-18t22-9l194-17 75-178q5-12 15.5-18t21.5-6q11 0 21.5 6t15.5 18l75 178 194 17q14 2 22 9t12 18q4 11 1.5 22.5T809-528L662-401l44 189q3 13-2 23.5T690-171q-9 7-21 8t-23-6L480-269Zm0-201Z") }
+
+    /** history */
+    val Recent by lazy { icon("history", "M480-120q-126 0-223-76.5T131-392q-4-15 6-27.5t27-14.5q16-2 29 6t18 24q24 90 99 147t170 57q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h70q17 0 28.5 11.5T360-600q0 17-11.5 28.5T320-560H160q-17 0-28.5-11.5T120-600v-160q0-17 11.5-28.5T160-800q17 0 28.5 11.5T200-760v54q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm40-376 100 100q11 11 11 28t-11 28q-11 11-28 11t-28-11L452-452q-6-6-9-13.5t-3-15.5v-159q0-17 11.5-28.5T480-680q17 0 28.5 11.5T520-640v144Z") }
+
+    /** label */
+    val Tag by lazy { icon("label", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h440q19 0 36 8.5t28 23.5l180 240q16 21 16 48t-16 48L664-192q-11 15-28 23.5t-36 8.5H160Zm0-80h440l180-240-180-240H160v480Zm310-240Z") }
+
+    /** delete */
+    val Bin by lazy { icon("delete", "M280-120q-33 0-56.5-23.5T200-200v-520q-17 0-28.5-11.5T160-760q0-17 11.5-28.5T200-800h160q0-17 11.5-28.5T400-840h160q17 0 28.5 11.5T600-800h160q17 0 28.5 11.5T800-760q0 17-11.5 28.5T760-720v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM428.5-291.5Q440-303 440-320v-280q0-17-11.5-28.5T400-640q-17 0-28.5 11.5T360-600v280q0 17 11.5 28.5T400-280q17 0 28.5-11.5Zm160 0Q600-303 600-320v-280q0-17-11.5-28.5T560-640q-17 0-28.5 11.5T520-600v280q0 17 11.5 28.5T560-280q17 0 28.5-11.5ZM280-720v520-520Z") }
+
+    /** search */
+    val Search by lazy { icon("search", "M380-320q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l224 224q11 11 11 28t-11 28q-11 11-28 11t-28-11L532-372q-30 24-69 38t-83 14Zm0-80q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z") }
+
+    /** add */
+    val Plus by lazy { icon("add", "M440-440H240q-17 0-28.5-11.5T200-480q0-17 11.5-28.5T240-520h200v-200q0-17 11.5-28.5T480-760q17 0 28.5 11.5T520-720v200h200q17 0 28.5 11.5T760-480q0 17-11.5 28.5T720-440H520v200q0 17-11.5 28.5T480-200q-17 0-28.5-11.5T440-240v-200Z") }
+
+    /** more_vert */
+    val MoreDots by lazy { icon("more_vert", "M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z") }
+
+    /** chevron_right */
+    val ArrowRight by lazy { icon("chevron_right", "M504-480 348-636q-11-11-11-28t11-28q11-11 28-11t28 11l184 184q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L404-268q-11 11-28 11t-28-11q-11-11-11-28t11-28l156-156Z") }
+
+    /** expand_more */
+    val ArrowDown by lazy { icon("expand_more", "M465-364.5q-7-2.5-13-8.5L268-557q-11-11-11-28t11-28q11-11 28-11t28 11l156 156 156-156q11-11 28-11t28 11q11 11 11 28t-11 28L508-373q-6 6-13 8.5t-15 2.5q-8 0-15-2.5Z") }
+
+    /** arrow_back */
+    val BackArrow by lazy { icon("arrow_back", "m313-440 196 196q12 12 11.5 28T508-188q-12 11-28 11.5T452-188L188-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l264-264q11-11 27.5-11t28.5 11q12 12 12 28.5T508-715L313-520h447q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H313Z") }
+
+    /** tune */
+    val SettingsCog by lazy { icon("tune", "M451.5-131.5Q440-143 440-160v-160q0-17 11.5-28.5T480-360q17 0 28.5 11.5T520-320v40h280q17 0 28.5 11.5T840-240q0 17-11.5 28.5T800-200H520v40q0 17-11.5 28.5T480-120q-17 0-28.5-11.5ZM160-200q-17 0-28.5-11.5T120-240q0-17 11.5-28.5T160-280h160q17 0 28.5 11.5T360-240q0 17-11.5 28.5T320-200H160Zm131.5-171.5Q280-383 280-400v-40H160q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h120v-40q0-17 11.5-28.5T320-600q17 0 28.5 11.5T360-560v160q0 17-11.5 28.5T320-360q-17 0-28.5-11.5ZM480-440q-17 0-28.5-11.5T440-480q0-17 11.5-28.5T480-520h320q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H480Zm131.5-171.5Q600-623 600-640v-160q0-17 11.5-28.5T640-840q17 0 28.5 11.5T680-800v40h120q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H680v40q0 17-11.5 28.5T640-600q-17 0-28.5-11.5ZM160-680q-17 0-28.5-11.5T120-720q0-17 11.5-28.5T160-760h320q17 0 28.5 11.5T520-720q0 17-11.5 28.5T480-680H160Z") }
+
+    /** stylus */
+    val Pen by lazy { icon("stylus", "M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z") }
+
+    /** ink_highlighter */
+    val Highlighter by lazy { icon("ink_highlighter", "M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-3 3q-11 11-25.5 17t-30.5 6H108q-14 0-19-12t5-22l92-92-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z") }
+
+    /** ink_eraser */
+    val Eraser by lazy { icon("ink_eraser", "M690-240h150q17 0 28.5 11.5T880-200q0 17-11.5 28.5T840-160H610l80-80Zm-483 80q-8 0-15.5-3t-13.5-9l-73-73q-23-23-23.5-57t22.5-58l440-456q23-24 56.5-24t56.5 23l199 199q23 23 23 57t-23 57L532-172q-6 6-13.5 9t-15.5 3H207Zm279-80 314-322-198-198-442 456 64 64h262Zm-6-240Z") }
+
+    /** ink_eraser_off */
+    val EraserStroke by lazy { icon("ink_eraser_off", "M763-84 602-244l-58 60q-11 11-25.5 17.5T487-160H223q-16 0-30.5-6T167-183l-62-62q-23-23-23.5-57t22.5-58l188-194L83-763q-12-12-12-28.5T83-820q12-12 28.5-12t28.5 12l680 680q12 12 12 28t-12 28q-12 12-28.5 12T763-84ZM224-240h262l59-61-197-197-188 194 64 64Zm655-321q0 16-5.5 30.5T856-504L743-388q-12 12-28.5 12T686-388q-12-12-11.5-28t11.5-28l114-118-198-198-114 117q-11 12-28 12t-29-12q-11-11-11-27t11-28l113-118q12-12 27-18t30-6q16 0 30.5 5.5T657-817l199 199q12 11 17.5 26t5.5 31Zm-320 46ZM447-400Z") }
+
+    /** highlight_alt */
+    val Lasso by lazy { icon("highlight_alt", "M520-384v224q0 17-11.5 28.5T480-120q-17 0-28.5-11.5T440-160v-320q0-17 11.5-28.5T480-520h320q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H576l252 252q11 11 11 28t-11 28q-11 11-28 11t-28-11L520-384ZM131.5-771.5Q120-783 120-800t11.5-28.5Q143-840 160-840t28.5 11.5Q200-817 200-800t-11.5 28.5Q177-760 160-760t-28.5-11.5Zm160 0Q280-783 280-800t11.5-28.5Q303-840 320-840t28.5 11.5Q360-817 360-800t-11.5 28.5Q337-760 320-760t-28.5-11.5Zm160 0Q440-783 440-800t11.5-28.5Q463-840 480-840t28.5 11.5Q520-817 520-800t-11.5 28.5Q497-760 480-760t-28.5-11.5Zm160 0Q600-783 600-800t11.5-28.5Q623-840 640-840t28.5 11.5Q680-817 680-800t-11.5 28.5Q657-760 640-760t-28.5-11.5Zm160 0Q760-783 760-800t11.5-28.5Q783-840 800-840t28.5 11.5Q840-817 840-800t-11.5 28.5Q817-760 800-760t-28.5-11.5Zm-480 640Q280-143 280-160t11.5-28.5Q303-200 320-200t28.5 11.5Q360-177 360-160t-11.5 28.5Q337-120 320-120t-28.5-11.5Zm-160-480Q120-623 120-640t11.5-28.5Q143-680 160-680t28.5 11.5Q200-657 200-640t-11.5 28.5Q177-600 160-600t-28.5-11.5Zm0 160Q120-463 120-480t11.5-28.5Q143-520 160-520t28.5 11.5Q200-497 200-480t-11.5 28.5Q177-440 160-440t-28.5-11.5Zm0 160Q120-303 120-320t11.5-28.5Q143-360 160-360t28.5 11.5Q200-337 200-320t-11.5 28.5Q177-280 160-280t-28.5-11.5Zm0 160Q120-143 120-160t11.5-28.5Q143-200 160-200t28.5 11.5Q200-177 200-160t-11.5 28.5Q177-120 160-120t-28.5-11.5Zm640-480Q760-623 760-640t11.5-28.5Q783-680 800-680t28.5 11.5Q840-657 840-640t-11.5 28.5Q817-600 800-600t-28.5-11.5Z") }
+
+    /** straighten */
+    val Ruler by lazy { icon("straighten", "M160-240q-33 0-56.5-23.5T80-320v-320q0-33 23.5-56.5T160-720h640q33 0 56.5 23.5T880-640v320q0 33-23.5 56.5T800-240H160Zm0-80h640v-320H680v120q0 17-11.5 28.5T640-480q-17 0-28.5-11.5T600-520v-120h-80v120q0 17-11.5 28.5T480-480q-17 0-28.5-11.5T440-520v-120h-80v120q0 17-11.5 28.5T320-480q-17 0-28.5-11.5T280-520v-120H160v320Zm160-160Zm160 0Zm160 0Zm-160 0Z") }
+
+    /** undo */
+    val Undo by lazy { icon("undo", "M320-200q-17 0-28.5-11.5T280-240q0-17 11.5-28.5T320-280h244q63 0 109.5-40T720-420q0-60-46.5-100T564-560H312l76 76q11 11 11 28t-11 28q-11 11-28 11t-28-11L188-572q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l144-144q11-11 28-11t28 11q11 11 11 28t-11 28l-76 76h252q97 0 166.5 63T800-420q0 94-69.5 157T564-200H320Z") }
+
+    /** redo */
+    val Redo by lazy { icon("redo", "M648-560H396q-63 0-109.5 40T240-420q0 60 46.5 100T396-280h244q17 0 28.5 11.5T680-240q0 17-11.5 28.5T640-200H396q-97 0-166.5-63T160-420q0-94 69.5-157T396-640h252l-76-76q-11-11-11-28t11-28q11-11 28-11t28 11l144 144q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L628-428q-11 11-28 11t-28-11q-11-11-11-28t11-28l76-76Z") }
+
+    /** text_fields */
+    val TextBox by lazy { icon("text_fields", "M297.5-177.5Q280-195 280-220v-460H140q-25 0-42.5-17.5T80-740q0-25 17.5-42.5T140-800h400q25 0 42.5 17.5T600-740q0 25-17.5 42.5T540-680H400v460q0 25-17.5 42.5T340-160q-25 0-42.5-17.5Zm360 0Q640-195 640-220v-260h-60q-25 0-42.5-17.5T520-540q0-25 17.5-42.5T580-600h240q25 0 42.5 17.5T880-540q0 25-17.5 42.5T820-480h-60v260q0 25-17.5 42.5T700-160q-25 0-42.5-17.5Z") }
+
+    /** image */
+    val PhotoFrame by lazy { icon("image", "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0 0v-560 560Zm80-80h400q12 0 18-11t-2-21L586-459q-6-8-16-8t-16 8L450-320l-74-99q-6-8-16-8t-16 8l-80 107q-8 10-2 21t18 11Z") }
+
+    /** photo_camera */
+    val CameraBody by lazy { icon("photo_camera", "M480-260q75 0 127.5-52.5T660-440q0-75-52.5-127.5T480-620q-75 0-127.5 52.5T300-440q0 75 52.5 127.5T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.5-23.5T80-200v-480q0-33 23.5-56.5T160-760h126l50-54q11-12 26.5-19t32.5-7h170q17 0 32.5 7t26.5 19l50 54h126q33 0 56.5 23.5T880-680v480q0 33-23.5 56.5T800-120H160Zm0-80h640v-480H638l-73-80H395l-73 80H160v480Zm320-240Z") }
+
+    /** gesture */
+    val DrawingPad by lazy { icon("gesture", "M554-120q-54 0-91-37t-37-89q0-76 61.5-137.5T641-460q-3-36-18-54.5T582-533q-30 0-65 25t-83 82q-78 93-114.5 121T241-277q-51 0-86-38t-35-92q0-54 23.5-110.5T223-653q19-26 28-44t9-29q0-7-2.5-10.5T250-740q-5 0-12 3t-15 11q-15 14-34.5 15T155-724q-15-16-15.5-37.5T155-797q24-21 48-32t47-11q46 0 78 32t32 80q0 29-15 64t-50 84q-38 54-56.5 95T220-413q0 17 5.5 26.5T241-377q10 0 17.5-5.5T286-409q13-14 31-34.5t44-50.5q63-75 114-107t107-32q67 0 110 45t49 123h49q21 0 35.5 14.5T840-415q0 21-14.5 35.5T790-365h-49q-8 112-58.5 178.5T554-120Zm2-100q32 0 54-36.5T640-358q-46 11-80 43.5T526-250q0 14 8 22t22 8Z") }
+
+    /** palette */
+    val ColorSwatch by lazy { icon("palette", "M480-80q-82 0-155-31.5t-127.5-86Q143-252 111.5-325T80-480q0-83 32.5-156t88-127Q256-817 330-848.5T488-880q80 0 151 27.5t124.5 76q53.5 48.5 85 115T880-518q0 115-70 176.5T640-280h-74q-9 0-12.5 5t-3.5 11q0 12 15 34.5t15 51.5q0 50-27.5 74T480-80Zm0-400Zm-177 23q17-17 17-43t-17-43q-17-17-43-17t-43 17q-17 17-17 43t17 43q17 17 43 17t43-17Zm120-160q17-17 17-43t-17-43q-17-17-43-17t-43 17q-17 17-17 43t17 43q17 17 43 17t43-17Zm200 0q17-17 17-43t-17-43q-17-17-43-17t-43 17q-17 17-17 43t17 43q17 17 43 17t43-17Zm120 160q17-17 17-43t-17-43q-17-17-43-17t-43 17q-17 17-17 43t17 43q17 17 43 17t43-17ZM480-160q9 0 14.5-5t5.5-13q0-14-15-33t-15-57q0-42 29-67t71-25h70q66 0 113-38.5T800-518q0-121-92.5-201.5T488-800q-136 0-232 93t-96 227q0 133 93.5 226.5T480-160Z") }
+
+    /** grid_on */
+    val PageRuling by lazy { icon("grid_on", "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h133v-133H200v133Zm213 0h134v-133H413v133Zm214 0h133v-133H627v133ZM200-413h133v-134H200v134Zm213 0h134v-134H413v134Zm214 0h133v-134H627v134ZM200-627h133v-133H200v133Zm213 0h134v-133H413v133Zm214 0h133v-133H627v133Z") }
+
+    /** note_add */
+    val AddPage by lazy { icon("note_add", "M440-360v80q0 17 11.5 28.5T480-240q17 0 28.5-11.5T520-280v-80h80q17 0 28.5-11.5T640-400q0-17-11.5-28.5T600-440h-80v-80q0-17-11.5-28.5T480-560q-17 0-28.5 11.5T440-520v80h-80q-17 0-28.5 11.5T320-400q0 17 11.5 28.5T360-360h80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h287q16 0 30.5 6t25.5 17l194 194q11 11 17 25.5t6 30.5v447q0 33-23.5 56.5T720-80H240Zm280-560v-160H240v640h480v-440H560q-17 0-28.5-11.5T520-640ZM240-800v200-200 640-640Z") }
+
+    /** touch_app */
+    val FingerDraws by lazy { icon("touch_app", "M419-80q-28 0-52.5-12T325-126L124-381q-8-9-7-21.5t9-20.5q20-21 48-25t52 11l74 45v-328q0-17 11.5-28.5T340-760q17 0 29 11.5t12 28.5v400q0 23-20.5 34.5T320-286l-36-22 104 133q6 7 14 11t17 4h221q33 0 56.5-23.5T720-240v-160q0-17-11.5-28.5T680-440H501q-17 0-28.5-11.5T461-480q0-17 11.5-28.5T501-520h179q50 0 85 35t35 85v160q0 66-47 113T640-80H419Zm83-260Zm-23-260q-17 0-28.5-11.5T439-640q0-2 5-20 8-14 12-28.5t4-31.5q0-50-35-85t-85-35q-50 0-85 35t-35 85q0 17 4 31.5t12 28.5q3 5 4 10t1 10q0 17-11 28.5T202-600q-11 0-20.5-6T167-621q-13-22-20-47t-7-52q0-83 58.5-141.5T340-920q83 0 141.5 58.5T540-720q0 27-7 52t-20 47q-5 9-14 15t-20 6Z") }
+
+    /** swipe_vertical */
+    val FingerScrolls by lazy { icon("swipe_vertical", "M161-140q-59-72-90-159T40-480q0-94 31-181t90-159h-51q-13 0-21.5-8.5T80-850q0-13 8.5-21.5T110-880h130q17 0 28.5 11.5T280-840v130q0 13-8.5 21.5T250-680q-13 0-21.5-8.5T220-710v-86q-58 66-89 147t-31 169q0 88 31 169t89 147v-86q0-13 8.5-21.5T250-280q13 0 21.5 8.5T280-250v130q0 17-11.5 28.5T240-80H110q-13 0-21.5-8.5T80-110q0-13 8.5-21.5T110-140h51Zm497 13q-23 8-46.5 7.5T566-131L340-236q-15-7-21-22.5t1-30.5l2-4q10-20 28-32.5t40-14.5l68-5-112-307q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l130 357q7 19-4 35.5T516-268l-47 3 131 61q7 3 15 3.5t15-1.5l157-57q31-11 45-41.5t3-61.5l-55-150q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l55 150q23 63-4.5 122.5T815-184l-157 57ZM514-543q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l41 112q6 16-1 31t-23 21q-16 6-31-1t-21-23l-40-113Zm126-3q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l27 75q6 16-.5 30.5T719-447q-16 6-31-1t-21-23l-27-75Zm49 191Z") }
+
+    /** spellcheck */
+    val RecogniseText by lazy { icon("spellcheck", "m564-192 198-198q11-11 28-11t28 11q11 11 11 28t-11 28L621-137q-12 12-27 18t-30 6q-15 0-30-6t-27-18l-85-85q-11-11-11-28t11-28q11-11 28-11t28 11l86 86ZM254-452l-37 105q-5 12-15 19.5t-23 7.5q-22 0-34-18t-4-38l162-435q5-13 16.5-21t25.5-8h32q14 0 25.5 8t16.5 21l162 434q8 21-4.5 39T541-320q-14 0-25-8t-16-21l-36-103H254Zm28-76h156l-76-216h-4l-76 216Z") }
+
+    /** download */
+    val Export by lazy { icon("download", "M465-339.5q-7-2.5-13-8.5L308-492q-12-12-11.5-28t11.5-28q12-12 28.5-12.5T365-549l75 75v-286q0-17 11.5-28.5T480-800q17 0 28.5 11.5T520-760v286l75-75q12-12 28.5-11.5T652-548q11 12 11.5 28T652-492L508-348q-6 6-13 8.5t-15 2.5q-8 0-15-2.5ZM240-160q-33 0-56.5-23.5T160-240v-80q0-17 11.5-28.5T200-360q17 0 28.5 11.5T240-320v80h480v-80q0-17 11.5-28.5T760-360q17 0 28.5 11.5T800-320v80q0 33-23.5 56.5T720-160H240Z") }
+
+    /** share */
+    val ShareArrow by lazy { icon("share", "M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2 7 2.5 13.5t.5 14.5q0 8-.5 14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm508.5-291.5Q720-743 720-760t-11.5-28.5Q697-800 680-800t-28.5 11.5Q640-777 640-760t11.5 28.5Q663-720 680-720t28.5-11.5ZM680-200ZM200-480Zm480-280Z") }
+
+    /** print */
+    val Printer by lazy { icon("print", "M320-120q-33 0-56.5-23.5T240-200v-80h-80q-33 0-56.5-23.5T80-360v-160q0-51 35-85.5t85-34.5h560q51 0 85.5 34.5T880-520v160q0 33-23.5 56.5T800-280h-80v80q0 33-23.5 56.5T640-120H320ZM160-360h80q0-33 23.5-56.5T320-440h320q33 0 56.5 23.5T720-360h80v-160q0-17-11.5-28.5T760-560H200q-17 0-28.5 11.5T160-520v160Zm480-280v-120H320v120h-80v-120q0-33 23.5-56.5T320-840h320q33 0 56.5 23.5T720-760v120h-80Zm80 180q17 0 28.5-11.5T760-500q0-17-11.5-28.5T720-540q-17 0-28.5 11.5T680-500q0 17 11.5 28.5T720-460Zm-80 260v-160H320v160h320ZM160-560h640-640Z") }
+
+    /** close */
+    val Close by lazy { icon("close", "M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z") }
+
+    /** check */
+    val Confirm by lazy { icon("check", "m382-354 339-339q12-12 28-12t28 12q12 12 12 28.5T777-636L410-268q-12 12-28 12t-28-12L182-440q-12-12-11.5-28.5T183-497q12-12 28.5-12t28.5 12l142 143Z") }
+
+    /** play_arrow */
+    val PlayRun by lazy { icon("play_arrow", "M320-273v-414q0-17 12-28.5t28-11.5q5 0 10.5 1.5T381-721l326 207q9 6 13.5 15t4.5 19q0 10-4.5 19T707-446L381-239q-5 3-10.5 4.5T360-233q-16 0-28-11.5T320-273Zm80-207Zm0 134 210-134-210-134v268Z") }
+
+    /** stop */
+    val StopSquare by lazy { icon("stop", "M240-320v-320q0-33 23.5-56.5T320-720h320q33 0 56.5 23.5T720-640v320q0 33-23.5 56.5T640-240H320q-33 0-56.5-23.5T240-320Zm80 0h320v-320H320v320Zm160-160Z") }
+
+    /** terminal */
+    val OutputPanel by lazy { icon("terminal", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H160v400Zm187-200-76-76q-12-12-11.5-28t12.5-28q12-11 28-11.5t28 11.5l104 104q12 12 12 28t-12 28L328-308q-11 11-27.5 11.5T272-308q-11-11-11-28t11-28l75-76Zm173 160q-17 0-28.5-11.5T480-320q0-17 11.5-28.5T520-360h160q17 0 28.5 11.5T720-320q0 17-11.5 28.5T680-280H520Z") }
+
+    /** error */
+    val ErrorMark by lazy { icon("error", "M508.5-291.5Q520-303 520-320t-11.5-28.5Q497-360 480-360t-28.5 11.5Q440-337 440-320t11.5 28.5Q463-280 480-280t28.5-11.5Zm0-160Q520-463 520-480v-160q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640v160q0 17 11.5 28.5T480-440q17 0 28.5-11.5ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z") }
+
+    /** input */
+    val InputArrow by lazy { icon("input", "M160-160q-33 0-56.5-23.5T80-240v-80q0-17 11.5-28.5T120-360q17 0 28.5 11.5T160-320v80h640v-480H160v80q0 17-11.5 28.5T120-600q-17 0-28.5-11.5T80-640v-80q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm327-280H120q-17 0-28.5-11.5T80-480q0-17 11.5-28.5T120-520h367l-55-54q-12-11-11.5-27.5T432-630q12-12 28.5-12.5T489-631l123 123q12 12 12 28t-12 28L489-329q-12 12-28.5 12T432-329q-11-12-11.5-28.5T432-386l55-54Z") }
+
+    /** wrap_text */
+    val WordWrap by lazy { icon("wrap_text", "M200-460q-17 0-28.5-11.5T160-500q0-17 11.5-28.5T200-540h490q63 0 106.5 43.5T840-390q0 63-43.5 106.5T690-240h-96l22 22q12 12 11.5 28T616-162q-12 12-28.5 12.5T559-161l-91-91q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l91-91q12-12 28.5-12t28.5 12q11 12 11.5 28.5T616-342l-22 22h96q29 0 49.5-20.5T760-390q0-29-20.5-49.5T690-460H200Zm0 220q-17 0-28.5-11.5T160-280q0-17 11.5-28.5T200-320h120q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240H200Zm0-440q-17 0-28.5-11.5T160-720q0-17 11.5-28.5T200-760h560q17 0 28.5 11.5T800-720q0 17-11.5 28.5T760-680H200Z") }
+
+    /** cloud_off */
+    val Offline by lazy { icon("cloud_off", "M260-160q-92 0-156-64T40-380q0-77 47.5-137T210-594q3-8 6-15.5t6-16.5L84-764q-11-11-11-28t11-28q11-11 28-11t28 11l680 680q11 11 11.5 27.5T820-84q-11 11-27.5 11.5T764-83l-78-77H260Zm0-80h346L284-562q-2 11-3 21t-1 21h-20q-58 0-99 41t-41 99q0 58 41 99t99 41Zm185-161Zm419 191-58-56q17-14 25.5-32.5T840-340q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-27 0-52 6.5T380-693l-58-58q35-24 74.5-36.5T480-800q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 39-15 72.5T864-210ZM593-479Z") }
+
+    /** drive_file_move */
+    val Move by lazy { icon("drive_file_move", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h207q16 0 30.5 6t25.5 17l57 57h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Zm328-160-37 37q-11 11-11 28t11 28q11 11 28 11t28-11l105-105q12-12 12-28t-12-28L507-573q-11-11-28-11t-28 11q-11 11-11 28t11 28l37 37H360q-17 0-28.5 11.5T320-440q0 17 11.5 28.5T360-400h128Z") }
+
+    /** content_copy */
+    val Copy by lazy { icon("content_copy", "M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-520q0-17 11.5-28.5T160-720q17 0 28.5 11.5T200-680v520h400q17 0 28.5 11.5T640-120q0 17-11.5 28.5T600-80H200Zm160-240v-480 480Z") }
+
+    /** restore */
+    val Restore by lazy { icon("restore", "M480-120q-126 0-223-76.5T131-392q-4-15 6-27.5t27-14.5q16-2 29 6t18 24q24 90 99 147t170 57q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h70q17 0 28.5 11.5T360-600q0 17-11.5 28.5T320-560H160q-17 0-28.5-11.5T120-600v-160q0-17 11.5-28.5T160-800q17 0 28.5 11.5T200-760v54q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm40-376 100 100q11 11 11 28t-11 28q-11 11-28 11t-28-11L452-452q-6-6-9-13.5t-3-15.5v-159q0-17 11.5-28.5T480-680q17 0 28.5 11.5T520-640v144Z") }
+
+    /** fit_screen */
+    val FitToView by lazy { icon("fit_screen", "M800-640v-80h-80q-17 0-28.5-11.5T680-760q0-17 11.5-28.5T720-800h80q33 0 56.5 23.5T880-720v80q0 17-11.5 28.5T840-600q-17 0-28.5-11.5T800-640Zm-720 0v-80q0-33 23.5-56.5T160-800h80q17 0 28.5 11.5T280-760q0 17-11.5 28.5T240-720h-80v80q0 17-11.5 28.5T120-600q-17 0-28.5-11.5T80-640Zm720 480h-80q-17 0-28.5-11.5T680-200q0-17 11.5-28.5T720-240h80v-80q0-17 11.5-28.5T840-360q17 0 28.5 11.5T880-320v80q0 33-23.5 56.5T800-160Zm-640 0q-33 0-56.5-23.5T80-240v-80q0-17 11.5-28.5T120-360q17 0 28.5 11.5T160-320v80h80q17 0 28.5 11.5T280-200q0 17-11.5 28.5T240-160h-80Zm80-240v-160q0-33 23.5-56.5T320-640h320q33 0 56.5 23.5T720-560v160q0 33-23.5 56.5T640-320H320q-33 0-56.5-23.5T240-400Zm80 0h320v-160H320v160Zm0 0v-160 160Z") }
+
+    /** add_box */
+    val NodeDot by lazy { icon("add_box", "M440-440v120q0 17 11.5 28.5T480-280q17 0 28.5-11.5T520-320v-120h120q17 0 28.5-11.5T680-480q0-17-11.5-28.5T640-520H520v-120q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640v120H320q-17 0-28.5 11.5T280-480q0 17 11.5 28.5T320-440h120ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z") }
+
+    /** abc */
+    val Letters by lazy { icon("abc", "M400-360q-8 0-14-6t-6-14v-200q0-8 6-14t14-6h140q17 0 28.5 11.5T580-560v40q0 17-11.5 28.5T540-480q17 0 28.5 11.5T580-440v40q0 17-11.5 28.5T540-360H400Zm40-150h80v-30h-80v30Zm0 90h80v-30h-80v30Zm-290 60q-13 0-21.5-8.5T120-390v-170q0-17 11.5-28.5T160-600h120q17 0 28.5 11.5T320-560v170q0 13-8.5 21.5T290-360q-13 0-21.5-8.5T260-390v-30h-80v30q0 13-8.5 21.5T150-360Zm30-120h80v-60h-80v60Zm500 120q-17 0-28.5-11.5T640-400v-160q0-17 11.5-28.5T680-600h120q17 0 28.5 11.5T840-560v20q0 13-8.5 21.5T810-510q-13 0-21.5-8.5T780-540h-80v120h80q0-13 8.5-21.5T810-450q13 0 21.5 8.5T840-420v20q0 17-11.5 28.5T800-360H680Z") }
+
+    /** calculate */
+    val Operations by lazy { icon("calculate", "M320-320v50q0 13 8.5 21.5T350-240q13 0 21.5-8.5T380-270v-50h50q13 0 21.5-8.5T460-350q0-13-8.5-21.5T430-380h-50v-50q0-13-8.5-21.5T350-460q-13 0-21.5 8.5T320-430v50h-50q-13 0-21.5 8.5T240-350q0 13 8.5 21.5T270-320h50Zm230 50h140q13 0 21.5-8.5T720-300q0-13-8.5-21.5T690-330H550q-13 0-21.5 8.5T520-300q0 13 8.5 21.5T550-270Zm0-100h140q13 0 21.5-8.5T720-400q0-13-8.5-21.5T690-430H550q-13 0-21.5 8.5T520-400q0 13 8.5 21.5T550-370ZM280-592h140q13 0 21.5-8.5T450-622q0-13-8.5-21.5T420-652H280q-13 0-21.5 8.5T250-622q0 13 8.5 21.5T280-592Zm-80 472q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Zm420 182 35 35q9 9 21 9t21-9q8-8 8.5-20.5T698-585l-36-37 35-35q9-9 9-21t-9-21q-9-9-21-9t-21 9l-35 35-35-35q-9-9-21-9t-21 9q-9 9-9 21t9 21l35 35-36 37q-8 9-8 21t9 21q9 9 21 9t21-9l35-35Z") }
+
+    /** music_note */
+    val MusicNote by lazy { icon("music_note", "M287-167q-47-47-47-113t47-113q47-47 113-47 23 0 42.5 5.5T480-418v-382q0-17 11.5-28.5T520-840h160q17 0 28.5 11.5T720-800v80q0 17-11.5 28.5T680-680H560v400q0 66-47 113t-113 47q-66 0-113-47Z") }
+
+    /** science */
+    val Flask by lazy { icon("science", "M200-120q-51 0-72.5-45.5T138-250l222-270v-240h-40q-17 0-28.5-11.5T280-800q0-17 11.5-28.5T320-840h320q17 0 28.5 11.5T680-800q0 17-11.5 28.5T640-760h-40v240l222 270q32 39 10.5 84.5T760-120H200Zm0-80h560L520-492v-268h-80v268L200-200Zm280-280Z") }
+
+    /** public */
+    val Globe by lazy { icon("public", "M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM440-162v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q41-45 62.5-100.5T800-480q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z") }
+
+    /** brush */
+    val BrushTip by lazy { icon("brush", "M240-120q-45 0-89-22t-71-58q26 0 53-20.5t27-59.5q0-50 35-85t85-35q50 0 85 35t35 85q0 66-47 113t-113 47Zm0-80q33 0 56.5-23.5T320-280q0-17-11.5-28.5T280-320q-17 0-28.5 11.5T240-280q0 23-5.5 42T220-202q5 2 10 2h10Zm230-160L360-470l358-358q11-11 27.5-11.5T774-828l54 54q12 12 12 28t-12 28L470-360Zm-190 80Z") }
+
+    /** favorite */
+    val Heart by lazy { icon("favorite", "M451.5-152q-14.5-5-25.5-16l-69-63q-106-97-191.5-192.5T80-634q0-94 63-157t157-63q53 0 100 22.5t80 61.5q33-39 80-61.5T660-854q94 0 157 63t63 157q0 115-85 211T602-230l-68 62q-11 11-25.5 16t-28.5 5q-14 0-28.5-5ZM442-690q-29-41-62-62.5T300-774q-60 0-100 40t-40 100q0 52 37 110.5T285.5-410q51.5 55 106 103t88.5 79q34-31 88.5-79t106-103Q726-465 763-523.5T800-634q0-60-40-100t-100-40q-47 0-80 21.5T518-690q-7 10-17 15t-21 5q-11 0-21-5t-17-15Zm38 189Z") }
+
+    /** biotech */
+    val Atom by lazy { icon("biotech", "M400-200v-80q-83 0-141.5-58.5T200-480q0-61 33.5-111t90.5-73q8-34 35.5-55t62.5-21l-9-25q-5-16 1.5-30.5T437-816h1q-6-15 1-29.5t24-20.5q15-5 29.5 1.5T512-842q16-6 31 1t21 23l82 225q6 16-.5 30.5T623-542h-1q6 16-1 31t-24 21q-15 5-29.5-1.5T548-514q-16 6-31-1t-21-23l-10-28q-15 14-34.5 21t-39.5 5q-22-2-41-13.5T338-582q-27 16-42.5 43T280-480q0 50 35 85t85 35h280q17 0 28.5 11.5T720-320q0 17-11.5 28.5T680-280H520v80h200q17 0 28.5 11.5T760-160q0 17-11.5 28.5T720-120H240q-17 0-28.5-11.5T200-160q0-17 11.5-28.5T240-200h160Zm146-378 36-14-68-188-38 14 70 188Zm-97.5-33.5Q460-623 460-640t-11.5-28.5Q437-680 420-680t-28.5 11.5Q380-657 380-640t11.5 28.5Q403-600 420-600t28.5-11.5ZM546-578Zm-126-62Zm0 0Z") }
+
+    /** genetics */
+    val Dna by lazy { icon("genetics", "M200-80q0-139 58-225.5T418-480q-102-88-160-174.5T200-880v-10q0-17 11.5-28.5T240-930q17 0 28.5 11.5T280-890v10q0 11 .5 20.5T282-840h396q1-10 1.5-19.5t.5-20.5v-10q0-17 11.5-28.5T720-930q17 0 28.5 11.5T760-890v10q0 139-58 225.5T542-480q102 88 160 174.5T760-80v10q0 17-11.5 28.5T720-30q-17 0-28.5-11.5T680-70v-10q0-11-.5-20.5T678-120H282q-1 10-1.5 19.5T280-80v10q0 17-11.5 28.5T240-30q-17 0-28.5-11.5T200-70v-10Zm138-600h284q13-19 22.5-38t17.5-42H298q8 22 17.5 41.5T338-680Zm142 148q20-17 39-34t36-34H405q17 17 36 34t39 34Zm-75 172h150q-17-17-36-34t-39-34q-20 17-39 34t-36 34ZM298-200h364q-8-22-17.5-41.5T622-280H338q-13 19-22.5 38T298-200Z") }
+
+    /** map */
+    val MapPin by lazy { icon("map", "m574-129-214-75-186 72q-10 4-19.5 2.5T137-136q-8-5-12.5-13.5T120-169v-561q0-13 7.5-23t20.5-15l186-63q6-2 12.5-3t13.5-1q7 0 13.5 1t12.5 3l214 75 186-72q10-4 19.5-2.5T823-824q8 5 12.5 13.5T840-791v561q0 13-7.5 23T812-192l-186 63q-6 2-12.5 3t-13.5 1q-7 0-13.5-1t-12.5-3Zm-14-89v-468l-160-56v468l160 56Zm80 0 120-40v-474l-120 46v468Zm-440-10 120-46v-468l-120 40v474Zm440-458v468-468Zm-320-56v468-468Z") }
+
+    /** settings */
+    val Cog by lazy { icon("settings", "M433-80q-27 0-46.5-18T363-142l-9-66q-13-5-24.5-12T307-235l-62 26q-25 11-50 2t-39-32l-47-82q-14-23-8-49t27-43l53-40q-1-7-1-13.5v-27q0-6.5 1-13.5l-53-40q-21-17-27-43t8-49l47-82q14-23 39-32t50 2l62 26q11-8 23-15t24-12l9-66q4-26 23.5-44t46.5-18h94q27 0 46.5 18t23.5 44l9 66q13 5 24.5 12t22.5 15l62-26q25-11 50-2t39 32l47 82q14 23 8 49t-27 43l-53 40q1 7 1 13.5v27q0 6.5-2 13.5l53 40q21 17 27 43t-8 49l-48 82q-14 23-39 32t-50-2l-60-26q-11 8-23 15t-24 12l-9 66q-4 26-23.5 44T527-80h-94Zm7-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z") }
+
+    /** lightbulb */
+    val Bulb by lazy { icon("lightbulb", "M423.5-103.5Q400-127 400-160h160q0 33-23.5 56.5T480-80q-33 0-56.5-23.5ZM360-200q-17 0-28.5-11.5T320-240q0-17 11.5-28.5T360-280h240q17 0 28.5 11.5T640-240q0 17-11.5 28.5T600-200H360Zm-30-120q-69-41-109.5-110T180-580q0-125 87.5-212.5T480-880q125 0 212.5 87.5T780-580q0 81-40.5 150T630-320H330Zm24-80h252q45-32 69.5-79T700-580q0-92-64-156t-156-64q-92 0-156 64t-64 156q0 54 24.5 101t69.5 79Zm126 0Z") }
+
+    /** explore */
+    val Compass by lazy { icon("explore", "m335-310 202-58q20-6 34.5-20.5T592-423l58-202q3-11-5.5-19.5T625-650l-202 58q-20 6-34.5 20.5T368-537l-58 202q-3 11 5.5 19.5T335-310Zm145-110q-25 0-42.5-17.5T420-480q0-25 17.5-42.5T480-540q25 0 42.5 17.5T540-480q0 25-17.5 42.5T480-420Zm0 340q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Zm0-320Z") }
+
+    /** rocket_launch */
+    val Rocket by lazy { icon("rocket_launch", "M284-506q14-28 29-54t33-52l-56-11-84 84 78 33Zm482-275q-70 2-149.5 41T472-636q-42 42-75 90t-49 90l114 113q42-16 90-49t90-75q65-65 104-144t41-149q0-4-1.5-8t-4.5-7q-3-3-7-4.5t-8-1.5ZM523-597.5q0-33.5 23-56.5t57-23q34 0 57 23t23 56.5q0 33.5-23 56.5t-57 23q-34 0-57-23t-23-56.5ZM512-279l33 79 84-84-11-56q-26 18-52 32.5T512-279Zm351-534q8 110-36 214.5T688-399l20 99q4 20-2 39t-20 33L560-102q-15 15-36 11.5T495-114l-61-143-171-171-143-61q-20-8-24-29t11-36l126-126q14-14 33.5-20t39.5-2l99 20q95-95 199.5-139T819-857q8 1 16 4.5t14 9.5q6 6 9.5 14t4.5 16ZM157-321q35-35 85.5-35.5T328-322q35 35 34.5 85.5T327-151q-48 48-113.5 57T82-76q9-66 18-131.5T157-321Zm57 56q-17 17-23.5 41T180-175q25-4 49-10t41-23q12-12 13-29t-11-29q-12-12-29-11.5T214-265Z") }
+
+    /** workspace_premium */
+    val Crown by lazy { icon("workspace_premium", "m480-483-68 52q-6 5-12 .5t-4-11.5l26-84-70-56q-5-5-3-11.5t9-6.5h86l26-82q2-7 10-7t10 7l26 82h85q7 0 9.5 6.5T608-582l-71 56 26 84q2 7-4 11.5t-12-.5l-67-52Zm0 363L293-58q-20 7-36.5-5T240-95v-254q-38-42-59-96t-21-115q0-134 93-227t227-93q134 0 227 93t93 227q0 61-21 115t-59 96v254q0 20-16.5 32T667-58l-187-62Zm170-270q70-70 70-170t-70-170q-70-70-170-70t-170 70q-70 70-70 170t70 170q70 70 170 70t170-70ZM320-159l160-41 160 41v-124q-35 20-75.5 31.5T480-240q-44 0-84.5-11.5T320-283v124Zm160-62Z") }
+
+    /** local_cafe */
+    val Cup by lazy { icon("local_cafe", "M200-120q-17 0-28.5-11.5T160-160q0-17 11.5-28.5T200-200h560q17 0 28.5 11.5T800-160q0 17-11.5 28.5T760-120H200Zm120-160q-66 0-113-47t-47-113v-320q0-33 23.5-56.5T240-840h560q33 0 56.5 23.5T880-760v120q0 33-23.5 56.5T800-560h-80v120q0 66-47 113t-113 47H320Zm0-80h240q33 0 56.5-23.5T640-440v-320H240v320q0 33 23.5 56.5T320-360Zm400-280h80v-120h-80v120ZM320-360h-80 400-320Z") }
+
+    /** park */
+    val Tree by lazy { icon("park", "M402-240H195q-24 0-36-21t2-41l119-178h-3q-24 0-35.5-21.5T244-543l203-290q6-8 15-12.5t18-4.5q9 0 18 4.5t15 12.5l203 290q14 20 2.5 41.5T683-480h-3l119 178q14 20 2 41t-36 21H558v120q0 17-11.5 28.5T518-80h-76q-17 0-28.5-11.5T402-120v-120Zm-132-80h160-76 252-76 160-420Zm0 0h420L530-560h76L480-740 354-560h76L270-320Z") }
+
+    /** landscape */
+    val Mountain by lazy { icon("landscape", "M120-240q-25 0-36-22t4-42l160-213q6-8 14.5-12t17.5-4q9 0 17.5 4t14.5 12l148 197h300L560-586l-68 90q-12 16-28 16.5t-28-8.5q-12-9-16-24.5t8-31.5l100-133q6-8 14.5-12t17.5-4q9 0 17.5 4t14.5 12l280 373q15 20 4 42t-36 22H120Zm340-80h300-312 68.5H460Zm-260 0h160l-80-107-80 107Zm0 0h160-160Z") }
+
+    /** cloud */
+    val CloudMark by lazy { icon("cloud", "M260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H260Zm0-80h480q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41Zm220-240Z") }
+
+    /** key */
+    val KeyShape by lazy { icon("key", "M223.5-423.5Q200-447 200-480t23.5-56.5Q247-560 280-560t56.5 23.5Q360-513 360-480t-23.5 56.5Q313-400 280-400t-56.5-23.5ZM280-240q-100 0-170-70T40-480q0-100 70-170t170-70q67 0 121.5 33t86.5 87h335q8 0 15.5 3t13.5 9l80 80q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L805-325q-5 5-12 8t-14 4q-7 1-14-1t-13-7l-52-39-57 43q-5 4-11 6t-12 2q-6 0-12.5-2t-11.5-6l-61-43h-47q-32 54-86.5 87T280-240Zm0-80q56 0 98.5-34t56.5-86h125l58 41v.5-.5l82-61 71 55 75-75h-.5.5l-40-40v-.5.5H435q-14-52-56.5-86T280-640q-66 0-113 47t-47 113q0 66 47 113t113 47Z") }
+
+    /** schedule */
+    val Clock by lazy { icon("schedule", "M520-496v-144q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640v159q0 8 3 15.5t9 13.5l132 132q11 11 28 11t28-11q11-11 11-28t-11-28L520-496ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z") }
+
+    /** calendar_month */
+    val Calendar by lazy { icon("calendar_month", "M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-40q0-17 11.5-28.5T280-880q17 0 28.5 11.5T320-840v40h320v-40q0-17 11.5-28.5T680-880q17 0 28.5 11.5T720-840v40h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-188.5-11.5Q280-423 280-440t11.5-28.5Q303-480 320-480t28.5 11.5Q360-457 360-440t-11.5 28.5Q337-400 320-400t-28.5-11.5ZM640-400q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-188.5-11.5Q280-263 280-280t11.5-28.5Q303-320 320-320t28.5 11.5Q360-297 360-280t-11.5 28.5Q337-240 320-240t-28.5-11.5ZM640-240q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z") }
+
+    /** flag */
+    val Flag by lazy { icon("flag", "M280-400v240q0 17-11.5 28.5T240-120q-17 0-28.5-11.5T200-160v-600q0-17 11.5-28.5T240-800h287q14 0 25 9t14 23l10 48h184q17 0 28.5 11.5T800-680v320q0 17-11.5 28.5T760-320H553q-14 0-25-9t-14-23l-10-48H280Zm306 0h134v-240H543q-14 0-25-9t-14-23l-10-48H280v240h257q14 0 25 9t14 23l10 48Zm-86-160Z") }
+
+    /** biotech */
+    val Microscope by lazy { icon("biotech", "M400-200v-80q-83 0-141.5-58.5T200-480q0-61 33.5-111t90.5-73q8-34 35.5-55t62.5-21l-9-25q-5-16 1.5-30.5T437-816h1q-6-15 1-29.5t24-20.5q15-5 29.5 1.5T512-842q16-6 31 1t21 23l82 225q6 16-.5 30.5T623-542h-1q6 16-1 31t-24 21q-15 5-29.5-1.5T548-514q-16 6-31-1t-21-23l-10-28q-15 14-34.5 21t-39.5 5q-22-2-41-13.5T338-582q-27 16-42.5 43T280-480q0 50 35 85t85 35h280q17 0 28.5 11.5T720-320q0 17-11.5 28.5T680-280H520v80h200q17 0 28.5 11.5T760-160q0 17-11.5 28.5T720-120H240q-17 0-28.5-11.5T200-160q0-17 11.5-28.5T240-200h160Zm146-378 36-14-68-188-38 14 70 188Zm-97.5-33.5Q460-623 460-640t-11.5-28.5Q437-680 420-680t-28.5 11.5Q380-657 380-640t11.5 28.5Q403-600 420-600t28.5-11.5ZM546-578Zm-126-62Zm0 0Z") }
+
+    /** sports_soccer */
+    val Ball by lazy { icon("sports_soccer", "M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm200-500 54-18 16-54q-32-48-77-82.5T574-786l-54 38v56l160 112Zm-400 0 160-112v-56l-54-38q-54 17-99 51.5T210-652l16 54 54 18Zm-42 308 46-4 30-54-58-174-56-20-40 30q0 65 18 118.5T238-272Zm293 108q25-4 49-12l28-60-26-44H378l-26 44 28 60q24 8 49 12t51 4q26 0 51-4ZM390-360h180l56-160-146-102-144 102 54 160Zm332 88q42-50 60-103.5T800-494l-40-28-56 18-58 174 30 54 46 4Z") }
+
+    /** theater_comedy */
+    val Mask by lazy { icon("theater_comedy", "M760-660q17 0 28.5-11.5T800-700q0-17-11.5-28.5T760-740q-17 0-28.5 11.5T720-700q0 17 11.5 28.5T760-660Zm-160 0q17 0 28.5-11.5T640-700q0-17-11.5-28.5T600-740q-17 0-28.5 11.5T560-700q0 17 11.5 28.5T600-660Zm24.5 71.5Q598-577 586-551q-5 10 2.5 18.5T608-524h144q12 0 19.5-8.5T774-551q-12-26-38.5-37.5T680-600q-29 0-55.5 11.5ZM110-150q-70-70-70-170v-200q0-33 23.5-56.5T120-600h320q33 0 56.5 23.5T520-520v200q0 100-70 170T280-80q-100 0-170-70Zm283-57q47-47 47-113v-200H120v200q0 66 47 113t113 47q66 0 113-47Zm527-593v200q0 102-70 171t-171 69q-17 0-33.5-2t-32.5-7q-16-5-23-20t-2-31q5-16 20-23.5t31-2.5q11 3 21 4.5t21 1.5q66 0 112.5-47T840-600v-200H520v100q0 17-11.5 28.5T480-660q-17 0-28.5-11.5T440-700v-100q0-33 23.5-56.5T520-880h320q33 0 56.5 23.5T920-800ZM200-380q17 0 28.5-11.5T240-420q0-17-11.5-28.5T200-460q-17 0-28.5 11.5T160-420q0 17 11.5 28.5T200-380Zm188.5-11.5Q400-403 400-420t-11.5-28.5Q377-460 360-460t-28.5 11.5Q320-437 320-420t11.5 28.5Q343-380 360-380t28.5-11.5ZM333-255q25-11 39-35 5-11-1-20.5t-17-9.5H206q-11 0-17 9.5t-1 20.5q14 24 39 35t53 11q28 0 53-11Zm-53-85Zm390-280Z") }
+
+    /** balance */
+    val Scales by lazy { icon("balance", "M120-120q-17 0-28.5-11.5T80-160q0-17 11.5-28.5T120-200h320v-447q-26-9-45-28t-28-45H240l110 258q5 11 6 22.5t-1 23.5q-9 46-49.5 71T220-320q-45 0-85.5-25T85-416q-2-12-1-23.5t6-22.5l110-258h-40q-17 0-28.5-11.5T120-760q0-17 11.5-28.5T160-800h207q12-35 43-57.5t70-22.5q39 0 70 22.5t43 57.5h207q17 0 28.5 11.5T840-760q0 17-11.5 28.5T800-720h-40l110 258q5 11 6 22.5t-1 23.5q-9 46-49.5 71T740-320q-45 0-85.5-25T605-416q-2-12-1-23.5t6-22.5l110-258H593q-9 26-28 45t-45 28v447h320q17 0 28.5 11.5T880-160q0 17-11.5 28.5T840-120H120Zm545-320h150l-75-174-75 174Zm-520 0h150l-75-174-75 174Zm335-280q17 0 28.5-11.5T520-760q0-17-11.5-28.5T480-800q-17 0-28.5 11.5T440-760q0 17 11.5 28.5T480-720Z") }
+
+    /** shield */
+    val Shield by lazy { icon("shield", "M467-85q-6-1-12-3-135-45-215-166.5T160-516v-189q0-25 14.5-45t37.5-29l240-90q14-5 28-5t28 5l240 90q23 9 37.5 29t14.5 45v189q0 140-80 261.5T505-88q-6 2-12 3t-13 1q-7 0-13-1Zm13-79q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Z") }
+
+    /** home */
+    val House by lazy { icon("home", "M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360Zm-80 0v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23.5 56.5T720-120H560q-17 0-28.5-11.5T520-160v-200h-80v200q0 17-11.5 28.5T400-120H240q-33 0-56.5-23.5T160-200Zm320-270Z") }
+
+    /** format_bold */
+    val Bold by lazy { icon("format_bold", "M352-200q-33 0-56.5-23.5T272-280v-400q0-33 23.5-56.5T352-760h141q65 0 120 40t55 111q0 51-23 78.5T602-491q25 11 55.5 41t30.5 90q0 89-65 124.5T501-200H352Zm41-112h104q48 0 58.5-24.5T566-372q0-11-10.5-35.5T494-432H393v120Zm0-228h93q33 0 48-17t15-38q0-24-17-39t-44-15h-95v109Z") }
+
+    /** format_italic */
+    val Italic by lazy { icon("format_italic", "M250-200q-21 0-35.5-14.5T200-250q0-21 14.5-35.5T250-300h110l120-360H370q-21 0-35.5-14.5T320-710q0-21 14.5-35.5T370-760h300q21 0 35.5 14.5T720-710q0 21-14.5 35.5T670-660h-90L460-300h90q21 0 35.5 14.5T600-250q0 21-14.5 35.5T550-200H250Z") }
+
+    /** format_underlined */
+    val Underline by lazy { icon("format_underlined", "M240-120q-17 0-28.5-11.5T200-160q0-17 11.5-28.5T240-200h480q17 0 28.5 11.5T760-160q0 17-11.5 28.5T720-120H240Zm83-223q-56-63-56-167v-279q0-21 15.5-36t36.5-15q21 0 36 15t15 36v285q0 56 28 91t82 35q54 0 82-35t28-91v-285q0-21 15.5-36t36.5-15q21 0 36 15t15 36v279q0 104-56 167t-157 63q-101 0-157-63Z") }
+
+    /** format_strikethrough */
+    val Strikethrough by lazy { icon("format_strikethrough", "M120-400q-17 0-28.5-11.5T80-440q0-17 11.5-28.5T120-480h720q17 0 28.5 11.5T880-440q0 17-11.5 28.5T840-400H120Zm300-160v-120H260q-25 0-42.5-17.5T200-740q0-25 17.5-42.5T260-800h440q25 0 42.5 17.5T760-740q0 25-17.5 42.5T700-680H540v120H420Zm0 240h120v100q0 25-17.5 42.5T480-160q-25 0-42.5-17.5T420-220v-100Z") }
+
+    /** format_color_text */
+    val TextColour by lazy { icon("format_color_text", "M120 0q-17 0-28.5-11.5T80-40v-80q0-17 11.5-28.5T120-160h720q17 0 28.5 11.5T880-120v80q0 17-11.5 28.5T840 0H120Zm165-280q-23 0-36.5-19.5T243-341l176-469q5-14 17-22t26-8h36q15 0 26.5 8t16.5 22l177 470q8 22-5.5 41T676-280q-14 0-26-8t-17-22l-39-114H368l-41 115q-5 14-16.5 21.5T285-280Zm111-224h168l-82-232h-4l-82 232Z") }
+
+    /** format_color_fill */
+    val Highlight by lazy { icon("format_color_fill", "m332-932 315 315q23 23 23 57t-23 57L457-313q-23 23-57 23t-57-23L153-503q-23-23-23-57t23-57l190-191-68-68q-12-12-11.5-28t12.5-28q12-11 28-11.5t28 11.5Zm68 181L209-560h382L400-751Zm303.5 447.5Q680-327 680-360q0-21 12.5-45t27.5-45q9-12 19-25t21-25q11 12 21 25t19 25q15 21 27.5 45t12.5 45q0 33-23.5 56.5T760-280q-33 0-56.5-23.5ZM160 0q-33 0-56.5-23.5T80-80q0-33 23.5-56.5T160-160h640q33 0 56.5 23.5T880-80q0 33-23.5 56.5T800 0H160Z") }
+
+    /** format_size */
+    val TextSize by lazy { icon("format_size", "M560-680H420q-25 0-42.5-17.5T360-740q0-25 17.5-42.5T420-800h400q25 0 42.5 17.5T880-740q0 25-17.5 42.5T820-680H680v460q0 25-17.5 42.5T620-160q-25 0-42.5-17.5T560-220v-460ZM200-480h-60q-25 0-42.5-17.5T80-540q0-25 17.5-42.5T140-600h240q25 0 42.5 17.5T440-540q0 25-17.5 42.5T380-480h-60v260q0 25-17.5 42.5T260-160q-25 0-42.5-17.5T200-220v-260Z") }
+
+    /** horizontal_rule */
+    val DividerLine by lazy { icon("horizontal_rule", "M200-440q-17 0-28.5-11.5T160-480q0-17 11.5-28.5T200-520h560q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H200Z") }
+
+    /** format_align_left */
+    val AlignLeft by lazy { icon("format_align_left", "M160-120q-17 0-28.5-11.5T120-160q0-17 11.5-28.5T160-200h640q17 0 28.5 11.5T840-160q0 17-11.5 28.5T800-120H160Zm0-160q-17 0-28.5-11.5T120-320q0-17 11.5-28.5T160-360h400q17 0 28.5 11.5T600-320q0 17-11.5 28.5T560-280H160Zm0-160q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h640q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H160Zm0-160q-17 0-28.5-11.5T120-640q0-17 11.5-28.5T160-680h400q17 0 28.5 11.5T600-640q0 17-11.5 28.5T560-600H160Zm0-160q-17 0-28.5-11.5T120-800q0-17 11.5-28.5T160-840h640q17 0 28.5 11.5T840-800q0 17-11.5 28.5T800-760H160Z") }
+
+    /** format_align_center */
+    val AlignCentre by lazy { icon("format_align_center", "M160-120q-17 0-28.5-11.5T120-160q0-17 11.5-28.5T160-200h640q17 0 28.5 11.5T840-160q0 17-11.5 28.5T800-120H160Zm160-160q-17 0-28.5-11.5T280-320q0-17 11.5-28.5T320-360h320q17 0 28.5 11.5T680-320q0 17-11.5 28.5T640-280H320ZM160-440q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h640q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H160Zm160-160q-17 0-28.5-11.5T280-640q0-17 11.5-28.5T320-680h320q17 0 28.5 11.5T680-640q0 17-11.5 28.5T640-600H320ZM160-760q-17 0-28.5-11.5T120-800q0-17 11.5-28.5T160-840h640q17 0 28.5 11.5T840-800q0 17-11.5 28.5T800-760H160Z") }
+
+    /** format_align_right */
+    val AlignRight by lazy { icon("format_align_right", "M160-760q-17 0-28.5-11.5T120-800q0-17 11.5-28.5T160-840h640q17 0 28.5 11.5T840-800q0 17-11.5 28.5T800-760H160Zm240 160q-17 0-28.5-11.5T360-640q0-17 11.5-28.5T400-680h400q17 0 28.5 11.5T840-640q0 17-11.5 28.5T800-600H400ZM160-440q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h640q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H160Zm240 160q-17 0-28.5-11.5T360-320q0-17 11.5-28.5T400-360h400q17 0 28.5 11.5T840-320q0 17-11.5 28.5T800-280H400ZM160-120q-17 0-28.5-11.5T120-160q0-17 11.5-28.5T160-200h640q17 0 28.5 11.5T840-160q0 17-11.5 28.5T800-120H160Z") }
+
+    /** format_list_bulleted */
+    val BulletList by lazy { icon("format_list_bulleted", "M400-200q-17 0-28.5-11.5T360-240q0-17 11.5-28.5T400-280h400q17 0 28.5 11.5T840-240q0 17-11.5 28.5T800-200H400Zm0-240q-17 0-28.5-11.5T360-480q0-17 11.5-28.5T400-520h400q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H400Zm0-240q-17 0-28.5-11.5T360-720q0-17 11.5-28.5T400-760h400q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H400ZM200-160q-33 0-56.5-23.5T120-240q0-33 23.5-56.5T200-320q33 0 56.5 23.5T280-240q0 33-23.5 56.5T200-160Zm0-240q-33 0-56.5-23.5T120-480q0-33 23.5-56.5T200-560q33 0 56.5 23.5T280-480q0 33-23.5 56.5T200-400Zm-56.5-263.5Q120-687 120-720t23.5-56.5Q167-800 200-800t56.5 23.5Q280-753 280-720t-23.5 56.5Q233-640 200-640t-56.5-23.5Z") }
+
+    /** format_list_numbered */
+    val NumberedList by lazy { icon("format_list_numbered", "M150-80q-13 0-21.5-8.5T120-110q0-13 8.5-21.5T150-140h70v-30h-30q-13 0-21.5-8.5T160-200q0-13 8.5-21.5T190-230h30v-30h-70q-13 0-21.5-8.5T120-290q0-13 8.5-21.5T150-320h90q17 0 28.5 11.5T280-280v40q0 17-11.5 28.5T240-200q17 0 28.5 11.5T280-160v40q0 17-11.5 28.5T240-80h-90Zm0-280q-13 0-21.5-8.5T120-390v-80q0-17 11.5-28.5T160-510h60v-30h-70q-13 0-21.5-8.5T120-570q0-13 8.5-21.5T150-600h90q17 0 28.5 11.5T280-560v70q0 17-11.5 28.5T240-450h-60v30h70q13 0 21.5 8.5T280-390q0 13-8.5 21.5T250-360H150Zm38.5-288.5Q180-657 180-670v-150h-30q-13 0-21.5-8.5T120-850q0-13 8.5-21.5T150-880h60q13 0 21.5 8.5T240-850v180q0 13-8.5 21.5T210-640q-13 0-21.5-8.5ZM400-200q-17 0-28.5-11.5T360-240q0-17 11.5-28.5T400-280h400q17 0 28.5 11.5T840-240q0 17-11.5 28.5T800-200H400Zm0-240q-17 0-28.5-11.5T360-480q0-17 11.5-28.5T400-520h400q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H400Zm0-240q-17 0-28.5-11.5T360-720q0-17 11.5-28.5T400-760h400q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H400Z") }
+
+    /** checklist */
+    val TaskList by lazy { icon("checklist", "m221-313 142-142q12-12 28-11.5t28 12.5q11 12 11 28t-11 28L250-228q-12 12-28 12t-28-12l-86-86q-11-11-11-28t11-28q11-11 28-11t28 11l57 57Zm0-320 142-142q12-12 28-11.5t28 12.5q11 12 11 28t-11 28L250-548q-12 12-28 12t-28-12l-86-86q-11-11-11-28t11-28q11-11 28-11t28 11l57 57Zm339 353q-17 0-28.5-11.5T520-320q0-17 11.5-28.5T560-360h280q17 0 28.5 11.5T880-320q0 17-11.5 28.5T840-280H560Zm0-320q-17 0-28.5-11.5T520-640q0-17 11.5-28.5T560-680h280q17 0 28.5 11.5T880-640q0 17-11.5 28.5T840-600H560Z") }
+
+    /** table_chart */
+    val TableGrid by lazy { icon("table_chart", "M760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120ZM200-640h560v-120H200v120Zm100 80H200v360h100v-360Zm360 0v360h100v-360H660Zm-80 0H380v360h200v-360Z") }
+
+    /** title */
+    val HeadingMark by lazy { icon("title", "M420-680H260q-25 0-42.5-17.5T200-740q0-25 17.5-42.5T260-800h440q25 0 42.5 17.5T760-740q0 25-17.5 42.5T700-680H540v460q0 25-17.5 42.5T480-160q-25 0-42.5-17.5T420-220v-460Z") }
+
+    /** format_quote */
+    val Quote by lazy { icon("format_quote", "m262-300 58-100q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T458-480L331-260q-5 9-14 14.5t-20 5.5q-23 0-34.5-20t-.5-40Zm360 0 58-100q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T818-480L691-260q-5 9-14 14.5t-20 5.5q-23 0-34.5-20t-.5-40ZM362.5-517.5Q380-535 380-560t-17.5-42.5Q345-620 320-620t-42.5 17.5Q260-585 260-560t17.5 42.5Q295-500 320-500t42.5-17.5Zm360 0Q740-535 740-560t-17.5-42.5Q705-620 680-620t-42.5 17.5Q620-585 620-560t17.5 42.5Q655-500 680-500t42.5-17.5ZM680-560Zm-360 0Z") }
+
+    /** link */
+    val LinkChain by lazy { icon("link", "M280-280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h120q17 0 28.5 11.5T440-640q0 17-11.5 28.5T400-600H280q-50 0-85 35t-35 85q0 50 35 85t85 35h120q17 0 28.5 11.5T440-320q0 17-11.5 28.5T400-280H280Zm80-160q-17 0-28.5-11.5T320-480q0-17 11.5-28.5T360-520h240q17 0 28.5 11.5T640-480q0 17-11.5 28.5T600-440H360Zm200 160q-17 0-28.5-11.5T520-320q0-17 11.5-28.5T560-360h120q50 0 85-35t35-85q0-50-35-85t-85-35H560q-17 0-28.5-11.5T520-640q0-17 11.5-28.5T560-680h120q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H560Z") }
+
+    /** opacity */
+    val Opacity by lazy { icon("opacity", "M253.5-212Q160-304 160-436q0-65 25-121.5T254-658l184-181q9-8 20-12.5t22-4.5q11 0 22 4.5t20 12.5l184 181q44 44 69 100.5T800-436q0 132-93.5 224T480-120q-133 0-226.5-92ZM242-400h474q12-72-13.5-123T650-600L480-768 310-600q-27 26-53 77t-15 123Z") }
+
+    /** line_weight */
+    val Thickness by lazy { icon("line_weight", "M140-160q-8 0-14-6t-6-14q0-8 6-14t14-6h680q8 0 14 6t6 14q0 8-6 14t-14 6H140Zm20-120q-17 0-28.5-11.5T120-320q0-17 11.5-28.5T160-360h640q17 0 28.5 11.5T840-320q0 17-11.5 28.5T800-280H160Zm0-160q-17 0-28.5-11.5T120-480v-40q0-17 11.5-28.5T160-560h640q17 0 28.5 11.5T840-520v40q0 17-11.5 28.5T800-440H160Zm0-200q-17 0-28.5-11.5T120-680v-80q0-17 11.5-28.5T160-800h640q17 0 28.5 11.5T840-760v80q0 17-11.5 28.5T800-640H160Z") }
+
+    /** edit */
+    val Fineliner by lazy { icon("edit", "M200-200h57l391-391-57-57-391 391v57Zm-40 80q-17 0-28.5-11.5T120-160v-97q0-16 6-30.5t17-25.5l505-504q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L313-143q-11 11-25.5 17t-30.5 6h-97Zm600-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z") }
+
+    /** stylus_note */
+    val Pencil by lazy { icon("stylus_note", "m499-287 335-335-52-52-335 335 52 52Zm-379-62q0 29 20 45t66 21q16 2 25.5 14.5T240-240q-1 17-12 28t-27 9q-81-10-121-46.5T40-349q0-65 53.5-105.5T242-503q39-3 58.5-12.5T320-542q0-22-21-34.5T230-596q-16-2-25.5-15t-7.5-29q2-17 14-27.5t28-8.5q83 12 122 44.5t39 89.5q0 53-38.5 83T248-423q-64 5-96 23.5T120-349Zm398 156L353-358l382-382q20-20 47.5-20t47.5 20l70 70q20 20 20 47.5T900-575L518-193Zm-159 33q-17 4-30-9t-9-30l33-159 165 165-159 33Z") }
+
+    /** line_style */
+    val DashedLine by lazy { icon("line_style", "M159-160q-17 0-28-11.5T120-200q0-17 12-28.5t29-11.5q17 0 28 11.5t11 28.5q0 17-12 28.5T159-160Zm160 0q-17 0-28-11.5T280-200q0-17 12-28.5t29-11.5q17 0 28 11.5t11 28.5q0 17-12 28.5T319-160Zm160 0q-17 0-28-11.5T440-200q0-17 11.5-28.5T480-240q17 0 28.5 11.5T520-200q0 17-12 28.5T479-160Zm161 0q-17 0-28.5-11.5T600-200q0-17 12-28.5t29-11.5q17 0 28 11.5t11 28.5q0 17-11.5 28.5T640-160Zm160 0q-17 0-28.5-11.5T760-200q0-17 11.5-28.5T800-240q17 0 28.5 11.5T840-200q0 17-11.5 28.5T800-160ZM159-320q-17 0-28-11.5T120-360q0-17 11.5-28.5T160-400h121q17 0 28 11.5t11 28.5q0 17-11.5 28.5T280-320H159Zm260 0q-17 0-28-11.5T380-360q0-17 11.5-28.5T420-400h121q17 0 28 11.5t11 28.5q0 17-11.5 28.5T540-320H419Zm260 0q-17 0-28-11.5T640-360q0-17 11.5-28.5T680-400h121q17 0 28 11.5t11 28.5q0 17-11.5 28.5T800-320H679ZM159-480q-17 0-28-11.5T120-520q0-17 11.5-28.5T160-560h241q17 0 28 11.5t11 28.5q0 17-11.5 28.5T400-480H159Zm400 0q-17 0-28-11.5T520-520q0-17 11.5-28.5T560-560h241q17 0 28 11.5t11 28.5q0 17-11.5 28.5T800-480H559ZM160-640q-17 0-28.5-11.5T120-680v-80q0-17 11.5-28.5T160-800h640q17 0 28.5 11.5T840-760v80q0 17-11.5 28.5T800-640H160Z") }
+
+    /** hub */
+    val Connect by lazy { icon("hub", "M155-75q-35-35-35-85t35-85q35-35 85-35 14 0 26 3t23 8l57-71q-28-31-39-70t-5-78l-81-27q-17 25-43 40t-58 15q-50 0-85-35T0-580q0-50 35-85t85-35q50 0 85 35t35 85v8l81 28q20-36 53.5-61t75.5-32v-87q-39-11-64.5-42.5T360-840q0-50 35-85t85-35q50 0 85 35t35 85q0 42-26 73.5T510-724v87q42 7 75.5 32t53.5 61l81-28v-8q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-32 0-58.5-15T739-515l-81 27q6 39-5 77.5T614-340l57 70q11-5 23-7.5t26-2.5q50 0 85 35t35 85q0 50-35 85t-85 35q-50 0-85-35t-35-85q0-20 6.5-38.5T624-232l-57-71q-41 23-87.5 23T392-303l-56 71q11 15 17.5 33.5T360-160q0 50-35 85t-85 35q-50 0-85-35Zm-35-465q17 0 28.5-11.5T160-580q0-17-11.5-28.5T120-620q-17 0-28.5 11.5T80-580q0 17 11.5 28.5T120-540Zm148.5 408.5Q280-143 280-160t-11.5-28.5Q257-200 240-200t-28.5 11.5Q200-177 200-160t11.5 28.5Q223-120 240-120t28.5-11.5Zm240-680Q520-823 520-840t-11.5-28.5Q497-880 480-880t-28.5 11.5Q440-857 440-840t11.5 28.5Q463-800 480-800t28.5-11.5ZM480-360q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29Zm268.5 228.5Q760-143 760-160t-11.5-28.5Q737-200 720-200t-28.5 11.5Q680-177 680-160t11.5 28.5Q703-120 720-120t28.5-11.5Zm120-420Q880-563 880-580t-11.5-28.5Q857-620 840-620t-28.5 11.5Q800-597 800-580t11.5 28.5Q823-540 840-540t28.5-11.5ZM480-840ZM120-580Zm360 120Zm360-120ZM240-160Zm480 0Z") }
+
+    /** check_circle */
+    val Saved by lazy { icon("check_circle", "m424-408-86-86q-11-11-28-11t-28 11q-11 11-11 28t11 28l114 114q12 12 28 12t28-12l226-226q11-11 11-28t-11-28q-11-11-28-11t-28 11L424-408Zm56 328q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z") }
+
+    /** cloud_done */
+    val CloudDone by lazy { icon("cloud_done", "m413-395-56-56q-12-12-28-12t-28 12q-12 12-12 28.5t12 28.5l85 86q12 12 28 12t28-12l169-169q12-12 12-29t-12-29q-12-12-29-12t-29 12L413-395ZM260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H260Zm0-80h480q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41Zm220-240Z") }
+
+    /** account_circle */
+    val Account by lazy { icon("account_circle", "M234-276q51-39 114-61.5T480-360q69 0 132 22.5T726-276q35-41 54.5-93T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 59 19.5 111t54.5 93Zm146.5-204.5Q340-521 340-580t40.5-99.5Q421-720 480-720t99.5 40.5Q620-639 620-580t-40.5 99.5Q539-440 480-440t-99.5-40.5ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm100-95.5q47-15.5 86-44.5-39-29-86-44.5T480-280q-53 0-100 15.5T294-220q39 29 86 44.5T480-160q53 0 100-15.5ZM523-537q17-17 17-43t-17-43q-17-17-43-17t-43 17q-17 17-17 43t17 43q17 17 43 17t43-17Zm-43-43Zm0 360Z") }
 
     val folderIcons: List<Pair<String, ImageVector>> by lazy {
         listOf(
@@ -1158,36 +395,20 @@ object KajetIcons {
         folderIcons.firstOrNull { it.first == id }?.second ?: Folder
 }
 
-// Elementy wspólne dla kilku ikon
+private const val VIEWPORT = 960f
 
-private fun PathBuilder.sheet() {
-    moveTo(5.5f, 3.5f); lineTo(18.5f, 3.5f); lineTo(18.5f, 20.5f); lineTo(5.5f, 20.5f); close()
-}
-
-private fun PathBuilder.circle(cx: Float, cy: Float, r: Float) {
-    moveTo(cx - r, cy)
-    arcToRelative(r, r, 0f, true, isPositiveArc = true, dx1 = 2 * r, dy1 = 0f)
-    arcToRelative(r, r, 0f, true, isPositiveArc = true, dx1 = -2 * r, dy1 = 0f)
-    close()
-}
-
-private fun PathBuilder.dot(cx: Float, cy: Float) {
-    moveTo(cx, cy)
-    lineTo(cx + 0.01f, cy)
-}
-
-private fun icon(name: String, build: PathBuilder.() -> Unit): ImageVector =
+private fun icon(name: String, drawing: String): ImageVector =
     ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).addPath(
-        pathData = PathData(build),
-        fill = null,
-        stroke = SolidColor(Color.Black),
-        strokeLineWidth = 1.75f,
-        strokeLineCap = StrokeCap.Round,
-        strokeLineJoin = StrokeJoin.Round,
-    ).build()
+        viewportWidth = VIEWPORT,
+        viewportHeight = VIEWPORT,
+    )
+        .addGroup(name = name, translationY = VIEWPORT)
+        .addPath(
+            pathData = PathParser().parsePathString(drawing).toNodes(),
+            fill = SolidColor(Color.Black),
+        )
+        .clearGroup()
+        .build()

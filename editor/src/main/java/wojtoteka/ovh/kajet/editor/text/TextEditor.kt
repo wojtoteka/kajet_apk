@@ -127,6 +127,14 @@ fun TextEditor(
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
 
+    // Miejsce, w które ma trafić wstawiana treść: za blokiem z kursorem,
+    // a nie na końcu całej notatki.
+    fun insertPosition(): Int = if (blockMode) {
+        focusedKey?.let { Blocks.endPosition(blocks, it) } ?: model.markdown.length
+    } else {
+        field.selection.start
+    }
+
     fun format(transform: (TextFieldValue) -> TextFieldValue) {
         if (blockMode) {
             val key = focusedKey ?: return
@@ -160,8 +168,14 @@ fun TextEditor(
             IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", { model.saveNow(); onBack() })
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-            IconAction(KajetIcons.PhotoFrame, "Wstaw zdjęcie z galerii", onPhotoFromGallery)
-            IconAction(KajetIcons.CameraBody, "Zrób zdjęcie", onPhotoFromCamera)
+            IconAction(KajetIcons.PhotoFrame, "Wstaw zdjęcie z galerii", {
+                model.rememberPhotoPosition(insertPosition())
+                onPhotoFromGallery()
+            })
+            IconAction(KajetIcons.CameraBody, "Zrób zdjęcie", {
+                model.rememberPhotoPosition(insertPosition())
+                onPhotoFromCamera()
+            })
             IconAction(KajetIcons.DrawingPad, "Wstaw rysunek", model::openDrawing)
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))

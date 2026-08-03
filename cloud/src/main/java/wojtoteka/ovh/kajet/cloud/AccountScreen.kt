@@ -61,6 +61,11 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
         DeviceAuthBridge.clear()
     }
 
+    // Świeży stan konta z serwera przy każdym wejściu na ekran.
+    LaunchedEffect(Unit) {
+        model.refreshFromServer()
+    }
+
     val colors = Kajet.colors
     val narrow = LocalConfiguration.current.screenWidthDp < 600
     val sheetPadding = if (narrow) 16.dp else 28.dp

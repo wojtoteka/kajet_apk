@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -142,58 +144,38 @@ fun HandwritingEditor(
         }
     }
 
-    Row(Modifier.fillMaxSize().background(colors.desk)) {
+    val handwriting = document?.handwriting
 
-        DrawingRail(
-            tool = tool,
-            canUndo = canUndo,
-            canRedo = canRedo,
-            favorite = document?.favorite == true,
-            fingerDraws = fingerDraws,
-            penColor = Color(if (tool == EditorTool.HIGHLIGHTER) pens.highlighterColor else pens.penColor),
-            onTool = model::selectTool,
-            onUndo = model::undo,
-            onRedo = model::redo,
-            onColor = { penPanel = !penPanel; settingsPanel = false },
-            onSettings = { settingsPanel = !settingsPanel; penPanel = false },
-            onFinger = model::toggleFinger,
-            onTextBox = {
-                model.addTextBox(
-                    page = 0,
-                    x = offsetX + 80f,
-                    y = offsetY + 80f,
-                    argb = colors.text.toArgb(),
-                )
-            },
-            onFavorite = model::toggleFavorite,
-            onExport = onExport,
-            onBack = goBack,
+    // Telefon trzymany w pionie dostaje inny układ niż tablet: pasek narzędzi
+    // wędruje na dół pod kciuk, powrót do góry, a panele wjeżdżają od dołu
+    // na całą szerokość. Wnętrze kartki jest wspólne dla obu układów.
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+
+    val onTextBox = {
+        model.addTextBox(
+            page = 0,
+            x = offsetX + 80f,
+            y = offsetY + 80f,
+            argb = colors.text.toArgb(),
         )
+    }
+    val onColorPanel = { penPanel = !penPanel; settingsPanel = false }
+    val onSettingsPanel = { settingsPanel = !settingsPanel; penPanel = false }
+    val penColor = Color(if (tool == EditorTool.HIGHLIGHTER) pens.highlighterColor else pens.penColor)
 
-        Column(Modifier.fillMaxSize()) {
-            val handwriting = document?.handwriting
-
-            // Pasek na górze. Kolor i grubość leżą na wierzchu, bo to jest to,
-            // co zmienia się w czasie pisania najczęściej, a nie raz na miesiąc.
-            TopBar(
-                title = document?.title.orEmpty(),
-                state = saveState,
-                lastSave = lastSave,
-                pageCount = handwriting?.pages?.size ?: 0,
-                tool = tool,
-                pens = pens,
-                onTitle = model::setTitle,
-                onPenColor = model::setPenColor,
-                onPenWidth = model::setPenWidth,
-                onHighlighterColor = model::setHighlighterColor,
-                onHighlighterWidth = model::setHighlighterWidth,
-                onEraserRadius = model::setEraserRadius,
-                onMore = { penPanel = !penPanel; settingsPanel = false },
-                moreOpen = penPanel,
-            )
-            HorizontalRule()
-
-        Box(Modifier.fillMaxSize()) {
+    val canvasArea: @Composable BoxScope.() -> Unit = {
+        val panelModifier = if (narrow) {
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .heightIn(max = 440.dp)
+        } else {
+            Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 8.dp)
+                .width(300.dp)
+                .heightIn(max = 560.dp)
+        }
             if (handwriting != null) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -336,9 +318,7 @@ fun HandwritingEditor(
                     onHighlighterOpacity = model::setHighlighterOpacity,
                     onEraserRadius = model::setEraserRadius,
                     onClose = { penPanel = false },
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 8.dp),
+                    modifier = panelModifier,
                 )
             }
 
@@ -370,12 +350,95 @@ fun HandwritingEditor(
                     onRemovePage = model::removeLastPage,
                     onFitWidth = { canvas.value?.fitWidth() },
                     onClose = { settingsPanel = false },
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 8.dp),
+                    modifier = panelModifier,
                 )
             }
+    }
+
+    if (narrow) {
+        Column(Modifier.fillMaxSize().background(colors.desk)) {
+            TopBar(
+                title = document?.title.orEmpty(),
+                state = saveState,
+                lastSave = lastSave,
+                pageCount = handwriting?.pages?.size ?: 0,
+                tool = tool,
+                pens = pens,
+                onTitle = model::setTitle,
+                onPenColor = model::setPenColor,
+                onPenWidth = model::setPenWidth,
+                onHighlighterColor = model::setHighlighterColor,
+                onHighlighterWidth = model::setHighlighterWidth,
+                onEraserRadius = model::setEraserRadius,
+                onMore = onColorPanel,
+                moreOpen = penPanel,
+                narrow = true,
+                onBack = goBack,
+            )
+            HorizontalRule()
+            Box(Modifier.fillMaxWidth().weight(1f), content = canvasArea)
+            HorizontalRule()
+            NarrowToolRow(
+                tool = tool,
+                canUndo = canUndo,
+                canRedo = canRedo,
+                favorite = document?.favorite == true,
+                fingerDraws = fingerDraws,
+                penColor = penColor,
+                onTool = model::selectTool,
+                onUndo = model::undo,
+                onRedo = model::redo,
+                onColor = onColorPanel,
+                onSettings = onSettingsPanel,
+                onFinger = model::toggleFinger,
+                onTextBox = onTextBox,
+                onFavorite = model::toggleFavorite,
+                onExport = onExport,
+            )
         }
+    } else {
+        Row(Modifier.fillMaxSize().background(colors.desk)) {
+            DrawingRail(
+                tool = tool,
+                canUndo = canUndo,
+                canRedo = canRedo,
+                favorite = document?.favorite == true,
+                fingerDraws = fingerDraws,
+                penColor = penColor,
+                onTool = model::selectTool,
+                onUndo = model::undo,
+                onRedo = model::redo,
+                onColor = onColorPanel,
+                onSettings = onSettingsPanel,
+                onFinger = model::toggleFinger,
+                onTextBox = onTextBox,
+                onFavorite = model::toggleFavorite,
+                onExport = onExport,
+                onBack = goBack,
+            )
+
+            Column(Modifier.fillMaxSize()) {
+                // Pasek na górze. Kolor i grubość leżą na wierzchu, bo to jest
+                // to, co zmienia się w czasie pisania najczęściej.
+                TopBar(
+                    title = document?.title.orEmpty(),
+                    state = saveState,
+                    lastSave = lastSave,
+                    pageCount = handwriting?.pages?.size ?: 0,
+                    tool = tool,
+                    pens = pens,
+                    onTitle = model::setTitle,
+                    onPenColor = model::setPenColor,
+                    onPenWidth = model::setPenWidth,
+                    onHighlighterColor = model::setHighlighterColor,
+                    onHighlighterWidth = model::setHighlighterWidth,
+                    onEraserRadius = model::setEraserRadius,
+                    onMore = onColorPanel,
+                    moreOpen = penPanel,
+                )
+                HorizontalRule()
+                Box(Modifier.fillMaxSize(), content = canvasArea)
+            }
         }
     }
 
@@ -470,6 +533,84 @@ private fun DrawingRail(
     }
 }
 
+/**
+ * Dolny pasek narzędzi na telefon. Te same działania co w [DrawingRail],
+ * ale w poziomie, pod kciukiem, z przewijaniem w bok.
+ */
+@Composable
+private fun NarrowToolRow(
+    tool: EditorTool,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    favorite: Boolean,
+    fingerDraws: Boolean,
+    penColor: Color,
+    onTool: (EditorTool) -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onColor: () -> Unit,
+    onSettings: () -> Unit,
+    onFinger: () -> Unit,
+    onTextBox: () -> Unit,
+    onFavorite: () -> Unit,
+    onExport: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Kajet.colors.desk)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        IconAction(KajetIcons.Pen, EditorTool.PEN.labelPl, { onTool(EditorTool.PEN) }, selected = tool == EditorTool.PEN)
+        IconAction(KajetIcons.Highlighter, EditorTool.HIGHLIGHTER.labelPl, { onTool(EditorTool.HIGHLIGHTER) }, selected = tool == EditorTool.HIGHLIGHTER)
+        IconAction(KajetIcons.Eraser, EditorTool.ERASER_PARTIAL.labelPl, { onTool(EditorTool.ERASER_PARTIAL) }, selected = tool == EditorTool.ERASER_PARTIAL)
+        IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.labelPl, { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
+        IconAction(KajetIcons.Lasso, EditorTool.LASSO.labelPl, { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
+        IconAction(KajetIcons.Ruler, EditorTool.RULER.labelPl, { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
+
+        VerticalDivider()
+
+        Box(
+            Modifier
+                .size(48.dp)
+                .clickable(onClickLabel = "Ustawienia pisaka", onClick = onColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .background(penColor, CircleShape)
+                    .border(1.dp, Kajet.colors.line, CircleShape),
+            )
+        }
+        IconAction(KajetIcons.TextBox, "Wstaw pole tekstowe", onTextBox)
+        IconAction(
+            icon = if (fingerDraws) KajetIcons.FingerDraws else KajetIcons.FingerScrolls,
+            description = if (fingerDraws) {
+                "Palec rysuje. Dotknij, żeby palcem przewijać stronę"
+            } else {
+                "Palec przewija stronę. Dotknij, żeby palcem rysować"
+            },
+            onClick = onFinger,
+            selected = fingerDraws,
+        )
+        IconAction(KajetIcons.SettingsCog, "Ustawienia notatki: tło, strony, palec", onSettings)
+
+        VerticalDivider()
+
+        IconAction(KajetIcons.Undo, "Cofnij", onUndo, enabled = canUndo)
+        IconAction(KajetIcons.Redo, "Ponów", onRedo, enabled = canRedo)
+
+        VerticalDivider()
+
+        IconAction(KajetIcons.Favourites, if (favorite) "Usuń z ulubionych" else "Dodaj do ulubionych", onFavorite, selected = favorite)
+        IconAction(KajetIcons.Export, "Eksportuj notatkę", onExport)
+    }
+}
+
 @Composable
 private fun TopBar(
     title: String,
@@ -487,22 +628,28 @@ private fun TopBar(
     onMore: () -> Unit,
     moreOpen: Boolean,
     modifier: Modifier = Modifier,
+    narrow: Boolean = false,
+    onBack: (() -> Unit)? = null,
 ) {
     Row(
         modifier
             .fillMaxWidth()
             .background(Kajet.colors.sheet)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = if (narrow) 4.dp else 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (narrow) 4.dp else 10.dp),
     ) {
+        if (onBack != null) {
+            IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", onBack)
+        }
         BasicTextField(
             value = title,
             onValueChange = onTitle,
             singleLine = true,
             textStyle = Kajet.type.titleSmall.copy(color = Kajet.colors.text),
             cursorBrush = SolidColor(Kajet.colors.accent),
-            modifier = Modifier.widthIn(min = 72.dp, max = 220.dp),
+            // Na wąskim ekranie tytuł nie może zjeść miejsca na kolory.
+            modifier = Modifier.widthIn(min = 72.dp, max = if (narrow) 120.dp else 220.dp),
             decorationBox = { field ->
                 if (title.isEmpty()) {
                     Text("Bez nazwy", style = Kajet.type.titleSmall, color = Kajet.colors.muted)
@@ -511,7 +658,7 @@ private fun TopBar(
             },
         )
         SaveIndicator(state = state, lastSave = lastSave)
-        if (pageCount > 1) {
+        if (pageCount > 1 && !narrow) {
             Text("$pageCount stron", style = Kajet.type.meta, color = Kajet.colors.muted)
         }
 
@@ -624,6 +771,8 @@ private fun SelectionPanel(
         modifier
             .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
             .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner))
+            // Na wąskim ekranie przyciski nie mieszczą się obok tekstu.
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -660,10 +809,9 @@ private fun PenPanel(
             else -> "Pisak"
         },
         onClose = onClose,
-        modifier = modifier
-            .width(300.dp)
-            .heightIn(max = 560.dp)
-            .verticalScroll(rememberScrollState()),
+        // Szerokość i wysokość nadaje wywołujący: na telefonie panel zajmuje
+        // całą szerokość przy dolnej krawędzi, na tablecie wąski pasek z boku.
+        modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
         when {
             tool.isEraser -> {
@@ -1026,10 +1174,7 @@ private fun NoteSettingsPanel(
     ToolPanel(
         title = "Ustawienia notatki",
         onClose = onClose,
-        modifier = modifier
-            .width(300.dp)
-            .heightIn(max = 620.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
         SectionLabel("Tło strony")
         PageBackground.entries.forEach { variant ->

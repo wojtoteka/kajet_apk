@@ -204,18 +204,9 @@ fun SettingsScreen(
 
             SettingsSection(
                 title = "Zapis automatyczny",
-                description = "Notatka zapisuje się sama. Nie ma przycisku zapisz i nie musisz o tym myśleć.",
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(3, 5, 10, 20).forEach { seconds ->
-                        NumberChoice(
-                            value = seconds,
-                            selected = settings.autosaveInterval == seconds,
-                            onClick = { scope.launch { settingsStore.setAutosaveInterval(seconds) } },
-                        )
-                    }
-                }
-            }
+                description = "Notatka zapisuje się sama po każdej zmianie. " +
+                    "Nie ma przycisku zapisz i nie musisz o tym myśleć.",
+            ) {}
         }
     }
 }
@@ -232,26 +223,6 @@ private fun SettingsSection(title: String, description: String, content: @Compos
         )
         content()
         HorizontalRule()
-    }
-}
-
-@Composable
-private fun NumberChoice(value: Int, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(64.dp, 48.dp)
-            .background(
-                if (selected) Kajet.colors.accentWash else Kajet.colors.desk,
-                androidx.compose.foundation.shape.RoundedCornerShape(Kajet.dimens.corner),
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "$value s",
-            style = Kajet.type.label,
-            color = if (selected) Kajet.colors.accent else Kajet.colors.muted,
-        )
     }
 }
 

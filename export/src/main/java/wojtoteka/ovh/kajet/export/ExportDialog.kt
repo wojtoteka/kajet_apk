@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -44,6 +45,8 @@ fun ExportDialog(
     onClose: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    // Kontekst ekranu, nie aplikacji — systemowy druk wymaga Activity.
+    val context = androidx.compose.ui.platform.LocalContext.current
     var format by remember { mutableStateOf(ExportFormat.PDF) }
     var ready by remember { mutableStateOf<File?>(null) }
     var working by remember { mutableStateOf(false) }
@@ -52,7 +55,10 @@ fun ExportDialog(
     Dialog(onDismissRequest = onClose) {
         Column(
             Modifier
-                .width(520.dp)
+                // Na telefonie okno ma zmieścić się w ekranie, na tablecie nie
+                // rozciągać się na całą szerokość.
+                .fillMaxWidth()
+                .widthIn(max = 520.dp)
                 .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
                 .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner)),
         ) {
@@ -136,17 +142,17 @@ fun ExportDialog(
                     } else {
                         PrimaryButton(
                             text = "Wyślij",
-                            onClick = { service.share(file, format.mime, document.title) },
+                            onClick = { error = service.share(file, format.mime, document.title) },
                             icon = KajetIcons.ShareArrow,
                         )
                         SecondaryButton(
                             text = "Otwórz",
-                            onClick = { service.open(file, format.mime) },
+                            onClick = { error = service.open(file, format.mime) },
                         )
                     }
                     SecondaryButton(
                         text = "Drukuj",
-                        onClick = { service.print(document, path) },
+                        onClick = { error = service.print(context, document, path) },
                         icon = KajetIcons.Printer,
                     )
                     Box(Modifier.weight(1f))

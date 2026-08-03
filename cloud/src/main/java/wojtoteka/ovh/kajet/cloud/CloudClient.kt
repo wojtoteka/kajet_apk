@@ -298,10 +298,12 @@ class CloudClient(
         )
     }
 
-    private companion object {
+    internal companion object {
         const val CONNECT_TIMEOUT = 15_000
         const val READ_TIMEOUT = 60_000
 
+        // Internal, not private: the contract tests decode server-shaped JSON
+        // with exactly this configuration, not a lookalike.
         val json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true

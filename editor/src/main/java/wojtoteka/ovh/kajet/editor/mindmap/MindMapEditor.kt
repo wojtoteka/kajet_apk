@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -107,6 +110,23 @@ fun MindMapEditor(
     var offsetY by remember { mutableFloatStateOf(map?.viewY ?: 0f) }
     var zoom by remember { mutableFloatStateOf(map?.zoom ?: 1f) }
 
+    // Rozmiar planszy w pikselach: potrzebny, żeby zmieścić całą mapę w oknie
+    // i żeby przyciski przybliżenia trzymały środek ekranu w miejscu.
+    var boardSize by remember { mutableStateOf(IntSize.Zero) }
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+
+    fun zoomBy(factor: Float) {
+        val next = (zoom * factor).coerceIn(0.25f, 4f)
+        if (next == zoom) return
+        if (boardSize.width > 0 && boardSize.height > 0) {
+            val centreX = offsetX + boardSize.width / (2f * zoom)
+            val centreY = offsetY + boardSize.height / (2f * zoom)
+            offsetX = centreX - boardSize.width / (2f * next)
+            offsetY = centreY - boardSize.height / (2f * next)
+        }
+        zoom = next
+    }
+
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -147,6 +167,12 @@ fun MindMapEditor(
                 enabled = selected != null,
             )
             IconAction(
+                icon = KajetIcons.AddPage,
+                description = "Dodaj węzeł obok wybranego",
+                onClick = { selected?.let { model.addSibling(it) } },
+                enabled = selected != null,
+            )
+            IconAction(
                 icon = KajetIcons.ShareArrow,
                 description = if (connecting) "Przerwij łączenie" else "Połącz dwa węzły",
                 onClick = model::toggleConnecting,
@@ -165,11 +191,24 @@ fun MindMapEditor(
             IconAction(KajetIcons.MindMapIcon, "Rozłóż gałęzie automatycznie", model::arrangeBranches)
             IconAction(
                 icon = KajetIcons.FitToView,
-                description = "Wróć do środka",
+                description = "Zmieść całą mapę w oknie",
                 onClick = {
-                    offsetX = 0f
-                    offsetY = 0f
-                    zoom = 1f
+                    // Obwiednia widocznych węzłów; zwinięte gałęzie zostają poza rachunkiem.
+                    val shown = map?.nodes?.filter { it.id in visible }.orEmpty()
+                    if (shown.isEmpty() || boardSize.width == 0 || boardSize.height == 0) {
+                        offsetX = 0f
+                        offsetY = 0f
+                        zoom = 1f
+                    } else {
+                        val left = shown.minOf { it.x } - FIT_PAD
+                        val top = shown.minOf { it.y } - FIT_PAD
+                        val width = shown.maxOf { it.x + it.width } + FIT_PAD - left
+                        val height = shown.maxOf { it.y + it.height } + FIT_PAD - top
+                        zoom = minOf(boardSize.width / width, boardSize.height / height)
+                            .coerceIn(0.25f, 4f)
+                        offsetX = left - (boardSize.width / zoom - width) / 2f
+                        offsetY = top - (boardSize.height / zoom - height) / 2f
+                    }
                 },
             )
 
@@ -190,7 +229,7 @@ fun MindMapEditor(
             Spacer(Modifier.height(12.dp))
         }
 
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().onSizeChanged { boardSize = it }) {
             if (map != null) {
                 // Plansza. Dwa palce przesuwają i skalują, jeden palec w pustym
                 // miejscu odznacza węzeł.
@@ -206,16 +245,26 @@ fun MindMapEditor(
                             }
                         }
                         .pointerInput(zoom, offsetX, offsetY) {
-                            detectTapGestures(onTap = { touch ->
-                                // Dotknięcie linii łapie linię, dotknięcie pustego
-                                // miejsca odznacza wszystko.
-                                val edge = model.edgeAt(
-                                    x = touch.x / zoom + offsetX,
-                                    y = touch.y / zoom + offsetY,
-                                    reach = EDGE_TOUCH_REACH / zoom,
-                                )
-                                if (edge != null) model.selectEdge(edge) else model.select(null)
-                            })
+                            detectTapGestures(
+                                onTap = { touch ->
+                                    // Dotknięcie linii łapie linię, dotknięcie pustego
+                                    // miejsca odznacza wszystko.
+                                    val edge = model.edgeAt(
+                                        x = touch.x / zoom + offsetX,
+                                        y = touch.y / zoom + offsetY,
+                                        reach = EDGE_TOUCH_REACH / zoom,
+                                    )
+                                    if (edge != null) model.selectEdge(edge) else model.select(null)
+                                },
+                                // Dwa dotknięcia pustego miejsca stawiają tam węzeł,
+                                // punkt dotyku wypada mniej więcej w jego środku.
+                                onDoubleTap = { touch ->
+                                    model.addNode(
+                                        x = touch.x / zoom + offsetX - 80f,
+                                        y = touch.y / zoom + offsetY - 32f,
+                                    )
+                                },
+                            )
                         },
                 ) {
                     Canvas(Modifier.fillMaxSize()) {
@@ -232,7 +281,12 @@ fun MindMapEditor(
                                 offsetX = offsetX,
                                 offsetY = offsetY,
                                 zoom = zoom,
-                                color = if (picked) colors.accent else colors.line,
+                                // Linia w barwie gałęzi, do której prowadzi — jak w edytorze WWW.
+                                color = if (picked) {
+                                    colors.accent
+                                } else {
+                                    nodeColor(to, colors.isDark).copy(alpha = 0.55f)
+                                },
                                 thick = picked,
                             )
                         }
@@ -286,6 +340,11 @@ fun MindMapEditor(
                             edited = edited == node.id,
                             connectTarget = dragged?.targetId == node.id,
                             hasChildren = MindMapLayout.hasChildren(map, node.id),
+                            hiddenCount = if (node.collapsed) {
+                                MindMapLayout.hiddenDescendants(map, node.id)
+                            } else {
+                                0
+                            },
                             onSelect = { model.select(node.id) },
                             onEdit = { model.edit(node.id) },
                             onText = { model.setText(node.id, it) },
@@ -293,6 +352,22 @@ fun MindMapEditor(
                             onDrag = { dx, dy -> model.moveNode(node.id, dx / zoom, dy / zoom) },
                             onDragEnd = model::finishDragging,
                             onCollapse = { model.toggleCollapsed(node.id) },
+                            onResizeStart = model::startDragging,
+                            // Rozmiar bierzemy z modelu, a nie ze zrzutu w tym lambda:
+                            // w trakcie ciągnięcia węzeł rośnie z każdą klatką.
+                            onResize = { dx, dy ->
+                                model.map.nodes.firstOrNull { it.id == node.id }?.let { current ->
+                                    model.resizeNode(
+                                        id = node.id,
+                                        width = current.width + dx / zoom,
+                                        height = current.height + dy / zoom,
+                                        finished = false,
+                                    )
+                                }
+                            },
+                            onResizeEnd = {
+                                model.resizeNode(node.id, node.width, node.height, finished = true)
+                            },
                             // Handle oddaje położenie palca w pikselach ekranu,
                             // a model liczy w układzie mapy, więc przeliczamy tu.
                             onConnectStart = {
@@ -363,6 +438,48 @@ fun MindMapEditor(
                     }
                 }
 
+                // Dyskretny rachunek mapy w rogu planszy.
+                Text(
+                    text = "${map.nodes.size} węzłów · ${map.edges.size} połączeń",
+                    style = Kajet.type.meta,
+                    color = colors.muted,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                )
+
+                // Przybliżenie przyciskami, z podglądem procentu. Środek ekranu
+                // stoi w miejscu, więc mapa nie ucieka spod palca.
+                Row(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(12.dp)
+                        .background(colors.sheet.copy(alpha = 0.94f), RoundedCornerShape(Kajet.dimens.corner))
+                        .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner))
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconAction(
+                        icon = KajetIcons.DividerLine,
+                        description = "Oddal",
+                        onClick = { zoomBy(0.9f) },
+                        iconSize = 18.dp,
+                        touchTarget = 40.dp,
+                    )
+                    Text(
+                        text = "${(zoom * 100).roundToInt()}%",
+                        style = Kajet.type.label,
+                        color = colors.text,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(min = 48.dp),
+                    )
+                    IconAction(
+                        icon = KajetIcons.Plus,
+                        description = "Przybliż",
+                        onClick = { zoomBy(1.1f) },
+                        iconSize = 18.dp,
+                        touchTarget = 40.dp,
+                    )
+                }
+
                 selected?.let { id ->
                     val node = map.nodes.firstOrNull { it.id == id }
                     if (node != null) {
@@ -370,9 +487,15 @@ fun MindMapEditor(
                             node = node,
                             connections = model.nodeConnections(id),
                             recentColors = recentColors,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(16.dp),
+                            narrow = narrow,
+                            // Na wąskim ekranie panel wisi na dole całą szerokością,
+                            // żeby nie zasłaniał planszy stojąc na jej środku.
+                            modifier = if (narrow) {
+                                Modifier.align(Alignment.BottomCenter)
+                            } else {
+                                Modifier.align(Alignment.BottomStart).padding(16.dp)
+                            },
+                            onText = { model.setText(id, it) },
                             onShape = { model.setShape(id, it) },
                             onColor = { model.setColor(id, it) },
                             onCustomColor = { model.setCustomColor(id, it) },
@@ -399,7 +522,7 @@ fun MindMapEditor(
                     ) {
                         Text("Pusta mapa", style = Kajet.type.title, color = colors.text)
                         Text(
-                            text = "Dodaj pierwszy węzeł przyciskiem po lewej stronie, a potem doczepiaj do niego gałęzie.",
+                            text = "Dodaj pierwszy węzeł przyciskiem po lewej stronie albo dotknij planszę dwa razy, a potem doczepiaj gałęzie.",
                             style = Kajet.type.body,
                             color = colors.muted,
                             modifier = Modifier.width(360.dp),
@@ -477,6 +600,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawEdge(
 /** Ile pikseli od linii jeszcze liczy się jako dotknięcie linii. */
 private const val EDGE_TOUCH_REACH = 22f
 
+/** Oddech wokół mapy przy zmieszczeniu jej całej w oknie. */
+private const val FIT_PAD = 40f
+
 @Composable
 private fun NodeOnBoard(
     node: MindNode,
@@ -487,6 +613,7 @@ private fun NodeOnBoard(
     edited: Boolean,
     connectTarget: Boolean,
     hasChildren: Boolean,
+    hiddenCount: Int,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onText: (String) -> Unit,
@@ -494,6 +621,9 @@ private fun NodeOnBoard(
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onCollapse: () -> Unit,
+    onResizeStart: () -> Unit,
+    onResize: (Float, Float) -> Unit,
+    onResizeEnd: () -> Unit,
     onConnectStart: () -> Unit,
     onConnectDrag: (Float, Float) -> Unit,
     onConnectEnd: () -> Unit,
@@ -627,14 +757,43 @@ private fun NodeOnBoard(
                     modifier = Modifier.size(with(density) { (13f * zoom).coerceIn(12f, 18f).toDp() }),
                 )
             }
+
+            // Uchwyt zmiany rozmiaru w prawym dolnym rogu. Puszczenie palca
+            // dopisuje zmianę do historii (resizeNode z finished = true).
+            val grip = with(density) { (22f * zoom).coerceIn(20f, 34f).toDp() }
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset {
+                        val half = (grip.toPx() / 2f).roundToInt()
+                        IntOffset(half, half)
+                    }
+                    .size(grip)
+                    .background(colors.sheet, RoundedCornerShape(6.dp))
+                    .border(2.dp, colors.accent, RoundedCornerShape(6.dp))
+                    .semantics { contentDescription = "Pociągnij, żeby zmienić rozmiar węzła" }
+                    // Klucz z zoomem: po zmianie przybliżenia delta palca musi
+                    // być dzielona świeżą wartością, nie tą sprzed gestu.
+                    .pointerInput(node.id, zoom) {
+                        detectDragGestures(
+                            onDragStart = { onResizeStart() },
+                            onDragEnd = { onResizeEnd() },
+                            onDragCancel = { onResizeEnd() },
+                        ) { change, drag ->
+                            change.consume()
+                            onResize(drag.x, drag.y)
+                        }
+                    },
+            )
         }
 
         if (hasChildren) {
+            val chevron = (22f * zoom).coerceIn(18f, 34f)
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .offset { IntOffset(0, (height / 2f).roundToInt() + 2) }
-                    .size(with(density) { (22f * zoom).coerceIn(18f, 34f).toDp() })
+                    .size(with(density) { chevron.toDp() })
                     .background(colors.sheet, RoundedCornerShape(percent = 50))
                     .border(1.dp, color, RoundedCornerShape(percent = 50))
                     .clickable(onClickLabel = if (node.collapsed) "Rozwiń gałąź" else "Zwiń gałąź", onClick = onCollapse),
@@ -645,6 +804,20 @@ private fun NodeOnBoard(
                     contentDescription = null,
                     tint = color,
                     modifier = Modifier.size(12.dp),
+                )
+            }
+            // Zwinięta gałąź zdradza obok chevrona, ile węzłów siedzi w środku.
+            if (node.collapsed && hiddenCount > 0) {
+                Text(
+                    text = "$hiddenCount",
+                    style = Kajet.type.meta,
+                    color = colors.muted,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset { IntOffset(chevron.roundToInt() + 6, (height / 2f).roundToInt() + 2) }
+                        .background(colors.sheet, RoundedCornerShape(percent = 50))
+                        .border(1.dp, color, RoundedCornerShape(percent = 50))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
                 )
             }
         }
@@ -659,7 +832,9 @@ private fun NodePanel(
     node: MindNode,
     connections: List<Pair<MindEdge, MindNode>>,
     recentColors: List<Int>,
+    narrow: Boolean,
     modifier: Modifier,
+    onText: (String) -> Unit,
     onShape: (NodeShape) -> Unit,
     onColor: (String) -> Unit,
     onCustomColor: (Int) -> Unit,
@@ -678,10 +853,17 @@ private fun NodePanel(
     var textColourPicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
 
+    // Na telefonie panel wisi na dole całą szerokością i nie przerasta
+    // połowy ekranu, na tablecie stoi jak dotąd w rogu planszy.
+    val panelHeight = if (narrow) {
+        (LocalConfiguration.current.screenHeightDp * 0.45f).dp
+    } else {
+        460.dp
+    }
     Column(
         modifier
-            .width(320.dp)
-            .heightIn(max = 460.dp)
+            .then(if (narrow) Modifier.fillMaxWidth() else Modifier.width(320.dp))
+            .heightIn(max = panelHeight)
             .background(colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
             .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner))
             .verticalScroll(rememberScrollState())
@@ -698,6 +880,26 @@ private fun NodePanel(
                 touchTarget = 32.dp,
             )
         }
+
+        // Treść węzła da się poprawić tutaj, bez celowania w mały napis na planszy.
+        SectionLabel("Tekst węzła")
+        BasicTextField(
+            value = node.text,
+            onValueChange = { onText(it.take(500)) },
+            textStyle = Kajet.type.body.copy(color = colors.text),
+            cursorBrush = SolidColor(colors.accent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 40.dp, max = 120.dp)
+                .padding(vertical = 4.dp),
+            decorationBox = { field ->
+                if (node.text.isEmpty()) {
+                    Text("Wpisz treść węzła", style = Kajet.type.body, color = colors.muted)
+                }
+                field()
+            },
+        )
+        HorizontalRule(color = colors.muted.copy(alpha = 0.5f))
 
         SectionLabel("Pismo")
         SegmentedChoice(

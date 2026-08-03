@@ -257,7 +257,7 @@ class LibraryViewModel(
             _progress.value = "Zapisuję notatkę $done z $total"
         }
         _progress.value = null
-        export.share(file, "application/zip", item.name)
+        export.share(file, "application/zip", item.name)?.let { _error.value = it }
     }
 
     // Indeks

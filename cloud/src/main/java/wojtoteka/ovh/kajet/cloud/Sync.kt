@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.model.NoteKind
+import wojtoteka.ovh.kajet.storage.FormatException
 import wojtoteka.ovh.kajet.storage.NoteCodec
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 
@@ -51,6 +52,18 @@ class Sync(
         if (client.hasNetwork()) scope.launch { runCatching { synchronise() } }
     }
 
+    /**
+     * Synchronizuje w tle i nie każe na siebie czekać — do zawołania przy
+     * wejściu do aplikacji. Bez tego notatki dopisane na stronie pojawiały się
+     * na urządzeniu dopiero po okresowym zadaniu (co pół godziny) albo po
+     * ręcznym kliknięciu „Synchronizuj teraz".
+     */
+    fun syncSoon() {
+        if (!account.isSignedIn()) return
+        if (!client.hasNetwork()) return
+        scope.launch { runCatching { synchronise() } }
+    }
+
     suspend fun synchronise(): SyncResult = lock.withLock {
         if (!account.isSignedIn()) {
             return@withLock SyncResult(reason = "Nie jesteś zalogowany.")
@@ -67,6 +80,13 @@ class Sync(
         val sent = sendPending()
         val fetched = fetchChanges()
 
+        // Uzgodnienie całej biblioteki, jak na dysku w chmurze: notatki, których
+        // serwer nie zna — także te sprzed zalogowania — dopisują się do kolejki
+        // i jadą od razu. Kolejność ma znaczenie: najpierw pobranie zapamiętuje
+        // wersje wszystkiego, co serwer już ma, więc nic mu się nie dubluje.
+        val settled = reconcileLibrary()
+        val sentAfter = if (settled > 0) sendPending() else StepResult()
+
         val stillWaiting = queue.size()
         _state.value = if (stillWaiting > 0) {
             SyncState.Waiting(stillWaiting)
@@ -75,12 +95,30 @@ class Sync(
         }
 
         SyncResult(
-            sent = sent.count,
+            sent = sent.count + sentAfter.count,
             fetched = fetched.count,
-            conflicts = sent.conflicts,
-            reason = sent.reason ?: fetched.reason,
-            worthRetrying = sent.worthRetrying || fetched.worthRetrying,
+            conflicts = sent.conflicts + sentAfter.conflicts,
+            reason = sent.reason ?: fetched.reason ?: sentAfter.reason,
+            worthRetrying = sent.worthRetrying || fetched.worthRetrying || sentAfter.worthRetrying,
         )
+    }
+
+    /**
+     * Dopisuje do kolejki każdą notatkę z biblioteki, o której serwer nic nie
+     * wie (nie mamy zapamiętanej żadnej jego wersji). Zwraca liczbę dopisanych.
+     */
+    private suspend fun reconcileLibrary(): Int = withContext(Dispatchers.IO) {
+        val queued = queue.all().map { it.path }.toSet()
+        var added = 0
+        val notes = runCatching { repository.allNoteIds() }.getOrDefault(emptyList())
+        for ((path, noteId) in notes) {
+            if (noteId.isBlank()) continue
+            if (knownVersion(noteId) > 0) continue
+            if (path in queued) continue
+            runCatching { queue.add(path, noteId) }
+            added += 1
+        }
+        added
     }
 
     // --- Sending ---
@@ -97,6 +135,17 @@ class Sync(
         var conflicts = 0
         var reason: String? = null
         var worthRetrying = false
+
+        // Kiedy katalog notatek jest chwilowo nie do odczytania, każdy odczyt
+        // poniżej rzuca wyjątkiem. Bez tej zapory cała kolejka szła wtedy do
+        // kasacji jako „notatki, których już nie ma", i zmiany nigdy nie
+        // docierały na serwer.
+        if (repository.store() == null) {
+            return@withContext StepResult(
+                reason = "Nie widzę katalogu z notatkami, więc nie mam czego wysłać. " +
+                    "Otwórz ustawienia i wskaż folder na urządzeniu.",
+            )
+        }
 
         for (entry in queue.all()) {
             val document = runCatching { repository.readNote(entry.path) }.getOrNull()
@@ -125,6 +174,13 @@ class Sync(
                     when (response.data.status) {
                         "conflict" -> {
                             saveVersionAlongside(entry.path, response.data)
+                            // The server copy just landed next to the local note.
+                            // Remember the server version, otherwise the next fetch
+                            // would treat it as new and overwrite the local edits
+                            // this conflict was meant to protect.
+                            response.data.onServer?.let {
+                                rememberVersion(document.id, it.version)
+                            }
                             conflicts += 1
                             queue.remove(entry.path)
                         }
@@ -178,10 +234,44 @@ class Sync(
     // --- Fetching ---
 
     private suspend fun fetchChanges(): StepResult = withContext(Dispatchers.IO) {
+        // Bez katalogu na notatki nie ma dokąd ich zapisać. Wcześniej pobieranie
+        // szło mimo to: każda notatka po cichu przepadała, a zakładka przesuwała
+        // się na koniec — po wskazaniu katalogu nie pobierało się już nic.
+        if (repository.store() == null) {
+            return@withContext StepResult(
+                reason = "Nie wskazano katalogu na notatki, więc nie ma dokąd ich zapisać. " +
+                    "Otwórz ustawienia i wybierz folder na urządzeniu.",
+            )
+        }
+
         var since = account.lastSync()
         var afterId: String? = null
         var fetched = 0
         var pages = 0
+        var failures = 0
+        var firstFailure: String? = null
+
+        // Zakładka, którą wolno zapamiętać. Przesuwa się tylko przez notatki
+        // załatwione do końca; pierwsza nieudana ją zatrzymuje, żeby następna
+        // synchronizacja sięgnęła po tę notatkę jeszcze raz.
+        var bookmark = since
+        var blocked = false
+
+        fun settled(updatedAt: Long) {
+            if (!blocked && updatedAt > bookmark) bookmark = updatedAt
+        }
+
+        fun failed(note: ServerNote, problem: Throwable?) {
+            failures += 1
+            if (firstFailure == null) {
+                firstFailure = when (problem) {
+                    is FormatException -> problem.userMessage
+                    else -> problem?.message?.takeIf { it.isNotBlank() }
+                } ?: "Nie udało się zapisać notatki „${note.title}” na urządzeniu."
+            }
+            bookmark = minOf(bookmark, (note.updatedAt - 1).coerceAtLeast(0))
+            blocked = true
+        }
 
         // Server pages at 200 notes. Loop until hasMore is false, advancing the
         // (upTo, upToId) cursor so notes that share the same updatedAt are not lost.
@@ -189,7 +279,7 @@ class Sync(
             when (val response = client.fetchChanges(since, afterId)) {
                 is CloudClient.Result.Error -> {
                     if (pages > 0) {
-                        account.rememberSync(since)
+                        account.rememberSync(bookmark)
                         repository.refresh()
                     }
                     return@withContext StepResult(
@@ -204,31 +294,50 @@ class Sync(
                     val page = response.data
 
                     for (fromServer in page.notes) {
-                        val content = fromServer.content ?: continue
+                        val content = fromServer.content
+                        if (content == null) {
+                            settled(fromServer.updatedAt)
+                            continue
+                        }
 
                         // A note we sent ourselves a moment ago need not be read
                         // back. We recognise it by the remembered version.
-                        if (knownVersion(fromServer.id) >= fromServer.version) continue
+                        if (knownVersion(fromServer.id) >= fromServer.version) {
+                            settled(fromServer.updatedAt)
+                            continue
+                        }
 
                         // Notes deleted on the server are not deleted here. The bin
                         // is on the tablet and it decides what disappears.
-                        if (fromServer.deletedAt != null) continue
+                        if (fromServer.deletedAt != null) {
+                            settled(fromServer.updatedAt)
+                            continue
+                        }
 
-                        val saved = runCatching {
+                        val outcome = runCatching {
                             repository.writeNoteFromCloud(NoteCodec.decodeNote(content))
-                        }.getOrNull()
+                        }
+                        val saved = outcome.getOrNull()
 
                         if (saved != null) {
                             fetchAttachments(fromServer.id, saved, fromServer.attachments)
                             rememberVersion(fromServer.id, fromServer.version)
                             fetched += 1
+                            settled(fromServer.updatedAt)
+                        } else {
+                            Log.w(
+                                "Kajet",
+                                "Nie udało się zapisać notatki ${fromServer.id} z serwera",
+                                outcome.exceptionOrNull(),
+                            )
+                            failed(fromServer, outcome.exceptionOrNull())
                         }
                     }
 
                     if (page.upTo > 0) {
                         since = page.upTo
                         afterId = page.upToId
-                        account.rememberSync(since)
+                        account.rememberSync(bookmark)
                     }
 
                     if (!page.hasMore) break
@@ -237,7 +346,12 @@ class Sync(
         }
 
         repository.refresh()
-        StepResult(count = fetched)
+        StepResult(
+            count = fetched,
+            reason = firstFailure?.let { first ->
+                if (failures > 1) "$first (takich notatek jest $failures)" else first
+            },
+        )
     }
 
     private suspend fun fetchAttachments(

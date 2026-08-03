@@ -60,7 +60,9 @@ class ExportService(
     private val repo: LibraryRepository,
 ) {
 
-    private fun exportDir(): File = File(context.cacheDir, "export").apply { mkdirs() }
+    // Katalog musi nazywać się tak samo jak w res/xml/sciezki_plikow.xml.
+    // Rozjazd tych dwóch nazw wywala aplikację przy „Udostępnij".
+    private fun exportDir(): File = File(context.cacheDir, "eksport").apply { mkdirs() }
 
     suspend fun export(
         notePath: String,
@@ -161,44 +163,67 @@ class ExportService(
 
     fun fileUri(file: File) = FileProvider.getUriForFile(context, "${context.packageName}.pliki", file)
 
-    fun share(file: File, mime: String, title: String) {
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = mime
-            putExtra(Intent.EXTRA_STREAM, fileUri(file))
-            putExtra(Intent.EXTRA_SUBJECT, title)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    /** Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie. */
+    fun share(file: File, mime: String, title: String): String? {
+        val outcome = runCatching {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                putExtra(Intent.EXTRA_STREAM, fileUri(file))
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(intent, "Wyślij: $title").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
         }
-        val chooser = Intent.createChooser(intent, "Wyślij: $title").apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return outcome.exceptionOrNull()?.let {
+            "Nie udało się otworzyć okna udostępniania. Plik leży w pamięci aplikacji."
         }
-        context.startActivity(chooser)
     }
 
-    fun open(file: File, mime: String) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(fileUri(file), mime)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    /** Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie. */
+    fun open(file: File, mime: String): String? {
+        val outcome = runCatching {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(fileUri(file), mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         }
-        runCatching { context.startActivity(intent) }
+        return outcome.exceptionOrNull()?.let {
+            "Żadna aplikacja na tym urządzeniu nie umie otworzyć pliku ${file.name}. " +
+                "Użyj „Wyślij” i wybierz program samodzielnie."
+        }
     }
 
-    fun print(document: NoteDocument, notePath: String) {
-        val manager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: return
+    /**
+     * [activityContext] musi pochodzić z ekranu (LocalContext), nie z aplikacji:
+     * systemowy druk odmawia pracy bez Activity.
+     */
+    fun print(activityContext: Context, document: NoteDocument, notePath: String): String? {
+        val manager = activityContext.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+            ?: return "To urządzenie nie udostępnia systemowego drukowania."
         val name = FileNames.safe(document.title)
-        manager.print(
-            name,
-            PrintAdapter(name) { output ->
-                PdfExport.write(
-                    document = document,
-                    output = output,
-                    attachment = { assetName -> readAttachmentBlocking(notePath, assetName) },
-                )
-            },
-            PrintAttributes.Builder()
-                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                .build(),
-        )
+        val outcome = runCatching {
+            manager.print(
+                name,
+                PrintAdapter(name) { output ->
+                    PdfExport.write(
+                        document = document,
+                        output = output,
+                        attachment = { assetName -> readAttachmentBlocking(notePath, assetName) },
+                    )
+                },
+                PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .build(),
+            )
+        }
+        return outcome.exceptionOrNull()?.let {
+            "Nie udało się uruchomić drukowania: ${it.message ?: "nieznany błąd"}."
+        }
     }
 }
 

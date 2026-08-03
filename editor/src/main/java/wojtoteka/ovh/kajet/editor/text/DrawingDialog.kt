@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.editor.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -23,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -30,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
+import wojtoteka.ovh.kajet.core.design.component.ColourDot
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
@@ -61,7 +66,8 @@ fun DrawingDialog(
     Dialog(onDismissRequest = onClose) {
         Column(
             Modifier
-                .width(640.dp)
+                .fillMaxWidth()
+                .widthIn(max = 640.dp)
                 .background(colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
                 .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner)),
         ) {
@@ -80,6 +86,9 @@ fun DrawingDialog(
                 Modifier
                     .fillMaxWidth()
                     .background(colors.desk)
+                    // Na telefonie pasek się nie mieści, więc przewija się w bok
+                    // zamiast ściskać kropki do zerowej szerokości.
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -97,20 +106,13 @@ fun DrawingDialog(
                     selected = tool == EditorTool.ERASER_STROKE,
                 )
                 Box(Modifier.width(12.dp))
-                InkPalette.pens.take(4).forEach { (name, variant) ->
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clickable(onClickLabel = "Kolor $name") { color = variant.toArgb() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            Modifier
-                                .size(if (color == variant.toArgb()) 24.dp else 18.dp)
-                                .background(variant, CircleShape)
-                                .border(1.dp, colors.line, CircleShape),
-                        )
-                    }
+                InkPalette.pens.forEach { (name, variant) ->
+                    ColourDot(
+                        color = variant.toArgb(),
+                        description = "Kolor $name",
+                        onClick = { color = variant.toArgb() },
+                        selected = color == variant.toArgb(),
+                    )
                 }
                 Box(Modifier.width(12.dp))
                 listOf(1.6f, 2.4f, 4f, 7f).forEach { variant ->
@@ -127,7 +129,13 @@ fun DrawingDialog(
                         Box(
                             Modifier
                                 .size((variant * 2.6f).dp)
-                                .background(Color(color), CircleShape),
+                                .background(Color(color), CircleShape)
+                                // Ciemny tusz na ciemnym biurku znika bez jaśniejszej obwódki.
+                                .border(
+                                    1.dp,
+                                    if (Color(color).luminance() < 0.25f) colors.muted else colors.line,
+                                    CircleShape,
+                                ),
                         )
                     }
                 }

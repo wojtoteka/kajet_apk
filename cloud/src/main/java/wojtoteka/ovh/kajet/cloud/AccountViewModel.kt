@@ -199,6 +199,26 @@ class AccountViewModel(
         }
     }
 
+    /**
+     * Sprawdza token i odświeża stan konta prosto z serwera. Wołane przy
+     * wejściu na ekran: dzięki temu zajęte miejsce jest aktualne, a martwy
+     * token wychodzi na jaw od razu, a nie dopiero przy synchronizacji.
+     */
+    fun refreshFromServer() {
+        if (!account.isSignedIn()) return
+        viewModelScope.launch {
+            val outcome = runCatching { client.accountState() }.getOrNull() ?: return@launch
+            when (outcome) {
+                is CloudClient.Result.Ok -> account.refresh(outcome.data)
+                is CloudClient.Result.Error -> if (outcome.mustSignIn) {
+                    account.signOut()
+                    _error.value = "Sesja wygasła po stronie serwera. Zaloguj się jeszcze raz."
+                }
+            }
+            refreshState()
+        }
+    }
+
     fun signOut() {
         cancelBrowserSignIn()
         account.signOut()

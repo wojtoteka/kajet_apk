@@ -41,8 +41,10 @@ sealed interface Block {
 
 object Blocks {
 
+    // URL łapany leniwie, bo magazyn potrafi nadać nazwę ze spacją i nawiasem
+    // ("zdjecie (2).jpg"); tytuł w cudzysłowie ma pierwszeństwo przed URL-em.
     private val imageOnly =
-        Regex("""^\s*!\[([^\]]*)]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*$""")
+        Regex("""^\s*!\[([^\]]*)]\((.+?)(?:\s+"([^"]*)")?\)\s*$""")
 
     private val percentTitle = Regex("""^(\d{1,3})%$""")
 
@@ -77,7 +79,7 @@ object Blocks {
                 result += Block.Image(
                     key = "o${number++}",
                     alt = image.groupValues[1],
-                    url = image.groupValues[2],
+                    url = image.groupValues[2].trim(),
                     width = widthFromTitle(image.groupValues[3]),
                 )
                 continue

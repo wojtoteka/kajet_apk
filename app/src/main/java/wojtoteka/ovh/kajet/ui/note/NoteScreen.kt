@@ -105,7 +105,7 @@ fun NoteScreen(
                 if (uri != null) {
                     val data = Photos.read(context, uri)
                     if (data != null) {
-                        model.insertPhoto(data, Photos.extension(context, uri), model.markdown.length)
+                        model.insertPhoto(data, Photos.extension(context, uri), model.takePhotoPosition())
                     }
                 }
             }
@@ -115,7 +115,7 @@ fun NoteScreen(
             ) { ok: Boolean ->
                 val file = cameraFile
                 if (ok && file != null && file.exists()) {
-                    model.insertPhoto(file.readBytes(), "jpg", model.markdown.length)
+                    model.insertPhoto(file.readBytes(), "jpg", model.takePhotoPosition())
                     file.delete()
                 }
                 cameraFile = null
@@ -165,8 +165,11 @@ fun NoteScreen(
                 .fillMaxSize()
                 .background(colors.sheet)
                 .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Otwieram notatkę", style = Kajet.type.body, color = colors.muted)
+            // Wyjście musi być zawsze, nawet gdyby otwieranie się zawiesiło.
+            SecondaryButton("Wróć do biblioteki", onBack, icon = KajetIcons.BackArrow)
         }
     }
 }

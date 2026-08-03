@@ -56,10 +56,7 @@ class LibraryStore(
         val folder = folder(path) ?: return emptyList()
         return folder.listFiles()
             .mapNotNull { toItem(it, path) }
-            .sortedWith(
-                compareBy<LibraryItem> { it.type != ItemType.FOLDER }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name },
-            )
+            .sortedWith(libraryOrder)
     }
 
     private fun toItem(file: DocumentFile, parentPath: String): LibraryItem? {
@@ -539,6 +536,20 @@ class LibraryStore(
 
     companion object {
         const val BACKUP_FILE = "content.bak.json"
+
+        /** Foldery alfabetycznie na górze, notatki i pliki pod nimi od najnowszej zmiany. */
+        val libraryOrder: Comparator<LibraryItem> = Comparator { a, b ->
+            val aFolder = a.type == ItemType.FOLDER
+            val bFolder = b.type == ItemType.FOLDER
+            when {
+                aFolder != bFolder -> if (aFolder) -1 else 1
+                aFolder -> String.CASE_INSENSITIVE_ORDER.compare(a.name, b.name)
+                else -> {
+                    val byDate = b.updatedAt.compareTo(a.updatedAt)
+                    if (byDate != 0) byDate else String.CASE_INSENSITIVE_ORDER.compare(a.name, b.name)
+                }
+            }
+        }
 
         fun codeTemplate(language: CodeLanguage): String = when (language) {
             CodeLanguage.PYTHON -> "print(\"Cześć\")\n"

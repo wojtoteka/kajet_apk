@@ -80,22 +80,55 @@ class AccountStore(context: Context) {
         }
     }
 
-    private fun createStore(context: Context): SharedPreferences = runCatching {
+    private fun createStore(context: Context): SharedPreferences {
+        val encrypted = runCatching { openEncrypted(context) }
+            .recoverCatching {
+                // Zepsuty plik (na przykład klucz przepadł po przywróceniu
+                // z kopii zapasowej) wyrzucamy i zakładamy od nowa. Bez tego
+                // każde uruchomienie odbijałoby się między magazynem szyfrowanym
+                // a zapasowym i logowanie raz było, raz znikało.
+                context.deleteSharedPreferences(FILE_NAME)
+                openEncrypted(context)
+            }
+            .getOrNull()
+
+        val fallback = context.getSharedPreferences("$FILE_NAME-fallback", Context.MODE_PRIVATE)
+        if (encrypted == null) {
+            // Magazyn kluczy bywa zepsuty na niektórych urządzeniach. Notatnik
+            // ma wtedy dalej działać, więc zostaje zwykły plik ustawień.
+            return fallback
+        }
+
+        // Token zapisany kiedyś do pliku zapasowego przenosi się do właściwego
+        // magazynu, żeby stan zalogowania nie zależał od tego, który plik
+        // akurat dało się otworzyć.
+        val stray = fallback.getString(KEY_TOKEN, null)
+        if (!stray.isNullOrBlank() && encrypted.getString(KEY_TOKEN, null).isNullOrBlank()) {
+            encrypted.edit()
+                .putString(KEY_TOKEN, stray)
+                .putString(KEY_TOKEN_ID, fallback.getString(KEY_TOKEN_ID, ""))
+                .putString(KEY_LOGIN, fallback.getString(KEY_LOGIN, ""))
+                .putString(KEY_EMAIL, fallback.getString(KEY_EMAIL, ""))
+                .putBoolean(KEY_ADMIN, fallback.getBoolean(KEY_ADMIN, false))
+                .putLong(KEY_LAST_SYNC, fallback.getLong(KEY_LAST_SYNC, 0L))
+                .apply()
+        }
+        if (fallback.all.isNotEmpty()) fallback.edit().clear().apply()
+        return encrypted
+    }
+
+    private fun openEncrypted(context: Context): SharedPreferences {
         val key = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
             FILE_NAME,
             key,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
-    }.getOrElse {
-        // The key store is broken on some older devices. The notepad must still
-        // work then, so we fall back to a plain preferences file.
-        context.getSharedPreferences("$FILE_NAME-fallback", Context.MODE_PRIVATE)
     }
 
     companion object {

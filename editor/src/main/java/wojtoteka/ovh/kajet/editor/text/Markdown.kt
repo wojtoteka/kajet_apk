@@ -202,11 +202,14 @@ object Markdown {
             "\u0000WZOR${formulas.size - 1}\u0000"
         }
 
-        result = Regex("!\\[([^\\]]*)]\\(([^)]+)\\)").replace(result) { match ->
-            val alt = match.groupValues[1]
-            val url = attachmentUrl(match.groupValues[2])
-            "<img src=\"$url\" alt=\"$alt\">"
-        }
+        // Adres może mieć spację i jeden poziom nawiasów, np. "zdjecie (2).jpg"
+        // z dawnych notatek. Opcjonalny tytuł w cudzysłowie nie wpada do adresu.
+        result = Regex("!\\[([^\\]]*)]\\(([^()\"]*(?:\\([^)]*\\)[^()\"]*)*)(?:\"([^\"]*)\")?\\)")
+            .replace(result) { match ->
+                val alt = match.groupValues[1]
+                val url = attachmentUrl(match.groupValues[2].trim())
+                "<img src=\"$url\" alt=\"$alt\">"
+            }
         result = Regex("\\[([^\\]]+)]\\(([^)]+)\\)").replace(result) { match ->
             "<a href=\"${match.groupValues[2]}\">${match.groupValues[1]}</a>"
         }

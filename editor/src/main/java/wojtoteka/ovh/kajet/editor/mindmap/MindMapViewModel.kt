@@ -156,9 +156,11 @@ class MindMapViewModel(
                     width = parent.width,
                     height = parent.height,
                     colorId = parent.colorId,
+                    customColor = parent.customColor,
                     shape = parent.shape,
                     font = parent.font,
                     fontSize = parent.fontSize,
+                    align = parent.align,
                 )
                 change(
                     map.copy(
@@ -211,6 +213,11 @@ class MindMapViewModel(
             x = parent.x + parent.width + GAP_X,
             y = parent.y + siblings * (parent.height + GAP_Y),
             colorId = parent.colorId,
+            customColor = parent.customColor,
+            shape = parent.shape,
+            font = parent.font,
+            fontSize = parent.fontSize,
+            align = parent.align,
         )
         change(
             map.copy(
@@ -223,9 +230,43 @@ class MindMapViewModel(
         return id
     }
 
+    /** Nowy węzeł tuż pod wskazanym, podpięty do tego samego rodzica. */
+    fun addSibling(id: String): String? {
+        val node = map.nodes.firstOrNull { it.id == id } ?: return null
+        val parentId = map.edges.firstOrNull { it.toId == id }?.fromId
+        val twinId = UUID.randomUUID().toString()
+        val twin = MindNode(
+            id = twinId,
+            x = node.x,
+            y = node.y + node.height + GAP_Y,
+            colorId = node.colorId,
+            customColor = node.customColor,
+            shape = node.shape,
+            font = node.font,
+            fontSize = node.fontSize,
+            align = node.align,
+        )
+        change(
+            map.copy(
+                nodes = map.nodes + twin,
+                // Korzeń nie ma rodzica: wtedy powstaje sam węzeł, bez linii.
+                edges = if (parentId != null) {
+                    map.edges + MindEdge(UUID.randomUUID().toString(), parentId, twinId)
+                } else {
+                    map.edges
+                },
+            ),
+        )
+        _selected.value = twinId
+        _edited.value = twinId
+        return twinId
+    }
+
     fun setText(id: String, text: String) {
+        // Edytor WWW ucina przy 500 znakach — tu tak samo, żeby pliki się zgadzały.
+        val capped = text.take(500)
         changeWithoutHistory { old ->
-            old.copy(nodes = old.nodes.map { if (it.id == id) it.copy(text = text) else it })
+            old.copy(nodes = old.nodes.map { if (it.id == id) it.copy(text = capped) else it })
         }
     }
 

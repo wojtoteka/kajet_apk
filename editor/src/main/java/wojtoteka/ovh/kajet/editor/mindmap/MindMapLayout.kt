@@ -127,4 +127,16 @@ object MindMapLayout {
     }
 
     fun hasChildren(map: MindMapContent, id: String): Boolean = map.edges.any { it.fromId == id }
+
+    /** Ilu potomków chowa zwinięcie tego węzła. Odporny na pętle w krawędziach. */
+    fun hiddenDescendants(map: MindMapContent, id: String): Int {
+        val seen = HashSet<String>()
+        fun walk(current: String) {
+            for (edge in map.edges) {
+                if (edge.fromId == current && edge.toId != id && seen.add(edge.toId)) walk(edge.toId)
+            }
+        }
+        walk(id)
+        return seen.size
+    }
 }

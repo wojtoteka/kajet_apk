@@ -113,6 +113,10 @@ interface IndexDao {
     @Query("SELECT COUNT(*) FROM entries")
     suspend fun count(): Int
 
+    /** Wszystkie notatki ze spisu — do uzgadniania biblioteki z chmurą. */
+    @Query("SELECT * FROM entries WHERE type = 'NOTE' AND documentId != ''")
+    suspend fun allNotes(): List<IndexEntry>
+
     // Searching
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

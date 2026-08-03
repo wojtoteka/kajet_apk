@@ -41,6 +41,14 @@ class MainActivity : ComponentActivity() {
         captureAuthIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Wejście do aplikacji to najlepszy moment na zajrzenie do chmury:
+        // człowiek właśnie patrzy na spis notatek i chce w nim widzieć to,
+        // co dopisał gdzie indziej.
+        (application as KajetApp).container.cloud.sync.syncSoon()
+    }
+
     private fun captureAuthIntent(intent: Intent?) {
         DeviceAuthBridge.offer(intent?.data)
     }

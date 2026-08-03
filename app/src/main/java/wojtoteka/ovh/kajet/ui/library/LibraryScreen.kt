@@ -656,30 +656,57 @@ private fun SearchView(
 @Composable
 private fun TrashView(model: LibraryViewModel) {
     val trash by model.trash.collectAsStateWithLifecycle()
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Kosz", style = Kajet.type.display, color = Kajet.colors.text)
-                Text(
-                    text = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, dopóki nie opróżnisz kosza.",
-                    style = Kajet.type.meta,
-                    color = Kajet.colors.muted,
-                    modifier = Modifier.widthIn(max = 560.dp),
-                )
+        if (narrow) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column {
+                    Text("Kosz", style = Kajet.type.title, color = Kajet.colors.text)
+                    Text(
+                        text = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, dopóki nie opróżnisz kosza.",
+                        style = Kajet.type.meta,
+                        color = Kajet.colors.muted,
+                    )
+                }
+                if (trash.isNotEmpty()) {
+                    SecondaryButton(
+                        text = "Opróżnij kosz",
+                        onClick = model::emptyTrash,
+                        icon = KajetIcons.Bin,
+                        color = Kajet.colors.danger,
+                    )
+                }
             }
-            if (trash.isNotEmpty()) {
-                SecondaryButton(
-                    text = "Opróżnij kosz",
-                    onClick = model::emptyTrash,
-                    icon = KajetIcons.Bin,
-                    color = Kajet.colors.danger,
-                )
+        } else {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Kosz", style = Kajet.type.display, color = Kajet.colors.text)
+                    Text(
+                        text = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, dopóki nie opróżnisz kosza.",
+                        style = Kajet.type.meta,
+                        color = Kajet.colors.muted,
+                        modifier = Modifier.widthIn(max = 560.dp),
+                    )
+                }
+                if (trash.isNotEmpty()) {
+                    SecondaryButton(
+                        text = "Opróżnij kosz",
+                        onClick = model::emptyTrash,
+                        icon = KajetIcons.Bin,
+                        color = Kajet.colors.danger,
+                    )
+                }
             }
         }
         HorizontalRule()
