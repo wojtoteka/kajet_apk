@@ -97,7 +97,6 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
 
             when (val current = state) {
                 is SignInState.SignedOut -> SignIn(
-                    serverUrl = current.serverUrl,
                     busy = busy,
                     waitingForBrowser = waitingForBrowser,
                     onSignIn = model::signIn,
@@ -121,7 +120,6 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun SignIn(
-    serverUrl: String,
     busy: Boolean,
     waitingForBrowser: Boolean,
     onSignIn: (String, String) -> Unit,
@@ -165,7 +163,7 @@ private fun SignIn(
                 enabled = !busy,
             )
             Text(
-                text = "Otworzy stronę $serverUrl w aplikacji. Tam wybierzesz konto Google " +
+                text = "Otworzy stronę logowania w aplikacji. Tam wybierzesz konto Google " +
                     "(albo hasło) i zatwierdzisz to urządzenie — zwykle wystarczą trzy tapnięcia.",
                 style = Kajet.type.meta,
                 color = Kajet.colors.muted,
@@ -188,8 +186,8 @@ private fun SignIn(
             }
         } else {
             Text(
-                text = "Zamiast hasła możesz wkleić token urządzenia. Otwórz w przeglądarce " +
-                    "stronę $serverUrl/account, wydaj token dla tego urządzenia i przepisz go tutaj. " +
+                text = "Zamiast hasła możesz wkleić token urządzenia. Na stronie konta Kajetu " +
+                    "wydaj token dla tego urządzenia i przepisz go tutaj. " +
                     "Przydaje się jako awaryjne wejście, gdy logowanie przez stronę nie zadziała.",
                 style = Kajet.type.body,
                 color = Kajet.colors.muted,

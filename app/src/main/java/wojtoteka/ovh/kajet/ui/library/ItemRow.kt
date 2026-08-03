@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.FolderColor
@@ -31,6 +32,7 @@ import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.StrokePreview
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
@@ -115,8 +117,12 @@ fun ItemRow(
                 }
 
                 item.language != null -> {
+                    val language = item.language!!
+                    val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
+                    val offlineHere = language.offline &&
+                        !(language == CodeLanguage.PYTHON && phone)
                     Text(
-                        text = item.language!!.labelPl + if (item.language!!.offline) {
+                        text = language.labelPl + if (offlineHere) {
                             ", działa bez internetu"
                         } else {
                             ", uruchamiany przez internet"

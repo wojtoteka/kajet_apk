@@ -11,8 +11,10 @@ class KajetServerRunner(private val cloud: CloudCode) : CodeRunner {
     override val name: String = "na serwerze Kajetu"
     override val requiresInternet: Boolean = true
 
+    // Python ma offline=true (Chaquopy na tablecie), ale na telefonie i tak
+    // leci tu — RunnerRegistry wybierze lokalny runner, gdy jest zarejestrowany.
     override fun supports(language: CodeLanguage): Boolean =
-        !language.offline && language.serverRuntime in ON_SERVER
+        language.serverRuntime in ON_SERVER
 
     override suspend fun run(
         language: CodeLanguage,

@@ -34,12 +34,25 @@ interface CodeRunner {
     ): RunResult
 }
 
-class RunnerRegistry(private val runners: List<CodeRunner>) {
+class RunnerRegistry(
+    private val runners: List<CodeRunner>,
+    /** Gdy true — najpierw runner sieciowy (CloudCode), potem lokalny. */
+    private val preferServer: () -> Boolean = { false },
+) {
 
-    fun forLanguage(language: CodeLanguage): CodeRunner? =
-        runners.firstOrNull { it.supports(language) && !it.requiresInternet }
-            ?: runners.firstOrNull { it.supports(language) }
+    fun forLanguage(language: CodeLanguage): CodeRunner? {
+        val matching = runners.filter { it.supports(language) }
+        if (preferServer()) {
+            matching.firstOrNull { it.requiresInternet }?.let { return it }
+        }
+        return matching.firstOrNull { !it.requiresInternet }
+            ?: matching.firstOrNull()
+    }
 
-    fun runsOffline(language: CodeLanguage): Boolean =
-        runners.any { it.supports(language) && !it.requiresInternet }
+    fun runsOffline(language: CodeLanguage): Boolean {
+        if (preferServer() && runners.any { it.supports(language) && it.requiresInternet }) {
+            return false
+        }
+        return runners.any { it.supports(language) && !it.requiresInternet }
+    }
 }

@@ -174,7 +174,7 @@ class CloudClient(
                 onFailure = {
                     Result.Error(
                         "Serwer odpowiedział czymś, czego nie rozumiem. " +
-                            "Sprawdź adres serwera w ustawieniach.",
+                            "Spróbuj ponownie za chwilę.",
                     )
                 },
             )
@@ -203,7 +203,7 @@ class CloudClient(
         val connection = try {
             URL(url).openConnection() as HttpURLConnection
         } catch (e: Exception) {
-            return Result.Error("Adres serwera jest nieprawidłowy: $url")
+            return Result.Error("Nie udało się połączyć z serwerem.")
         }
 
         return try {
@@ -234,7 +234,7 @@ class CloudClient(
             }
         } catch (e: UnknownHostException) {
             Result.Error(
-                "Nie mogę połączyć się z serwerem. Sprawdź internet albo adres serwera w ustawieniach.",
+                "Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem.",
                 worthRetrying = true,
             )
         } catch (e: SocketTimeoutException) {
@@ -258,7 +258,7 @@ class CloudClient(
         val connection = try {
             URL(url).openConnection() as HttpURLConnection
         } catch (e: Exception) {
-            return Result.Error("Adres serwera jest nieprawidłowy.")
+            return Result.Error("Nie udało się połączyć z serwerem.")
         }
 
         return try {

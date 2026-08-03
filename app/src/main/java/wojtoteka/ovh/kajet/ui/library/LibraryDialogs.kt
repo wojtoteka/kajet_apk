@@ -322,12 +322,16 @@ fun NewFileDialog(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel("Język")
             CodeLanguage.entries.filter { it.runnable }.forEach { option ->
+                val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
                 ChoiceRow(
                     text = option.labelPl,
-                    description = if (option.offline) {
-                        "Uruchamia się na tablecie, bez internetu."
-                    } else {
-                        "Uruchamia się na serwerze, potrzebny internet."
+                    description = when {
+                        option == CodeLanguage.PYTHON && phone ->
+                            "Uruchamia się na serwerze, potrzebne konto i internet."
+                        option.offline ->
+                            "Uruchamia się na tablecie, bez internetu."
+                        else ->
+                            "Uruchamia się na serwerze, potrzebny internet."
                     },
                     selected = option == language,
                     onClick = { language = option },
