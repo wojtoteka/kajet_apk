@@ -1,0 +1,2219 @@
+package wojtoteka.ovh.kajet.core.text
+
+/**
+ * Wszystkie napisy Kajetu w jednym miejscu.
+ *
+ * Interfejs z polami, a każdy język to obiekt, który je nadpisuje: dodanie
+ * napisu to jedna linijka tutaj i jedna w każdym języku, a kompilator nie
+ * pozwoli o żadnym zapomnieć. Nazwy pól opisują MIEJSCE, w którym napis stoi,
+ * a nie jego treść — „save” zmieni się kiedyś na „zapisz zmiany”, ale dalej
+ * będzie tym samym przyciskiem.
+ *
+ * Nie może to być klasa z napisami w konstruktorze, choć wygląda to zgrabniej.
+ * Wywołanie metody w Dalviku mieści najwyżej 255 rejestrów na argumenty, a
+ * napisów jest ponad czterysta. Kotlin taki kod skompiluje, ale ART odrzuca
+ * klasę przy pierwszym użyciu (VerifyError) i aplikacja ginie na starcie.
+ * Przy nadpisywaniu pól każde stoi osobno i limit nie ma czego dotyczyć.
+ *
+ * Reguła na przyszłość: nowy napis w widoku dopisujemy tu, a nie wpisujemy
+ * wprost w Compose. Inaczej wraca stan, w którym połowa aplikacji nie umie
+ * mówić po angielsku.
+ */
+interface Strings {
+    /*
+      Czy to zestaw angielski.
+
+      Potrzebne przy wyliczeniach, które noszą swoje nazwy przy sobie (barwy
+      folderów, ikony, narzędzia pisaka, języki programowania). Wpisywanie
+      trzydziestu ośmiu nazw ikon do tej klasy nic by nie dało — stoją tam,
+      gdzie stoją, a stąd biorą tylko odpowiedź na pytanie „w którym języku".
+    */
+    val english: Boolean
+
+    // --- Rzeczy wspólne ---
+    val appName: String
+    val save: String
+    val cancel: String
+    val close: String
+    val back: String
+    val delete: String
+    val rename: String
+    val copy: String
+    val move: String
+    val create: String
+    val open: String
+    val send: String
+    val print: String
+    val settings: String
+    val account: String
+    val search: String
+    val understood: String
+    val untitled: String
+    val unnamed: String
+
+    // --- Biblioteka ---
+    val sectionLibrary: String
+    val folders: String
+    val sectionFavorites: String
+    val sectionRecent: String
+    val sectionSearch: String
+    val sectionTrash: String
+    val newFolder: String
+    val newNote: String
+    val newCodeFile: String
+    val folderName: String
+    val folderColour: String
+    val folderIcon: String
+    val emptyFolder: String
+    val emptyFolderHint: String
+    val emptyTrash: String
+    val restore: String
+    val deleteForever: String
+    val moveToTrash: String
+    val addToFavorites: String
+    val removeFromFavorites: String
+    val rebuildIndex: String
+
+    // --- Notatka ---
+    val noteText: String
+    val noteHandwritten: String
+    val noteMindMap: String
+    val writeHere: String
+    val saved: String
+    val saving: String
+    val loading: String
+    val changesWaiting: String
+    val saveFailed: String
+    val noteInCloud: String
+    val noteWaitingForCloud: String
+    val noteOpenFailed: String
+    val noteSaveFailed: String
+    val noteDeletedElsewhere: String
+    val noteDeletedElsewhereAbout: String
+    val fileDeletedElsewhereAbout: String
+    val saveAsNewNote: String
+    val saveAsNewFile: String
+    val discardChanges: String
+    val saveAsNewFailed: String
+    val placeholderWord: String
+    val savingPhoto: String
+    val savingDrawing: String
+    val photoSaveFailed: String
+    val drawingSaveFailed: String
+    val exportTitle: String
+    val exportFormat: String
+    val exportSave: String
+    val shareLink: String
+    val shareLinkBusy: String
+
+    // --- Pisak ---
+    val penInk: String
+    val penBlack: String
+    val penGrey: String
+    val penBlue: String
+    val penRed: String
+    val penGreen: String
+    val penBrown: String
+    val penYellow: String
+    val penPink: String
+    val pickOwnColour: String
+    val strokeWidth: String
+    val colourNamed: String
+    val drawingInNote: String
+    val closeWithoutSaving: String
+    val insertDrawing: String
+    val clearDrawing: String
+    val drawWithFingerOrStylus: String
+    val yourColours: String
+    val thickness: String
+    val opacity: String
+
+    // --- Ustawienia ---
+    val settingsLanguage: String
+    val settingsLanguageAbout: String
+    val languageSystem: String
+    val languagePolish: String
+    val languageEnglish: String
+    val settingsToolbarSide: String
+    val settingsToolbarSideAbout: String
+    val toolbarLeft: String
+    val toolbarRight: String
+    val settingsAppearance: String
+    val themeSystem: String
+    val themeLight: String
+    val themeDark: String
+    val settingsCode: String
+    val settingsCodeAbout: String
+    val codeAssistOn: String
+    val codeAssistOnAbout: String
+    val codeAssistOff: String
+    val codeAssistOffAbout: String
+
+    // --- Ekran biblioteki ---
+    val libRebuilding: String
+    val libFavoritesAbout: String
+    val libFavoritesEmpty: String
+    val libRecentAbout: String
+    val libRecentEmpty: String
+    val libSearchInNotes: String
+    val libAllNotes: String
+    val libFolderUp: String
+    val libFolderEmpty: String
+    val libFolderEmptyHint: String
+    val libNothingHere: String
+    val libSearchAbout: String
+    val libSearchPrompt: String
+    val libSearchPromptAbout: String
+    val libSearchNothing: String
+    val libExpand: String
+    val libCollapse: String
+    val libKindFolder: String
+    val libKindCode: String
+    val emptyNote: String
+    val emptyPage: String
+    val noDate: String
+    val justNow: String
+    val inFavorites: String
+    val libSearchNothingAbout: String
+    val emptyTrashQuestion: String
+    val trashAbout: String
+    val trashEmptyTitle: String
+    val trashEmptyAbout: String
+    val menuMoveToFolder: String
+    val menuCopy: String
+
+    /** Doklejane do nazwy kopii: „Wzory (kopia)". */
+    val copySuffix: String
+
+    /** Pytanie przed kasowaniem jednego wpisu z kosza, bez odwrotu. */
+    val deleteForeverQuestion: String
+    val deleteForeverWarning: String
+    val menuLook: String
+    val exportFolderPdf: String
+    val exportFolderMarkdown: String
+    val movePrompt: String
+    val codeShort: String
+    val codeWithPreview: String
+    val codeWorksOffline: String
+    val codeNeedsInternet: String
+
+    // --- Okna: nowy folder, notatka, plik ---
+    val colour: String
+    val icon: String
+    val createFolder: String
+    val createNote: String
+    val createFile: String
+    val titleLabel: String
+    val newName: String
+    val fileName: String
+    val defaultFileName: String
+    val noteKindLabel: String
+    val kindHandwrittenAbout: String
+    val kindTextAbout: String
+    val kindMindMapAbout: String
+    val pageLabel: String
+    val pageA4About: String
+    val pageScrollAbout: String
+    val pageBackgroundLabel: String
+    val langHtmlAbout: String
+    val langNeedsAccountAbout: String
+
+    // --- Edytor kodu ---
+    val codeOutput: String
+    val codeErrors: String
+    val codeInput: String
+    val codeRun: String
+    val codeStop: String
+    val codePagePreview: String
+    val codeSearchInFile: String
+    val codeWordWrap: String
+    val codeTypeTwoLetters: String
+    val codeUnsaved: String
+    val codeHtmlHint: String
+    val codeWontRunHere: String
+    val codeRunsOnTablet: String
+    val codeRunsOnServer: String
+    val codeWorkingOnTablet: String
+    val codeSendingToServer: String
+    val codeFromServer: String
+    val codeFromTablet: String
+    val codeExitCode: String
+    val codeOutputEmpty: String
+    val codeNoErrors: String
+    val codeInputLabel: String
+    val codeOpenFailed: String
+    val codeSaveFailed: String
+    val codeRunFailed: String
+
+    // --- Edytor tekstowy ---
+    val insertPhotoFromGallery: String
+    val takePhoto: String
+    val exportNote: String
+    val rawMarkdownAbout: String
+    val fontFamily: String
+    val fontSize: String
+    val fontSizeWholeNote: String
+    val wholeNoteLook: String
+    val defaultSize: String
+    val defaultColour: String
+    val tableAddRow: String
+    val tableAddColumn: String
+    val tableRemoveRow: String
+    val tableRemoveColumn: String
+    val tableRemove: String
+    fun tableSize(rows: Int, columns: Int): String
+    val smallerText: String
+    val largerText: String
+    val colourWholeNote: String
+    val colourSelection: String
+    val highlightSelection: String
+    val bold: String
+    val italic: String
+    val underline: String
+    val strike: String
+    val heading1: String
+    val heading2: String
+    val heading3: String
+    val bulletList: String
+    val numberedList: String
+    val taskList: String
+    val quote: String
+    val inlineCode: String
+    val codeBlock: String
+    val table: String
+    val formula: String
+    val link: String
+    val dividerLine: String
+    val showRawMarkdown: String
+    val backToContentView: String
+    val colourWholeNoteTitle: String
+    val colourSelectionTitle: String
+    val tableColumn: String
+    val untickTask: String
+    val tickTask: String
+    val photoInNote: String
+    val noCaption: String
+    val photoSize: String
+    val photoCaption: String
+    val photoUp: String
+    val photoDown: String
+    val photoRemove: String
+    val photoCaptionAbout: String
+
+    // --- Edytor odręczny ---
+    val penSettings: String
+    val insertTextBox: String
+    val fingerDrawsSwitch: String
+    val fingerScrollsSwitch: String
+    val noteSettingsIcon: String
+    val undo: String
+    val redo: String
+    val eraser: String
+    val morePenSettings: String
+    val deselect: String
+    val penTool: String
+    val highlighterTool: String
+    val shapeKindLabel: String
+    val shapeOutlineColourTitle: String
+    val shapeFillLabel: String
+    val shapeNoFill: String
+    val shapeFillColourTitle: String
+    val shapeSquareLock: String
+    val shapeSquareAbout: String
+    val shapeRotate: String
+    val shapeResize: String
+    val shapeRemove: String
+    val eraserSize: String
+    val widthLabel: String
+    val highlighterColourTitle: String
+    val whatYouWriteWith: String
+    val inkColourTitle: String
+    val penAboutPen: String
+    val penAboutFineliner: String
+    val penAboutPencil: String
+    val penAboutDashed: String
+    val textColourTitle: String
+    val addBoxBackground: String
+    val changeBoxBackground: String
+    val boxBackgroundTitle: String
+    val yourColour: String
+    val noteSettings: String
+    val pageKind: String
+    val pageA4Long: String
+    val pageScrollLong: String
+    val pagesLabel: String
+    val onePage: String
+    val addPage: String
+    val removeLastPage: String
+    val fingerLabel: String
+    val palmRejectionAbout: String
+    val fitWidth: String
+    val textBox: String
+    val moveTextBox: String
+    val deleteTextBox: String
+    val resizeTextBox: String
+
+    // --- Mapa myśli ---
+    val newNode: String
+    val addBranch: String
+    val addSibling: String
+    val finishConnecting: String
+    val connectToOthers: String
+    val inkLabel: String
+    val arrangeBranches: String
+    val fitWholeMap: String
+    val exportMap: String
+    val releaseToConnect: String
+    val releaseOnEmpty: String
+    val tapNodesToConnect: String
+    val nodeWithoutName: String
+    val disconnect: String
+    val keepConnection: String
+    val zoomOut: String
+    val zoomIn: String
+    val emptyMap: String
+    val emptyMapAbout: String
+    val tapTwiceToType: String
+    val dragToConnect: String
+    val dragToResize: String
+    val expandBranch: String
+    val collapseBranch: String
+    val selectedNode: String
+    val hideSettings: String
+    val showMoreSettings: String
+    val nodeText: String
+    val typeNodeText: String
+    val textLabel: String
+    val nodeColour: String
+    val connections: String
+    val connectionsAbout: String
+    val nodeTextColour: String
+    val colourFromTheme: String
+    val colourOwn: String
+    val shapeLabel: String
+    val nodeColourTitle: String
+    val nodeTextColourTitle: String
+
+    // --- Zapis do pliku, wybór barwy, pismo odręczne ---
+    val fileReady: String
+    val savingFile: String
+    val exportFailed: String
+    val openFile: String
+    val linkFailed: String
+    val exportNoHandwriting: String
+    val exportNoPhotos: String
+    val exportHandwrittenOnly: String
+    val exportTextOnly: String
+    val hue: String
+    val presetColours: String
+    val recentColours: String
+    val done: String
+    val libraryFolderName: String
+    val noNotesFolderPicked: String
+    val sendLink: String
+    val sendFile: String
+    val shareWindowFailed: String
+    val shareWindowFailedFile: String
+    val noSystemPrinting: String
+    val printFailed: String
+    val printOpenFailed: String
+    val printGaveUp: String
+    val unknownError: String
+    val emptyNoteInExport: String
+    val mapNodes: String
+    val handwrittenInDocx: String
+    val pageWord: String
+    val noDescription: String
+    val handwrittenNoTextYet: String
+
+    // --- Konto w chmurze ---
+    val cloudAccount: String
+    val cloudAccountAbout: String
+    val waitingForApproval: String
+    val cancelWaiting: String
+    val opening: String
+    val signInWithGoogle: String
+    val signInWithGoogleAbout: String
+    val orAddressAndPassword: String
+    val emailAddress: String
+    val password: String
+    val signIn: String
+    val signingIn: String
+    val tokenFromBrowser: String
+    val tokenAbout: String
+    val tokenFromSite: String
+    val checking: String
+    val connect: String
+    val signedIn: String
+    val spaceLabel: String
+    val takenNoLimit: String
+    val syncSection: String
+    val syncAbout: String
+    val syncing: String
+    val syncNow: String
+    val signOut: String
+    val signOutAbout: String
+    val everythingSynced: String
+    val noInternet: String
+    val sessionExpired: String
+    val closeMessage: String
+    val closePanel: String
+    val deviceFallbackName: String
+    val giveEmailAndPassword: String
+    val serverUnreachable: String
+    val approveOnSite: String
+    val backFromBrowser: String
+    val checkingApproval: String
+    val pasteTokenFromSite: String
+    val sessionExpiredServer: String
+    val signedOutNotesStay: String
+    val syncFailedSafe: String
+    val alreadyInSync: String
+    val serverCopiesKept: String
+    val incompleteSignInAnswer: String
+    val approvalTimedOut: String
+    val notSignedIn: String
+    val serverGibberish: String
+    val offlineNoteQueued: String
+    val cannotReachServer: String
+    val serverTimedOut: String
+    val connectionDropped: String
+    val fileDownloadFailed: String
+    val serverRefused: String
+    val notOnServer: String
+    val noteChangedElsewhere: String
+    val outOfSpace: String
+    val serverTrouble: String
+    val noNotesDirToSend: String
+    val noNotesDirToSave: String
+    val runOnServerNeedsAccount: String
+    val runOnServerNeedsInternet: String
+    val codeWord: String
+
+    // --- Ustawienia i pliki na dysku ---
+    val cloudAccountOn: String
+    val cloudAccountOff: String
+    val notesFolder: String
+    val notesFolderAbout: String
+    val noFolderPicked: String
+    val changeFolder: String
+    val rebuildIndexAbout: String
+    val conflictCopyFailed: String
+    val retryStuckButton: String
+    val stuckAbout: String
+    val stylusAndFinger: String
+    val stylusAndFingerAbout: String
+    val fingerScrollsAbout: String
+    val fingerDrawsAbout: String
+    val penHaptics: String
+    val penHapticsAbout: String
+    val penHapticsOn: String
+    val penHapticsOff: String
+    val appearanceAbout: String
+    val newHandwrittenNote: String
+    val newHandwrittenNoteAbout: String
+    val autosaveSection: String
+    val autosaveAbout: String
+    val deviceStorage: String
+    val greetingWord: String
+    val photoAltText: String
+    val greetingVariable: String
+    val myPageTitle: String
+    val emptyNoteFile: String
+    val brokenContentFile: String
+    val newerKajet: String
+    val brokenInlineDrawing: String
+    val brokenFolderDescription: String
+    val noNotesFolderChosen: String
+    val binEmpty: String
+    val notInBinAnyMore: String
+    val binEntryNoDescription: String
+    val entryHasNoName: String
+    val cannotMoveIntoItself: String
+    val noParentFolder: String
+    val handwritingLabel: String
+
+    // --- Pierwsze uruchomienie ---
+    val firstRun: String
+    val whereToKeepNotes: String
+    val whereToKeepNotesAbout: String
+    val whereToKeepNotesWhy: String
+    val pickNotesFolder: String
+    val pickNotesFolderAbout: String
+
+    // --- Otwieranie i awarie ---
+    val starting: String
+    val startingSlow: String
+    val errorScreenTitle: String
+    val errorScreenAbout: String
+    val errorRestart: String
+    val errorCopyDetails: String
+    val errorSendDetails: String
+    val errorSendTitle: String
+    val errorNoDetails: String
+    val screenBrokeTitle: String
+    val screenBrokeAbout: String
+    val screenBrokeReload: String
+    val noteNotOpened: String
+    val noteNotOpenedAbout: String
+    val noteOpening: String
+    val noEditorYet: String
+    val noEditorYetAbout: String
+    val backToLibrary: String
+
+    // --- Praca w tle ---
+    val readingFolderFailed: String
+    val readingFavoritesFailed: String
+    val readingRecentFailed: String
+    val walkingLibrary: String
+    val actionFailed: String
+    val pythonOnTablet: String
+    val pythonStartFailed: String
+
+    // --- Informacje prawne i o aplikacji ---
+    val legalSection: String
+    val legalSectionAbout: String
+    val termsOfService: String
+    val privacyPolicy: String
+    val documentNoNetwork: String
+    val documentNoBrowser: String
+    val aboutSection: String
+    val aboutSectionAbout: String
+    val appVersionWord: String
+
+    // --- Nowa wersja aplikacji ---
+    val updateTitle: String
+    val updateToDownload: String
+    val updateInstall: String
+    val updateLater: String
+    val updateWhatChanged: String
+    val checkUpdates: String
+    val checkingUpdates: String
+    val upToDate: String
+    val updateCheckFailed: String
+}
+
+/*
+  Zdania z liczbą albo z nazwą w środku.
+
+  Nie da się ich trzymać jako gotowych napisów, bo szyk zdania w każdym języku
+  jest inny — a sklejanie kawałków w widoku daje zdania, których nikt nie
+  napisałby po angielsku. Stoją więc tu, przy słowniku, całe.
+*/
+
+fun Strings.searchFound(count: Int): String =
+    if (english) "$count found" else "Znalezione: $count"
+
+fun Strings.cannotRunLanguage(language: String): String = if (english) {
+    "Kajet cannot run $language. You can still write the file and save it."
+} else {
+    "Kajet nie umie uruchomić języka $language. Plik możesz nadal pisać i zapisywać."
+}
+
+/**
+ * Ile jest w folderze.
+ *
+ * Polska liczba mnoga ma trzy postacie i nie da się jej złożyć z „wpis" plus
+ * końcówka: 2-4 to „wpisy", ale 12-14 już „wpisów", za to 22-24 znowu „wpisy".
+ * Dlatego całe zdania, a nie sklejanie.
+ */
+fun Strings.folderSummary(count: Int): String = if (english) {
+    when (count) {
+        0 -> "Empty folder"
+        1 -> "1 item"
+        else -> "$count items"
+    }
+} else {
+    when {
+        count == 0 -> "Pusty folder"
+        count == 1 -> "1 wpis"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "$count wpisy"
+        else -> "$count wpisów"
+    }
+}
+
+fun Strings.starNote(name: String): String =
+    if (english) "Add $name to favourites" else "Dodaj $name do ulubionych"
+
+fun Strings.unstarNote(name: String): String =
+    if (english) "Remove $name from favourites" else "Usuń $name z ulubionych"
+
+fun Strings.actionsFor(name: String): String =
+    if (english) "Actions for $name" else "Działania dla $name"
+
+fun Strings.emptyTrashWarning(count: Int): String = if (english) {
+    "All $count notes in the bin will be gone for good. This cannot be undone."
+} else {
+    "Wszystkie notatki z kosza ($count) znikną na dobre. Tego nie da się cofnąć."
+}
+
+fun Strings.trashedAt(whenText: String, where: String): String = if (english) {
+    "Binned $whenText · was in: $where"
+} else {
+    "Wyrzucono $whenText · było w: $where"
+}
+
+/**
+ * Ile zostało wpisowi w koszu, który trafił tam za serwerem. „Dzień" tylko
+ * przy jedynce — po polsku każda inna liczba bierze „dni".
+ */
+fun Strings.disappearsIn(days: Int): String = when {
+    days <= 0 -> if (english) "Disappears today" else "Zniknie dziś"
+    days == 1 -> if (english) "Disappears tomorrow" else "Zniknie jutro"
+    english -> "Disappears in $days days"
+    else -> "Zniknie za $days dni"
+}
+
+fun Strings.deleteForeverOf(name: String): String =
+    if (english) "Delete $name for good" else "Usuń $name na dobre"
+
+/**
+ * Nazwa katalogu na dysku, gdy różni się od wpisanej. Dwukropka ani ukośnika
+ * nazwa pliku nie zniesie — lepiej powiedzieć to wprost, niż zostawić dwie
+ * różne nazwy bez wyjaśnienia.
+ */
+fun Strings.nameOnDiskAbout(nameOnDisk: String): String =
+    if (english) "On the disk: $nameOnDisk" else "Na dysku: $nameOnDisk"
+
+fun Strings.moveDialogTitle(name: String): String =
+    if (english) "Move: $name" else "Przenieś: $name"
+
+fun Strings.folderLookTitle(name: String): String =
+    if (english) "Folder look: $name" else "Wygląd folderu: $name"
+
+fun Strings.refreshingIndex(done: Int, total: Int): String = if (english) {
+    "Refreshing the note index, $done of $total"
+} else {
+    "Odświeżam spis notatek, $done z $total"
+}
+
+fun Strings.checkingProgress(done: Int, total: Int): String =
+    if (english) "Checking $done of $total" else "Sprawdzam $done z $total"
+
+fun Strings.savingFolder(name: String): String =
+    if (english) "Saving the folder $name" else "Zapisuję folder $name"
+
+fun Strings.savingNote(done: Int, total: Int): String =
+    if (english) "Saving note $done of $total" else "Zapisuję notatkę $done z $total"
+
+fun Strings.savedAt(hour: Int, minute: Int): String =
+    "%s %02d:%02d".format(saved, hour, minute)
+
+fun Strings.photoNotFound(file: String): String = if (english) {
+    "Kajet could not find $file. The photo may have been deleted from the note's folder."
+} else {
+    "Nie ma pliku $file. Zdjęcie mogło zostać skasowane z katalogu notatki."
+}
+
+fun Strings.selectedStrokes(count: Int): String = if (english) {
+    "$count strokes selected"
+} else {
+    val noun = when {
+        count == 1 -> "kreskę"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "kreski"
+        else -> "kresek"
+    }
+    "Zaznaczono $count $noun"
+}
+
+fun Strings.pagesCount(count: Int): String = if (english) {
+    "This note has $count pages."
+} else {
+    "Notatka ma $count ${pageNoun(count)}."
+}
+
+/** Sam licznik stron, na pasek edytora: „3 strony", „5 stron". */
+fun Strings.pagesShort(count: Int): String = if (english) {
+    "$count ${if (count == 1) "page" else "pages"}"
+} else if (count == 1) {
+    "1 strona"
+} else {
+    "$count ${pageNoun(count)}"
+}
+
+fun Strings.eraserSizeOf(size: Int): String =
+    if (english) "Eraser size $size" else "Wielkość gumki $size"
+
+fun Strings.strokeWidthOf(size: String): String =
+    if (english) "Width $size" else "Grubość $size"
+
+fun Strings.disconnectFrom(name: String): String =
+    if (english) "Disconnect from $name" else "Rozłącz z $name"
+
+fun Strings.thisNode(): String = if (english) "this node" else "tym węzłem"
+
+fun Strings.colourNamedHex(hex: String): String = "$colourNamed $hex"
+
+fun Strings.conflictsNoted(count: Int): String = if (english) {
+    "$count notes changed in two places at once. $serverCopiesKept"
+} else {
+    val noun = when {
+        count == 1 -> "notatka zmieniła się"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki zmieniły się"
+        else -> "notatek zmieniło się"
+    }
+    "$count $noun w dwóch miejscach naraz. $serverCopiesKept"
+}
+
+fun Strings.mapTally(nodes: Int, edges: Int): String = if (english) {
+    "$nodes nodes · $edges connections"
+} else {
+    val nodeWord = when {
+        nodes == 1 -> "węzeł"
+        nodes % 10 in 2..4 && nodes % 100 !in 12..14 -> "węzły"
+        else -> "węzłów"
+    }
+    val edgeWord = when {
+        edges == 1 -> "połączenie"
+        edges % 10 in 2..4 && edges % 100 !in 12..14 -> "połączenia"
+        else -> "połączeń"
+    }
+    "$nodes $nodeWord · $edges $edgeWord"
+}
+
+fun Strings.spaceUsedPercent(used: String, quota: String, percent: Int): String = if (english) {
+    "$used of $quota used ($percent %)"
+} else {
+    "Zajęte $used z $quota ($percent %)"
+}
+
+fun Strings.handwritingSummary(strokes: Int, pages: Int): String = when {
+    strokes == 0 -> emptyNote
+    english && pages == 1 -> "Handwriting, $strokes ${if (strokes == 1) "stroke" else "strokes"}"
+    english -> "Handwriting, $pages pages"
+    pages == 1 -> "$handwritingLabel, $strokes ${strokeNoun(strokes)}"
+    else -> "$handwritingLabel, $pages ${pageNoun(pages)}"
+}
+
+/** „1 kreska", „2 kreski", „5 kresek" — trzy postacie polskiej liczby mnogiej. */
+private fun strokeNoun(count: Int): String = when {
+    count == 1 -> "kreska"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "kreski"
+    else -> "kresek"
+}
+
+/** To samo dla stron: „2 strony", ale „5 stron". */
+private fun pageNoun(count: Int): String = when {
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "strony"
+    else -> "stron"
+}
+
+/** Ile węzłów ma mapa myśli. */
+fun Strings.nodesCount(count: Int): String = if (english) {
+    "$count ${if (count == 1) "node" else "nodes"}"
+} else {
+    val noun = when {
+        count == 1 -> "węzeł"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "węzły"
+        else -> "węzłów"
+    }
+    "$count $noun"
+}
+
+fun Strings.cannotOpenFile(name: String?): String =
+    if (english) "Kajet cannot open $name." else "Nie można otworzyć pliku $name."
+
+fun Strings.cannotSaveFile(name: String?): String =
+    if (english) "Kajet cannot save $name." else "Nie można zapisać pliku $name."
+
+fun Strings.cannotCreateFile(name: String, folder: String?): String = if (english) {
+    "Kajet cannot create $name in the folder $folder."
+} else {
+    "Nie można utworzyć pliku $name w katalogu $folder."
+}
+
+fun Strings.diskRenamedFile(saved: String?, wanted: String): String = if (english) {
+    "The disk saved the file as $saved instead of $wanted. Pick another folder for your notes."
+} else {
+    "Dysk zapisał plik pod nazwą $saved zamiast $wanted. Wybierz inny katalog na notatki."
+}
+
+fun Strings.cannotCreateFolder(name: String?): String =
+    if (english) "Kajet cannot create the folder $name." else "Nie można utworzyć katalogu $name."
+
+fun Strings.cannotReadFile(name: String?): String =
+    if (english) "Kajet cannot read $name." else "Nie można odczytać pliku $name."
+
+fun Strings.fileVanishedWhileCopying(name: String?): String = if (english) {
+    "$name disappeared while it was being copied."
+} else {
+    "Plik $name zniknął w trakcie kopiowania."
+}
+
+fun Strings.folderGone(path: String): String = if (english) {
+    "The folder $path is gone. Someone may have moved it outside Kajet."
+} else {
+    "Nie ma już folderu $path. Ktoś mógł go przenieść poza aplikacją."
+}
+
+fun Strings.folderCreateFailed(name: String): String = if (english) {
+    "The folder $name could not be created. Check that there is space on the disk."
+} else {
+    "Nie udało się utworzyć folderu $name. Sprawdź, czy jest miejsce na dysku."
+}
+
+fun Strings.noteGone(path: String): String =
+    if (english) "The note $path is gone." else "Nie ma już notatki $path."
+
+fun Strings.noteGoneUnsaved(path: String): String = if (english) {
+    "The note $path is gone. Your changes were not saved."
+} else {
+    "Nie ma już notatki $path. Zmiany nie zostały zapisane."
+}
+
+fun Strings.noteUnreadable(name: String?): String = if (english) {
+    "The note $name cannot be read. Its content.json is damaged."
+} else {
+    "Nie da się odczytać notatki $name. Plik content.json jest uszkodzony."
+}
+
+fun Strings.fileGone(path: String): String =
+    if (english) "The file $path is gone." else "Nie ma już pliku $path."
+
+fun Strings.fileGoneUnsaved(path: String): String = if (english) {
+    "The file $path is gone. Your changes were not saved."
+} else {
+    "Nie ma już pliku $path. Zmiany nie zostały zapisane."
+}
+
+fun Strings.entryGone(path: String): String =
+    if (english) "The entry $path is gone." else "Nie ma już wpisu $path."
+
+fun Strings.renameFailed(name: String): String =
+    if (english) "Renaming to $name did not work." else "Nie udało się zmienić nazwy na $name."
+
+fun Strings.fileGoneFromBin(name: String): String = if (english) {
+    "The file $name is no longer in the bin."
+} else {
+    "W koszu nie ma już pliku $name."
+}
+
+fun Strings.pythonInternalError(message: String?): String = if (english) {
+    "Python broke internally: $message"
+} else {
+    "Wewnętrzny błąd Pythona: $message"
+}
+
+fun Strings.spaceUsed(used: String, quota: String): String =
+    if (english) "$used of $quota" else "$used z $quota"
+
+fun Strings.spaceUsedNoLimit(used: String): String = "$used $takenNoLimit"
+
+fun Strings.notesStuck(count: Int): String = if (english) {
+    if (count == 1) "1 note could not be uploaded." else "$count notes could not be uploaded."
+} else {
+    val noun = when {
+        count == 1 -> "notatki nie udało się"
+        else -> "notatek nie udało się"
+    }
+    "$count $noun wysłać."
+}
+
+fun Strings.notesWaiting(count: Int): String = if (english) {
+    "$count notes waiting to upload"
+} else {
+    val noun = when {
+        count == 1 -> "notatka czeka"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają"
+        else -> "notatek czeka"
+    }
+    "$count $noun na wysłanie"
+}
+
+fun Strings.offlineWaiting(count: Int): String = if (english) {
+    "No internet. $count notes are waiting and will upload when the network is back."
+} else {
+    val noun = when {
+        count == 1 -> "notatka czeka i pójdzie"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i pójdą"
+        else -> "notatek czeka i pójdzie"
+    }
+    "Brak internetu. $count $noun, gdy sieć wróci."
+}
+
+fun Strings.signedInAs(login: String): String =
+    if (english) "Signed in as $login." else "Zalogowano jako $login."
+
+fun Strings.syncSummary(sent: Int, fetched: Int): String = buildString {
+    if (english) {
+        if (sent > 0) append("$sent sent. ")
+        if (fetched > 0) append("$fetched fetched. ")
+    } else {
+        if (sent > 0) append("Wysłano $sent. ")
+        if (fetched > 0) append("Pobrano $fetched. ")
+    }
+}
+
+fun Strings.serverError(status: Int): String =
+    if (english) "The server answered with error $status." else "Serwer odpowiedział błędem $status."
+
+fun Strings.noteSaveOnDeviceFailed(title: String): String = if (english) {
+    "The note \u201c$title\u201d would not save on this device."
+} else {
+    "Nie udało się zapisać notatki \u201e$title\u201d na urządzeniu."
+}
+
+fun Strings.codeNoteUnknownShape(title: String): String = if (english) {
+    "The code note \u201c$title\u201d is saved in a way Kajet does not know."
+} else {
+    "Notatka z kodem \u201e$title\u201d ma nieznany format."
+}
+
+fun Strings.nothingOpensFile(name: String): String = if (english) {
+    "No app on this device can open $name. Use \u201cSend\u201d and pick a program yourself."
+} else {
+    "Żadna aplikacja na tym urządzeniu nie umie otworzyć pliku $name. " +
+        "Użyj \u201eWyślij\u201d i wybierz program samodzielnie."
+}
+
+fun Strings.minutesAgo(minutes: Long): String =
+    if (english) "$minutes min ago" else "$minutes min temu"
+
+fun Strings.hoursAgo(hours: Long): String =
+    if (english) "$hours h ago" else "$hours godz. temu"
+
+/** Co stoi na urządzeniu — pod wyróżnionym numerem wersji do pobrania. */
+fun Strings.updateOnThisDevice(installedVersion: String): String = if (english) {
+    "This device has $installedVersion."
+} else {
+    "Na tym urządzeniu jest $installedVersion."
+}
+
+/**
+ * Wiersz o pliku pod numerem wersji: system, wielkość i data wystawienia.
+ * Puste człony wypadają, bo starszy serwer nie podaje daty.
+ */
+fun Strings.releaseFacts(size: String, date: String): String =
+    listOf("Android", size, date).filter { it.isNotBlank() }.joinToString(" · ")
+
+/** Odpowiedź na ręczne sprawdzenie w ustawieniach, gdy nowsza wersja jednak jest. */
+fun Strings.newVersionFound(version: String): String = if (english) {
+    "A newer version is available: $version."
+} else {
+    "Jest nowsza wersja: $version."
+}
+
+object PolishStrings : Strings {
+    override val english = false
+    override val appName = "Kajet"
+    override val save = "Zapisz"
+    override val cancel = "Anuluj"
+    override val close = "Zamknij"
+    override val back = "Wróć"
+    override val delete = "Skasuj"
+    override val rename = "Zmień nazwę"
+    override val copy = "Kopiuj"
+    override val move = "Przenieś"
+    override val create = "Utwórz"
+    override val open = "Otwórz"
+    override val send = "Wyślij"
+    override val print = "Drukuj"
+    override val settings = "Ustawienia"
+    override val account = "Konto"
+    override val search = "Szukaj"
+    override val understood = "Rozumiem"
+    override val untitled = "Bez tytułu"
+    override val unnamed = "Bez nazwy"
+
+    override val sectionLibrary = "Biblioteka"
+    override val folders = "Foldery"
+    override val sectionFavorites = "Ulubione"
+    override val sectionRecent = "Ostatnio otwarte"
+    override val sectionSearch = "Szukaj"
+    override val sectionTrash = "Kosz"
+    override val newFolder = "Nowy folder"
+    override val newNote = "Nowa notatka"
+    override val newCodeFile = "Nowy plik z kodem"
+    override val folderName = "Nazwa folderu"
+    override val folderColour = "Barwa folderu"
+    override val folderIcon = "Ikona folderu"
+    override val emptyFolder = "Tu jeszcze nic nie ma"
+    override val emptyFolderHint = "Zacznij od nowej notatki albo folderu."
+    override val emptyTrash = "Opróżnij kosz"
+    override val restore = "Przywróć"
+    override val deleteForever = "Skasuj na stałe"
+    override val moveToTrash = "Wyrzuć do kosza"
+    override val addToFavorites = "Dodaj do ulubionych"
+    override val removeFromFavorites = "Usuń z ulubionych"
+    override val rebuildIndex = "Odbuduj spis notatek"
+
+    override val noteText = "Tekstowa"
+    override val noteHandwritten = "Odręczna"
+    override val noteMindMap = "Mapa myśli"
+    override val writeHere = "Zacznij pisać. Formatowanie widać od razu w treści."
+    override val saved = "Zapisane"
+    override val saving = "Zapisuję…"
+    override val loading = "Wczytuję"
+    override val changesWaiting = "Zmiany czekają"
+    override val saveFailed = "Zapis się nie udał"
+    override val noteInCloud = "Notatka jest w chmurze"
+    override val noteWaitingForCloud = "Notatka czeka na wysłanie do chmury"
+    override val noteOpenFailed = "Nie udało się otworzyć notatki."
+    override val noteSaveFailed = "Nie udało się zapisać notatki."
+    override val noteDeletedElsewhere = "Usunięta na innym urządzeniu"
+    override val noteDeletedElsewhereAbout = "Ta notatka została usunięta na innym urządzeniu. " +
+        "Twoja wersja jest wciąż tutaj — możesz zapisać ją jako nową notatkę " +
+        "albo odrzucić zmiany."
+    override val fileDeletedElsewhereAbout = "Ten plik został usunięty na innym urządzeniu. " +
+        "Twoja wersja jest wciąż tutaj — możesz zapisać ją jako nowy plik " +
+        "albo odrzucić zmiany."
+    override val saveAsNewNote = "Zapisz jako nową"
+    override val saveAsNewFile = "Zapisz jako nowy plik"
+    override val discardChanges = "Odrzuć zmiany"
+    override val saveAsNewFailed = "Nie udało się zapisać nowej kopii. Treść zostaje na ekranie — " +
+        "spróbuj jeszcze raz."
+    override val placeholderWord = "tekst"
+    override val savingPhoto = "Zapisuję zdjęcie…"
+    override val savingDrawing = "Zapisuję rysunek…"
+    override val photoSaveFailed = "Nie udało się zapisać zdjęcia w notatce."
+    override val drawingSaveFailed = "Nie udało się zapisać rysunku w notatce."
+    override val exportTitle = "Zapisz notatkę do pliku"
+    override val exportFormat = "Format"
+    override val exportSave = "Zapisz plik"
+    override val shareLink = "Udostępnij odnośnikiem"
+    override val shareLinkBusy = "Robię odnośnik…"
+
+    override val penInk = "Atrament"
+    override val penBlack = "Czarny"
+    override val penGrey = "Szary"
+    override val penBlue = "Niebieski"
+    override val penRed = "Czerwony"
+    override val penGreen = "Zielony"
+    override val penBrown = "Brązowy"
+    override val penYellow = "Żółty"
+    override val penPink = "Różowy"
+    override val pickOwnColour = "Dobierz własny kolor"
+    override val strokeWidth = "Grubość kreski"
+    override val colourNamed = "Kolor"
+    override val drawingInNote = "Rysunek w notatce"
+    override val closeWithoutSaving = "Zamknij bez zapisywania"
+    override val insertDrawing = "Wstaw rysunek"
+    override val clearDrawing = "Wyczyść"
+    override val drawWithFingerOrStylus = "Rysuj palcem albo rysikiem"
+    override val yourColours = "Twoje kolory"
+    override val thickness = "Grubość"
+    override val opacity = "Krycie"
+
+    override val settingsLanguage = "Język"
+    override val settingsLanguageAbout = "Kajet mówi w języku systemu: po polsku, gdy system " +
+        "jest po polsku, i po angielsku w pozostałych przypadkach. Poniżej możesz to zmienić."
+    override val languageSystem = "Taki jak w systemie"
+    override val languagePolish = "Polski"
+    // Nazwy języków stoją zawsze w swoim języku: kto szuka polskiego, widzi
+    // „Polski", kto angielskiego — „English", niezależnie od bieżącej mowy.
+    override val languageEnglish = "English"
+    override val settingsToolbarSide = "Pasek narzędzi"
+    override val settingsToolbarSideAbout = "Po której stronie ekranu stoi pasek z narzędziami " +
+        "w edytorach. Leworęczni zwykle wolą prawą — dłoń nie zasłania wtedy przycisków " +
+        "i nic nie klika się samo."
+    override val toolbarLeft = "Po lewej"
+    override val toolbarRight = "Po prawej"
+    override val settingsAppearance = "Wygląd"
+    override val themeSystem = "Taki jak w systemie"
+    override val themeLight = "Jasny"
+    override val themeDark = "Ciemny"
+    override val settingsCode = "Pisanie kodu"
+    override val settingsCodeAbout = "Edytor kodu może domykać za Ciebie nawiasy, cudzysłowy " +
+        "i znaczniki HTML. Podpowiada, ale nie pisze za Ciebie: żadnych gotowych " +
+        "pętli ani szkieletów."
+    override val codeAssistOn = "Domykaj nawiasy i znaczniki"
+    override val codeAssistOnAbout = "Po wpisaniu „(” dostajesz „()” z kursorem w środku, " +
+        "a po „<p>” dopisuje się „</p>”. Enter przepisuje wcięcie."
+    override val codeAssistOff = "Bez podpowiedzi"
+    override val codeAssistOffAbout = "Edytor wpisuje dokładnie to, co naciśniesz."
+
+    override val libRebuilding = "Odbudowuję spis notatek…"
+    override val libFavoritesAbout = "Notatki oznaczone gwiazdką w edytorze."
+    override val libFavoritesEmpty = "Nie masz jeszcze ulubionych notatek. Otwórz notatkę i naciśnij " +
+        "gwiazdkę na pasku u góry."
+    override val libRecentAbout = "Dwadzieścia ostatnio otwieranych notatek."
+    override val libRecentEmpty = "Tu pojawią się notatki, które otworzysz."
+    override val libSearchInNotes = "Szukaj w notatkach"
+    override val libAllNotes = "Wszystkie notatki"
+    override val libFolderUp = "Folder wyżej"
+    override val libFolderEmpty = "Ten folder jest pusty"
+    override val libFolderEmptyHint = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze " +
+        "się w katalogu wybranym na tym urządzeniu."
+    override val libNothingHere = "Pusto"
+    override val libSearchAbout = "Szukam w tytułach i w treści. Pismo odręczne znajdę wtedy, kiedy " +
+        "zamienisz je na tekst."
+    override val libSearchPrompt = "Wpisz, czego szukasz"
+    override val libSearchPromptAbout = "Wystarczą dwie litery. Szukanie działa bez internetu, bo spis notatek " +
+        "leży na urządzeniu."
+    override val libSearchNothing = "Nic tu nie ma"
+    override val libExpand = "Rozwiń"
+    override val libCollapse = "Zwiń"
+    override val libKindFolder = "Folder"
+    override val libKindCode = "Plik z kodem"
+    override val emptyNote = "Pusta notatka"
+    override val emptyPage = "Pusta strona"
+    override val noDate = "Bez daty"
+    override val justNow = "Przed chwilą"
+    override val inFavorites = "W ulubionych"
+    override val libSearchNothingAbout = "Sprawdź pisownię albo odbuduj spis notatek w ustawieniach, " +
+        "jeśli notatki trafiły tu spoza Kajetu."
+    override val emptyTrashQuestion = "Opróżnić kosz?"
+    override val trashAbout = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, " +
+        "dopóki nie opróżnisz kosza."
+    override val trashEmptyTitle = "Kosz jest pusty"
+    override val trashEmptyAbout = "Wyrzucone notatki znajdziesz tutaj i przywrócisz je dokładnie " +
+        "tam, skąd zniknęły."
+    override val menuMoveToFolder = "Przenieś do innego folderu"
+    override val menuCopy = "Zrób kopię"
+    override val copySuffix = "(kopia)"
+    override val deleteForeverQuestion = "Skasować na dobre?"
+    override val deleteForeverWarning = "Tego się nie cofnie. Wpis zniknie z kosza, z dysku i z konta w chmurze."
+    override val menuLook = "Zmień kolor i ikonę"
+    override val exportFolderPdf = "Zapisz cały folder jako PDF"
+    override val exportFolderMarkdown = "Zapisz cały folder jako Markdown"
+    override val movePrompt = "Wybierz folder, do którego ma trafić ten wpis."
+    override val codeShort = "Kod"
+    override val codeWithPreview = "z podglądem strony"
+    override val codeWorksOffline = "działa bez internetu"
+    override val codeNeedsInternet = "uruchamiany przez internet"
+
+    override val colour = "Kolor"
+    override val icon = "Ikona"
+    override val createFolder = "Utwórz folder"
+    override val createNote = "Utwórz notatkę"
+    override val createFile = "Utwórz plik"
+    override val titleLabel = "Tytuł"
+    override val newName = "Nowa nazwa"
+    override val fileName = "Nazwa pliku"
+    override val defaultFileName = "program"
+    override val noteKindLabel = "Rodzaj"
+    override val kindHandwrittenAbout = "Piszesz rysikiem, możesz też wstawić pole z tekstem."
+    override val kindTextAbout = "Piszesz z klawiatury, możesz wstawić zdjęcie i mały rysunek."
+    override val kindMindMapAbout = "Węzły połączone liniami, podpisy z klawiatury albo rysikiem."
+    override val pageLabel = "Strona"
+    override val pageA4About = "Tak jak w zeszycie. Wydruk wychodzi bez przycinania."
+    override val pageScrollAbout = "Strona rośnie w dół, kiedy piszesz przy dolnej krawędzi."
+    override val pageBackgroundLabel = "Tło strony"
+    override val langHtmlAbout = "Strona WWW. Obejrzysz ją w podglądzie, bez internetu."
+    override val langNeedsAccountAbout = "Uruchamia się na serwerze, potrzebne konto i internet."
+
+    override val codeOutput = "Wynik"
+    override val codeErrors = "Błędy"
+    override val codeInput = "Wejście"
+    override val codeRun = "Uruchom program"
+    override val codeStop = "Zatrzymaj"
+    override val codePagePreview = "Podgląd strony"
+    override val codeSearchInFile = "Szukaj w pliku"
+    override val codeWordWrap = "Zawijanie wierszy"
+    override val codeTypeTwoLetters = "Wpisz co najmniej dwie litery"
+    override val codeUnsaved = "Zmiany czekają"
+    override val codeHtmlHint = "HTML. Stronę obejrzysz pod ikoną globusa po lewej."
+    override val codeWontRunHere = "Tego języka Kajet nie uruchomi."
+    override val codeRunsOnTablet = "Uruchamia się na tablecie, bez internetu."
+    override val codeRunsOnServer = "Uruchamia się na serwerze, potrzebny internet."
+    override val codeWorkingOnTablet = "Uruchamiam na tablecie…"
+    override val codeSendingToServer = "Wysyłam na serwer…"
+    override val codeFromServer = "Serwer"
+    override val codeFromTablet = "Tablet"
+    override val codeExitCode = "kod wyjścia"
+    override val codeOutputEmpty = "Naciśnij przycisk uruchomienia po lewej stronie. Tu pojawi się to, " +
+        "co program wypisze."
+    override val codeNoErrors = "Nie ma błędów."
+    override val codeInputLabel = "Dane, które program przeczyta"
+    override val codeOpenFailed = "Nie udało się otworzyć pliku."
+    override val codeSaveFailed = "Nie udało się zapisać pliku."
+    override val codeRunFailed = "Uruchomienie się nie udało."
+
+    override val insertPhotoFromGallery = "Wstaw zdjęcie z galerii"
+    override val takePhoto = "Zrób zdjęcie"
+    override val exportNote = "Eksportuj notatkę"
+    override val rawMarkdownAbout = "Surowy zapis notatki. Wróć do widoku treści, żeby zobaczyć formatowanie."
+    override val fontFamily = "Krój pisma"
+    override val fontSize = "Wielkość pisma"
+    override val fontSizeWholeNote = "Wielkość pisma całej notatki"
+    override val wholeNoteLook = "Wygląd całej notatki"
+    override val defaultSize = "Domyślna"
+    override val defaultColour = "Domyślna barwa"
+    override val tableAddRow = "Dodaj wiersz"
+    override val tableAddColumn = "Dodaj kolumnę"
+    override val tableRemoveRow = "Usuń wiersz z kursorem"
+    override val tableRemoveColumn = "Usuń kolumnę z kursorem"
+    override val tableRemove = "Usuń tabelkę"
+    override fun tableSize(rows: Int, columns: Int) = "Tabelka $rows na $columns"
+    override val smallerText = "Mniejsze pismo"
+    override val largerText = "Większe pismo"
+    override val colourWholeNote = "Kolor pisma całej notatki"
+    override val colourSelection = "Kolor zaznaczonego fragmentu"
+    override val highlightSelection = "Wyróżnij zaznaczony fragment"
+    override val bold = "Pogrubienie"
+    override val italic = "Kursywa"
+    override val underline = "Podkreślenie"
+    override val strike = "Przekreślenie"
+    override val heading1 = "Nagłówek największy"
+    override val heading2 = "Nagłówek średni"
+    override val heading3 = "Nagłówek mały"
+    override val bulletList = "Lista"
+    override val numberedList = "Lista numerowana"
+    override val taskList = "Lista zadań, na przykład lista zakupów"
+    override val quote = "Cytat"
+    override val inlineCode = "Kod w tekście"
+    override val codeBlock = "Blok kodu"
+    override val table = "Tabela"
+    override val formula = "Wzór matematyczny"
+    override val link = "Odnośnik"
+    override val dividerLine = "Linia oddzielająca"
+    override val showRawMarkdown = "Pokaż surowy zapis Markdown"
+    override val backToContentView = "Wróć do widoku treści"
+    override val colourWholeNoteTitle = "Kolor pisma w całej notatce"
+    override val colourSelectionTitle = "Kolor zaznaczonego fragmentu"
+    override val tableColumn = "Kolumna"
+    override val untickTask = "Zaznacz zadanie jako niezrobione"
+    override val tickTask = "Zaznacz zadanie jako zrobione"
+    override val photoInNote = "Zdjęcie w notatce"
+    override val noCaption = "Bez podpisu"
+    override val photoSize = "Wielkość zdjęcia"
+    override val photoCaption = "Podpis zdjęcia"
+    override val photoUp = "Przesuń zdjęcie wyżej"
+    override val photoDown = "Przesuń zdjęcie niżej"
+    override val photoRemove = "Usuń zdjęcie z notatki"
+    override val photoCaptionAbout = "Podpis czyta czytnik ekranu i trafia do wydruku."
+
+    override val penSettings = "Ustawienia pisaka"
+    override val insertTextBox = "Wstaw pole tekstowe"
+    override val fingerDrawsSwitch = "Palec rysuje. Dotknij, żeby palcem przewijać stronę"
+    override val fingerScrollsSwitch = "Palec przewija stronę. Dotknij, żeby palcem rysować"
+    override val noteSettingsIcon = "Ustawienia notatki: tło, strony, palec"
+    override val undo = "Cofnij"
+    override val redo = "Ponów"
+    override val eraser = "Gumka"
+    override val morePenSettings = "Więcej ustawień pisaka"
+    override val deselect = "Odznacz"
+    override val penTool = "Pisak"
+    override val highlighterTool = "Zakreślacz"
+    override val shapeKindLabel = "Jaki kształt"
+    override val shapeOutlineColourTitle = "Kolor obrysu"
+    override val shapeFillLabel = "Wypełnienie"
+    override val shapeNoFill = "Bez wypełnienia"
+    override val shapeFillColourTitle = "Kolor wypełnienia"
+    override val shapeSquareLock = "Proporcje 1:1"
+    override val shapeSquareAbout =
+        "Przy włączonej blokadzie wychodzi koło i kwadrat, a linia trzyma się kąta co 45 stopni. " +
+            "To samo daje Shift albo drugi palec na ekranie w trakcie rysowania."
+    override val shapeRotate = "Obróć kształt"
+    override val shapeResize = "Zmień rozmiar kształtu"
+    override val shapeRemove = "Usuń kształt"
+    override val eraserSize = "Wielkość gumki"
+    override val widthLabel = "Szerokość"
+    override val highlighterColourTitle = "Kolor zakreślacza"
+    override val whatYouWriteWith = "Czym piszesz"
+    override val inkColourTitle = "Kolor atramentu"
+    override val penAboutPen = "Kreska grubieje tam, gdzie mocniej naciskasz rysikiem."
+    override val penAboutFineliner = "Równa kreska o stałej szerokości."
+    override val penAboutPencil = "Kreska z ziarnem, jak ołówek na papierze."
+    override val penAboutDashed = "Linia przerywana, do podziałów i szkiców."
+    override val textColourTitle = "Kolor pisma"
+    override val addBoxBackground = "Dodaj tło pola"
+    override val changeBoxBackground = "Zmień tło pola"
+    override val boxBackgroundTitle = "Tło pola tekstowego"
+    override val yourColour = "Twój kolor"
+    override val noteSettings = "Ustawienia notatki"
+    override val pageKind = "Rodzaj strony"
+    override val pageA4Long = "Osobne kartki A4. Tak samo wyjdzie na drukarce."
+    override val pageScrollLong = "Jedna strona, która rośnie w dół, kiedy dopiszesz przy dolnej krawędzi."
+    override val pagesLabel = "Strony"
+    override val onePage = "Notatka ma jedną stronę."
+    override val addPage = "Dodaj"
+    override val removeLastPage = "Usuń ostatnią"
+    override val fingerLabel = "Palec"
+    override val palmRejectionAbout = "Kiedy rysik dotyka ekranu, dłoń nie rysuje. Dzieje się tak " +
+        "niezależnie od ustawienia obok."
+    override val fitWidth = "Dopasuj szerokość"
+    override val textBox = "Pole tekstowe"
+    override val moveTextBox = "Przesuń pole tekstowe"
+    override val deleteTextBox = "Usuń pole tekstowe"
+    override val resizeTextBox = "Zmień wielkość pola"
+
+    override val newNode = "Nowy węzeł"
+    override val addBranch = "Dodaj gałąź do wybranego węzła"
+    override val addSibling = "Dodaj węzeł obok wybranego"
+    override val finishConnecting = "Skończ łączenie"
+    override val connectToOthers = "Połącz ten węzeł z innymi"
+    override val inkLabel = "Podpis rysikiem"
+    override val arrangeBranches = "Rozłóż gałęzie automatycznie"
+    override val fitWholeMap = "Zmieść całą mapę w oknie"
+    override val exportMap = "Eksportuj mapę"
+    override val releaseToConnect = "Puść, żeby połączyć."
+    override val releaseOnEmpty = "Puść na pustym miejscu, żeby dołożyć tam nowy węzeł."
+    override val tapNodesToConnect = "Dotykaj kolejnych węzłów, żeby połączyć je z wybranym. " +
+        "Skończysz tym samym przyciskiem."
+    override val nodeWithoutName = "węzeł bez nazwy"
+    override val disconnect = "Rozłącz"
+    override val keepConnection = "Zostaw połączenie"
+    override val zoomOut = "Oddal"
+    override val zoomIn = "Przybliż"
+    override val emptyMap = "Pusta mapa"
+    override val emptyMapAbout = "Dodaj pierwszy węzeł przyciskiem po lewej stronie albo dotknij planszę " +
+        "dwa razy, a potem doczepiaj gałęzie."
+    override val tapTwiceToType = "Dotknij dwa razy, aby wpisać"
+    override val dragToConnect = "Pociągnij, żeby połączyć z innym węzłem"
+    override val dragToResize = "Pociągnij, żeby zmienić rozmiar węzła"
+    override val expandBranch = "Rozwiń gałąź"
+    override val collapseBranch = "Zwiń gałąź"
+    override val selectedNode = "Wybrany węzeł"
+    override val hideSettings = "Schowaj ustawienia"
+    override val showMoreSettings = "Pokaż więcej ustawień"
+    override val nodeText = "Tekst węzła"
+    override val typeNodeText = "Wpisz treść węzła"
+    override val textLabel = "Pismo"
+    override val nodeColour = "Kolor węzła"
+    override val connections = "Połączenia"
+    override val connectionsAbout = "Możesz też dotknąć linii na planszy i rozłączyć ją tam."
+    override val nodeTextColour = "Kolor pisma"
+    override val colourFromTheme = "dobierany do motywu"
+    override val colourOwn = "własny"
+    override val shapeLabel = "Kształt"
+    override val nodeColourTitle = "Kolor węzła"
+    override val nodeTextColourTitle = "Kolor pisma w węźle"
+
+    override val fileReady = "Plik jest gotowy"
+    override val savingFile = "Zapisuję…"
+    override val exportFailed = "Zapis się nie udał. Spróbuj innego formatu."
+    override val openFile = "Otwórz"
+    override val linkFailed = "Nie udało się zrobić odnośnika."
+    override val exportNoHandwriting = "Pismo odręczne nie wejdzie do tego pliku."
+    override val exportNoPhotos = "Zdjęcia nie wejdą do tego pliku."
+    override val exportHandwrittenOnly = "Ten format zapisuje tylko notatki odręczne."
+    override val exportTextOnly = "Zapisze się tylko tekst, bez pisma."
+    override val hue = "Odcień"
+    override val presetColours = "Gotowe"
+    override val recentColours = "Ostatnio używane"
+    override val done = "Gotowe"
+    override val libraryFolderName = "Biblioteka"
+    override val noNotesFolderPicked = "Nie wybrano katalogu na notatki."
+    override val sendLink = "Wyślij odnośnik"
+    override val sendFile = "Wyślij"
+    override val shareWindowFailed = "Nie udało się otworzyć okna udostępniania. Odnośnik:"
+    override val shareWindowFailedFile = "Nie udało się otworzyć okna udostępniania. Plik leży w pamięci " +
+        "aplikacji."
+    override val noSystemPrinting = "To urządzenie nie udostępnia systemowego drukowania."
+    override val printFailed = "Nie udało się uruchomić drukowania:"
+    override val printOpenFailed = "Nie udało się otworzyć pliku do wydruku."
+    override val printGaveUp = "Wydruk się nie udał."
+    override val unknownError = "nieznany błąd"
+    override val emptyNoteInExport = "Ta notatka jest jeszcze pusta."
+    override val mapNodes = "Węzły mapy"
+    override val handwrittenInDocx = "Ta notatka jest pisana odręcznie. W pliku DOCX znajdziesz tylko " +
+        "pola tekstowe i pismo zamienione wcześniej na tekst. Do zapisania samego pisma " +
+        "użyj eksportu do pliku PDF."
+    override val pageWord = "Strona"
+    override val noDescription = "bez opisu"
+    override val handwrittenNoTextYet = "Ta notatka jest pisana odręcznie i nie ma w niej jeszcze tekstu. " +
+        "Zaznacz pismo narzędziem zaznaczania i wybierz zamianę na tekst, a potem wyeksportuj " +
+        "ponownie."
+
+    override val cloudAccount = "Konto w chmurze"
+    override val cloudAccountAbout = "Kajet działa bez konta. Notatki leżą wtedy tylko w katalogu " +
+        "wybranym na tym urządzeniu. Konto przydaje się, żeby otworzyć je na komputerze " +
+        "i odzyskać po zmianie telefonu albo tabletu."
+    override val waitingForApproval = "Czekam, aż zatwierdzisz logowanie na stronie. Możesz wrócić do " +
+        "aplikacji sam albo przyciskiem „Otwórz aplikację” po zatwierdzeniu."
+    override val cancelWaiting = "Anuluj oczekiwanie"
+    override val opening = "Otwieram…"
+    override val signInWithGoogle = "Zaloguj przez Google"
+    override val signInWithGoogleAbout = "Otworzy stronę logowania w aplikacji. Wybierzesz tam " +
+        "swoje konto Google."
+    override val orAddressAndPassword = "Albo adres i hasło"
+    override val emailAddress = "Adres e-mail"
+    override val password = "Hasło"
+    override val signIn = "Zaloguj się"
+    override val signingIn = "Loguję…"
+    override val tokenFromBrowser = "Token z przeglądarki"
+    override val tokenAbout = "Zamiast hasła możesz wkleić token urządzenia. Na stronie konta Kajetu " +
+        "wydaj token dla tego urządzenia i przepisz go tutaj. Przydaje się wtedy, gdy " +
+        "logowanie przez stronę nie zadziała."
+    override val tokenFromSite = "Token ze strony"
+    override val checking = "Sprawdzam…"
+    override val connect = "Połącz"
+    override val signedIn = "Zalogowany"
+    override val spaceLabel = "Miejsce"
+    override val takenNoLimit = "zajęte, bez limitu"
+    override val syncSection = "Synchronizacja"
+    override val syncAbout = "Notatki wysyłają się same po każdym zapisie. Kiedy nie ma internetu, " +
+        "czekają na urządzeniu i idą, gdy sieć wróci."
+    override val syncing = "Synchronizuję…"
+    override val syncNow = "Synchronizuj teraz"
+    override val signOut = "Wyloguj się"
+    override val signOutAbout = "Wylogowanie odcina chmurę, ale nie kasuje niczego z urządzenia. " +
+        "Notatki zostają w wybranym katalogu."
+    override val everythingSynced = "Wszystko synchronizowane"
+    override val noInternet = "Brak internetu"
+    override val sessionExpired = "Sesja wygasła. Zaloguj się jeszcze raz."
+    override val closeMessage = "Zamknij komunikat"
+    override val closePanel = "Zamknij panel"
+    override val deviceFallbackName = "Urządzenie"
+    override val giveEmailAndPassword = "Podaj adres e-mail i hasło."
+    override val serverUnreachable = "Nie udało się połączyć z serwerem."
+    override val approveOnSite = "Zaloguj się na stronie (Google albo hasło) i zatwierdź to urządzenie. " +
+        "Kajet czeka w tle."
+    override val backFromBrowser = "Powrót z przeglądarki. Sprawdzam zatwierdzenie…"
+    override val checkingApproval = "Sprawdzam zatwierdzenie logowania…"
+    override val pasteTokenFromSite = "Wklej token ze strony."
+    override val sessionExpiredServer = "Sesja wygasła po stronie serwera. Zaloguj się jeszcze raz."
+    override val signedOutNotesStay = "Wylogowano. Notatki zostały na urządzeniu."
+    override val syncFailedSafe = "Synchronizacja się nie udała. Notatki są bezpieczne na urządzeniu."
+    override val alreadyInSync = "Wszystko jest już zsynchronizowane."
+    override val serverCopiesKept = "Wersje z serwera zapisały się obok, żeby nic nie przepadło."
+    override val incompleteSignInAnswer = "Serwer oddał niepełną odpowiedź logowania."
+    override val approvalTimedOut = "Czas na zatwierdzenie minął. Spróbuj jeszcze raz."
+    override val notSignedIn = "Nie jesteś zalogowany."
+    override val serverGibberish = "Serwer przysłał odpowiedź, której Kajet nie rozumie. " +
+        "Spróbuj ponownie za chwilę."
+    override val offlineNoteQueued = "Nie ma połączenia z internetem. Notatka jest zapisana na urządzeniu " +
+        "i wyślemy ją, gdy sieć wróci."
+    override val cannotReachServer = "Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem."
+    override val serverTimedOut = "Serwer nie odpowiedział na czas. Spróbuję jeszcze raz później."
+    override val connectionDropped = "Połączenie z serwerem się urwało. Spróbuję jeszcze raz później."
+    override val fileDownloadFailed = "Nie udało się pobrać pliku. Spróbuję później."
+    override val serverRefused = "Serwer odmówił dostępu."
+    override val notOnServer = "Nie ma tego na serwerze."
+    override val noteChangedElsewhere = "Ta notatka zmieniła się także gdzie indziej."
+    override val outOfSpace = "Brakuje miejsca na koncie."
+    override val serverTrouble = "Serwer ma kłopot. Spróbuję jeszcze raz później."
+    override val noNotesDirToSend = "Nie widzę katalogu z notatkami, więc nie mam czego wysłać. " +
+        "Otwórz ustawienia i wskaż folder na urządzeniu."
+    override val noNotesDirToSave = "Nie wskazano katalogu na notatki, więc nie ma dokąd ich zapisać. " +
+        "Otwórz ustawienia i wybierz folder na urządzeniu."
+    override val runOnServerNeedsAccount = "Uruchamianie na serwerze wymaga konta. Zaloguj się " +
+        "w ustawieniach, w sekcji „Konto w chmurze”."
+    override val runOnServerNeedsInternet = "Nie ma internetu, a ten język liczy się na serwerze. " +
+        "Kod jest zapisany i uruchomisz go po połączeniu z siecią."
+    override val codeWord = "kod"
+
+    override val cloudAccountOn = "Notatki trafiają też na serwer i otworzysz je na komputerze."
+    override val cloudAccountOff = "Bez konta Kajet działa normalnie, a notatki leżą tylko na tym " +
+        "urządzeniu. Z kontem trafiają też na serwer i otworzysz je na komputerze."
+    override val notesFolder = "Katalog na notatki"
+    override val notesFolderAbout = "Tu leżą wszystkie Twoje pliki. Po zmianie katalogu Kajet przeczyta " +
+        "go od nowa."
+    override val noFolderPicked = "Jeszcze nie wybrano folderu."
+    override val changeFolder = "Zmień folder"
+    override val rebuildIndexAbout = "Odbuduj spis wtedy, gdy notatki trafiły tu z komputera albo " +
+        "gdy wyszukiwanie nie znajduje czegoś, co na pewno masz."
+    override val conflictCopyFailed = "Nie udało się zapisać kopii konfliktu. Spróbuję ponownie."
+    override val retryStuckButton = "Spróbuj ponownie"
+    override val stuckAbout = "Te notatki zostały na urządzeniu. Zajrzyj do nich albo spróbuj wysłać jeszcze raz."
+    override val stylusAndFinger = "Rysik i palec"
+    override val stylusAndFingerAbout = "Kiedy rysik dotyka ekranu, dłoń nie rysuje. Dzieje się tak " +
+        "niezależnie od ustawienia poniżej."
+    override val fingerScrollsAbout = "Palcem przesuwasz stronę, rysikiem piszesz. Tak jest najwygodniej."
+    override val fingerDrawsAbout = "Palcem też rysujesz. Przydaje się, kiedy nie masz przy sobie rysika."
+    override val penHaptics = "Drganie rysika"
+    override val penHapticsAbout = "Silniczek w rysiku Lenovo daje odgłos pisania. Kajet mówi mu, " +
+        "czym piszesz — piórem, ołówkiem czy gumką."
+    override val penHapticsOn = "Działa. Rysik drga przy pisaniu w notatkach odręcznych."
+    override val penHapticsOff = "Potrzebne jest jednorazowe pozwolenie, którego nie da się nadać " +
+        "z tabletu. Podłącz tablet do komputera z adb i uruchom:"
+    override val appearanceAbout = "Motyw jasny i ciemny są rysowane osobno, a nie odwracane kolorami."
+    override val newHandwrittenNote = "Nowa notatka odręczna"
+    override val newHandwrittenNoteAbout = "Te ustawienia podpowiadają się przy tworzeniu notatki. " +
+        "Zawsze możesz je zmienić."
+    override val autosaveSection = "Zapis automatyczny"
+    override val autosaveAbout = "Notatka zapisuje się sama po każdej zmianie. Nie ma przycisku zapisz " +
+        "i nie musisz o tym myśleć."
+    override val deviceStorage = "Pamięć urządzenia / "
+    override val greetingWord = "Cześć"
+    override val photoAltText = "zdjęcie"
+    override val greetingVariable = "powitanie"
+    override val myPageTitle = "Moja strona"
+    override val emptyNoteFile = "Plik notatki jest pusty. Otwórz kopię z kosza albo utwórz notatkę na nowo."
+    override val brokenContentFile = "Nie da się odczytać pliku content.json. Plik jest uszkodzony albo " +
+        "nie należy do Kajetu."
+    override val newerKajet = "Ta notatka pochodzi z nowszej wersji Kajetu. Zaktualizuj aplikację, żeby " +
+        "ją otworzyć."
+    override val brokenInlineDrawing = "Nie da się odczytać rysunku wstawionego w tekst."
+    override val brokenFolderDescription = "Nie da się odczytać opisu folderu."
+    override val noNotesFolderChosen = "Nie wybrano katalogu na notatki. Otwórz ustawienia i wskaż folder " +
+        "na urządzeniu."
+    override val binEmpty = "Kosz jest pusty."
+    override val notInBinAnyMore = "Tego wpisu nie ma już w koszu."
+    override val binEntryNoDescription = "Wpis w koszu nie ma opisu, więc nie wiadomo, gdzie go odłożyć."
+    override val entryHasNoName = "Wpis nie ma nazwy."
+    override val cannotMoveIntoItself = "Nie można przenieść folderu do jego własnego wnętrza."
+    override val noParentFolder = "Nie ma już folderu nadrzędnego."
+    override val handwritingLabel = "Pismo odręczne"
+
+    override val firstRun = "Pierwsze uruchomienie"
+    override val whereToKeepNotes = "Gdzie mam trzymać Twoje notatki?"
+    override val whereToKeepNotesAbout = "Wskaż folder na urządzeniu. Kajet będzie w nim zapisywał " +
+        "wszystko, co napiszesz. Każdy folder z aplikacji to zwykły katalog na dysku, " +
+        "a każda notatka to katalog z plikiem w środku."
+    override val whereToKeepNotesWhy = "Dzięki temu notatki zostaną na urządzeniu nawet wtedy, gdy " +
+        "odinstalujesz Kajet. Możesz je też skopiować na komputer albo otworzyć w innej " +
+        "aplikacji. Najlepszym miejscem jest folder Dokumenty."
+    override val pickNotesFolder = "Wskaż folder na notatki"
+    override val pickNotesFolderAbout = "Otworzy się okno systemu Android. Wybierz folder i naciśnij " +
+        "przycisk potwierdzenia. Możesz zmienić to później w ustawieniach."
+
+    override val starting = "Kajet się otwiera…"
+    override val startingSlow = "Trwa to dłużej niż zwykle. Notatki leżą bezpiecznie na " +
+        "urządzeniu. Jeśli nic się nie zmieni, zamknij Kajet i otwórz go jeszcze raz."
+    override val errorScreenTitle = "Aplikacja napotkała błąd"
+    override val errorScreenAbout = "Kajet zatrzymał się przez błąd opisany niżej. Notatki są " +
+        "zapisane na dysku i nic im nie grozi. Uruchom aplikację ponownie przyciskiem."
+    override val errorRestart = "Uruchom ponownie"
+    override val errorCopyDetails = "Skopiuj szczegóły"
+    override val errorSendDetails = "Wyślij log"
+    override val errorSendTitle = "Zgłoszenie błędu Kajetu"
+    override val errorNoDetails = "Brak zapisanych szczegółów błędu."
+    override val screenBrokeTitle = "Ten ekran się nie narysował"
+    override val screenBrokeAbout = "Kajet napotkał błąd przy składaniu ekranu. Reszta aplikacji " +
+        "działa, a notatki są zapisane na dysku. Spróbuj złożyć ekran jeszcze raz."
+    override val screenBrokeReload = "Przeładuj ekran"
+    override val noteNotOpened = "Notatka się nie otworzyła"
+    override val noteNotOpenedAbout = "Nie udało się otworzyć notatki. Sprawdź, czy plik nadal jest " +
+        "w folderze."
+    override val noteOpening = "Otwieram notatkę"
+    override val noEditorYet = "Ten rodzaj notatki nie ma jeszcze edytora"
+    override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Edytor do tego rodzaju " +
+        "notatek jeszcze powstaje."
+    override val backToLibrary = "Wróć do biblioteki"
+
+    override val readingFolderFailed = "Nie udało się odczytać folderu."
+    override val readingFavoritesFailed = "Nie udało się odczytać ulubionych."
+    override val readingRecentFailed = "Nie udało się odczytać ostatnio otwartych."
+    override val walkingLibrary = "Przeglądam bibliotekę…"
+    override val actionFailed = "Nie udało się wykonać tej czynności."
+    override val pythonOnTablet = "na tablecie"
+    override val pythonStartFailed = "Nie udało się uruchomić Pythona na tablecie. Zamknij aplikację " +
+        "i otwórz ją ponownie."
+
+    override val legalSection = "Informacje prawne"
+    override val legalSectionAbout = "Regulamin i polityka prywatności otwierają się na stronie " +
+        "Kajetu, w przeglądarce."
+    override val termsOfService = "Regulamin"
+    override val privacyPolicy = "Polityka prywatności"
+    override val documentNoNetwork = "Bez internetu nie otworzę tego dokumentu. Połącz się z siecią " +
+        "i spróbuj jeszcze raz."
+    override val documentNoBrowser = "Na tym urządzeniu nie ma przeglądarki, która otworzyłaby tę " +
+        "stronę."
+    override val aboutSection = "O aplikacji"
+    override val aboutSectionAbout = "Kajet — notatnik na pismo odręczne, tekst, mapy myśli i kod."
+    override val appVersionWord = "Wersja"
+
+    override val updateTitle = "Nowa wersja"
+    override val updateToDownload = "Do pobrania"
+    override val updateInstall = "Zainstaluj"
+    override val updateLater = "Później"
+    override val updateWhatChanged = "Co się zmieniło"
+    override val checkUpdates = "Sprawdź aktualizacje"
+    override val checkingUpdates = "Sprawdzanie…"
+    override val upToDate = "Zainstalowana wersja jest najnowsza."
+    override val updateCheckFailed = "Nie udało się zapytać serwera. Sprawdź połączenie " +
+        "z internetem i spróbuj jeszcze raz."
+}
+
+object EnglishStrings : Strings {
+    override val english = true
+    override val appName = "Kajet"
+    override val save = "Save"
+    override val cancel = "Cancel"
+    override val close = "Close"
+    override val back = "Back"
+    override val delete = "Delete"
+    override val rename = "Rename"
+    override val copy = "Copy"
+    override val move = "Move"
+    override val create = "Create"
+    override val open = "Open"
+    override val send = "Send"
+    override val print = "Print"
+    override val settings = "Settings"
+    override val account = "Account"
+    override val search = "Search"
+    override val understood = "Got it"
+    override val untitled = "Untitled"
+    override val unnamed = "Unnamed"
+
+    override val sectionLibrary = "Library"
+    override val folders = "Folders"
+    override val sectionFavorites = "Favourites"
+    override val sectionRecent = "Recently opened"
+    override val sectionSearch = "Search"
+    override val sectionTrash = "Bin"
+    override val newFolder = "New folder"
+    override val newNote = "New note"
+    override val newCodeFile = "New code file"
+    override val folderName = "Folder name"
+    override val folderColour = "Folder colour"
+    override val folderIcon = "Folder icon"
+    override val emptyFolder = "Nothing here yet"
+    override val emptyFolderHint = "Start with a new note or folder."
+    override val emptyTrash = "Empty the bin"
+    override val restore = "Restore"
+    override val deleteForever = "Delete for good"
+    override val moveToTrash = "Move to bin"
+    override val addToFavorites = "Add to favourites"
+    override val removeFromFavorites = "Remove from favourites"
+    override val rebuildIndex = "Rebuild the note index"
+
+    override val noteText = "Text"
+    override val noteHandwritten = "Handwritten"
+    override val noteMindMap = "Mind map"
+    override val writeHere = "Start writing. Formatting shows up straight away."
+    override val saved = "Saved"
+    override val saving = "Saving..."
+    override val loading = "Loading"
+    override val changesWaiting = "Changes waiting"
+    override val saveFailed = "Saving did not work"
+    override val noteInCloud = "The note is in the cloud"
+    override val noteWaitingForCloud = "The note is waiting to go to the cloud"
+    override val noteOpenFailed = "Kajet could not open the note."
+    override val noteSaveFailed = "Kajet could not save the note."
+    override val noteDeletedElsewhere = "Deleted on another device"
+    override val noteDeletedElsewhereAbout = "This note has been deleted on another device. " +
+        "Your version is still here — you can save it as a new note " +
+        "or discard the changes."
+    override val fileDeletedElsewhereAbout = "This file has been deleted on another device. " +
+        "Your version is still here — you can save it as a new file " +
+        "or discard the changes."
+    override val saveAsNewNote = "Save as a new note"
+    override val saveAsNewFile = "Save as a new file"
+    override val discardChanges = "Discard the changes"
+    override val saveAsNewFailed = "Kajet could not save the new copy. Your content stays on " +
+        "screen — try again."
+    override val placeholderWord = "text"
+    override val savingPhoto = "Saving the photo"
+    override val savingDrawing = "Saving the drawing"
+    override val photoSaveFailed = "The photo would not save into the note."
+    override val drawingSaveFailed = "The drawing would not save into the note."
+    override val exportTitle = "Save the note to a file"
+    override val exportFormat = "Format"
+    override val exportSave = "Save file"
+    override val shareLink = "Share a link"
+    override val shareLinkBusy = "Making a link..."
+
+    override val penInk = "Ink"
+    override val penBlack = "Black"
+    override val penGrey = "Grey"
+    override val penBlue = "Blue"
+    override val penRed = "Red"
+    override val penGreen = "Green"
+    override val penBrown = "Brown"
+    override val penYellow = "Yellow"
+    override val penPink = "Pink"
+    override val pickOwnColour = "Pick your own colour"
+    override val strokeWidth = "Stroke width"
+    override val colourNamed = "Colour"
+    override val drawingInNote = "Drawing in the note"
+    override val closeWithoutSaving = "Close without saving"
+    override val insertDrawing = "Insert the drawing"
+    override val clearDrawing = "Clear"
+    override val drawWithFingerOrStylus = "Draw with a finger or a stylus"
+    override val yourColours = "Your colours"
+    override val thickness = "Thickness"
+    override val opacity = "Opacity"
+
+    override val settingsLanguage = "Language"
+    override val settingsLanguageAbout = "Without a choice of your own, Kajet speaks the language " +
+        "your system is set to: Polish when the system is Polish, English otherwise."
+    override val languageSystem = "Same as the system"
+    // Language names always speak their own language — see the Polish strings.
+    override val languagePolish = "Polski"
+    override val languageEnglish = "English"
+    override val settingsToolbarSide = "Toolbar"
+    override val settingsToolbarSideAbout = "Which side of the screen the editor toolbar " +
+        "sits on. Left-handed people usually prefer the right — the hand no longer covers " +
+        "the buttons or taps them by accident."
+    override val toolbarLeft = "On the left"
+    override val toolbarRight = "On the right"
+    override val settingsAppearance = "Appearance"
+    override val themeSystem = "Same as the system"
+    override val themeLight = "Light"
+    override val themeDark = "Dark"
+    override val settingsCode = "Writing code"
+    override val settingsCodeAbout = "The code editor can close brackets, quotes and HTML tags " +
+        "for you. It helps, but it does not write for you: no ready-made loops, " +
+        "no scaffolding."
+    override val codeAssistOn = "Close brackets and tags"
+    override val codeAssistOnAbout = "Typing “(” gives you “()” with the caret inside, and “<p>” " +
+        "adds “</p>”. Enter keeps the indent."
+    override val codeAssistOff = "No help – I type it myself"
+    override val codeAssistOffAbout = "The editor types exactly what you press."
+
+    override val libRebuilding = "Rebuilding the note index."
+    override val libFavoritesAbout = "Notes you starred in the editor."
+    override val libFavoritesEmpty = "No favourites yet. Open a note and press the star in the top bar."
+    override val libRecentAbout = "The twenty notes you worked on most recently."
+    override val libRecentEmpty = "Notes you open will show up here."
+    override val libSearchInNotes = "Search your notes"
+    override val libAllNotes = "All notes"
+    override val libFolderUp = "Folder above"
+    override val libFolderEmpty = "This folder is empty"
+    override val libFolderEmptyHint = "Create a note or a folder for a subject. Everything is saved in the " +
+        "directory you picked on this device."
+    override val libNothingHere = "Nothing here"
+    override val libSearchAbout = "I search titles and content. Handwriting turns up once you convert it " +
+        "to text."
+    override val libSearchPrompt = "Type what you are looking for"
+    override val libSearchPromptAbout = "Two letters are enough. Search works offline, because the index lives " +
+        "on this device."
+    override val libSearchNothing = "Nothing found"
+    override val libExpand = "Expand"
+    override val libCollapse = "Collapse"
+    override val libKindFolder = "Folder"
+    override val libKindCode = "Code file"
+    override val emptyNote = "Empty note"
+    override val emptyPage = "Empty page"
+    override val noDate = "No date"
+    override val justNow = "Just now"
+    override val inFavorites = "In favourites"
+    override val libSearchNothingAbout = "Check the spelling, or rebuild the note index in settings if you " +
+        "copied files in from outside Kajet."
+    override val emptyTrashQuestion = "Empty the bin?"
+    override val trashAbout = "Binned notes sit in a .trash folder next to your library. Nothing is lost " +
+        "until you empty the bin."
+    override val trashEmptyTitle = "The bin is empty"
+    override val trashEmptyAbout = "Binned notes turn up here, and you can put them back exactly where they " +
+        "came from."
+    override val menuMoveToFolder = "Move to another folder"
+    override val menuCopy = "Make a copy"
+    override val copySuffix = "(copy)"
+    override val deleteForeverQuestion = "Delete for good?"
+    override val deleteForeverWarning = "There is no way back. It goes from the bin, from the disk and from the cloud account."
+    override val menuLook = "Change the colour and icon"
+    override val exportFolderPdf = "Save the whole folder as PDF"
+    override val exportFolderMarkdown = "Save the whole folder as Markdown"
+    override val movePrompt = "Pick the folder this should go into."
+    override val codeShort = "Code"
+    override val codeWithPreview = "with a page preview"
+    override val codeWorksOffline = "works offline"
+    override val codeNeedsInternet = "runs over the internet"
+
+    override val colour = "Colour"
+    override val icon = "Icon"
+    override val createFolder = "Create the folder"
+    override val createNote = "Create the note"
+    override val createFile = "Create the file"
+    override val titleLabel = "Title"
+    override val newName = "New name"
+    override val fileName = "File name"
+    override val defaultFileName = "program"
+    override val noteKindLabel = "Kind"
+    override val kindHandwrittenAbout = "You write with the stylus, and can drop in a text box too."
+    override val kindTextAbout = "You type it, and can add a picture or a small drawing."
+    override val kindMindMapAbout = "Nodes joined by lines, labelled by keyboard or by stylus."
+    override val pageLabel = "Page"
+    override val pageA4About = "Just like an exercise book. Prints without anything cut off."
+    override val pageScrollAbout = "The page grows downwards as you write near the bottom."
+    override val pageBackgroundLabel = "Page background"
+    override val langHtmlAbout = "A web page. You see it in the preview, no internet needed."
+    override val langNeedsAccountAbout = "Runs on the server, so it needs an account and internet."
+
+    override val codeOutput = "Output"
+    override val codeErrors = "Errors"
+    override val codeInput = "Input"
+    override val codeRun = "Run the program"
+    override val codeStop = "Stop"
+    override val codePagePreview = "Page preview"
+    override val codeSearchInFile = "Search in this file"
+    override val codeWordWrap = "Wrap long lines"
+    override val codeTypeTwoLetters = "Type at least two letters"
+    override val codeUnsaved = "Changes waiting"
+    override val codeHtmlHint = "HTML. The globe on the left shows you the page."
+    override val codeWontRunHere = "Kajet cannot run this language."
+    override val codeRunsOnTablet = "Runs on the tablet, no internet needed."
+    override val codeRunsOnServer = "Runs on the server, so it needs internet."
+    override val codeWorkingOnTablet = "Running on the tablet..."
+    override val codeSendingToServer = "Sending to the server..."
+    override val codeFromServer = "Server"
+    override val codeFromTablet = "Tablet"
+    override val codeExitCode = "exit code"
+    override val codeOutputEmpty = "Press the run button on the left. Whatever the program prints " +
+        "shows up here."
+    override val codeNoErrors = "No errors."
+    override val codeInputLabel = "What the program will read"
+    override val codeOpenFailed = "The file would not open."
+    override val codeSaveFailed = "The file would not save."
+    override val codeRunFailed = "Running it did not work."
+
+    override val insertPhotoFromGallery = "Insert a photo from the gallery"
+    override val takePhoto = "Take a photo"
+    override val exportNote = "Save the note to a file"
+    override val rawMarkdownAbout = "The raw note. Go back to the content view to see the formatting."
+    override val fontFamily = "Typeface"
+    override val fontSize = "Text size"
+    override val fontSizeWholeNote = "Text size for the whole note"
+    override val wholeNoteLook = "Look of the whole note"
+    override val defaultSize = "Default"
+    override val defaultColour = "Default colour"
+    override val tableAddRow = "Add row"
+    override val tableAddColumn = "Add column"
+    override val tableRemoveRow = "Remove the row with the cursor"
+    override val tableRemoveColumn = "Remove the column with the cursor"
+    override val tableRemove = "Remove table"
+    override fun tableSize(rows: Int, columns: Int) = "Table $rows by $columns"
+    override val smallerText = "Smaller text"
+    override val largerText = "Larger text"
+    override val colourWholeNote = "Text colour for the whole note"
+    override val colourSelection = "Colour of the selected piece"
+    override val highlightSelection = "Highlight the selected piece"
+    override val bold = "Bold"
+    override val italic = "Italic"
+    override val underline = "Underline"
+    override val strike = "Strikethrough"
+    override val heading1 = "Biggest heading"
+    override val heading2 = "Medium heading"
+    override val heading3 = "Small heading"
+    override val bulletList = "List"
+    override val numberedList = "Numbered list"
+    override val taskList = "Tick list, a shopping list for instance"
+    override val quote = "Quote"
+    override val inlineCode = "Code inside the text"
+    override val codeBlock = "Code block"
+    override val table = "Table"
+    override val formula = "Maths formula"
+    override val link = "Link"
+    override val dividerLine = "Dividing line"
+    override val showRawMarkdown = "Show the raw Markdown"
+    override val backToContentView = "Back to the content view"
+    override val colourWholeNoteTitle = "Text colour for the whole note"
+    override val colourSelectionTitle = "Colour of the selected piece"
+    override val tableColumn = "Column"
+    override val untickTask = "Untick the task"
+    override val tickTask = "Tick the task"
+    override val photoInNote = "Photo in the note"
+    override val noCaption = "No caption"
+    override val photoSize = "Photo size"
+    override val photoCaption = "Photo caption"
+    override val photoUp = "Move the photo up"
+    override val photoDown = "Move the photo down"
+    override val photoRemove = "Remove the photo from the note"
+    override val photoCaptionAbout = "The caption is read by screen readers and goes into the print-out."
+
+    override val penSettings = "Pen settings"
+    override val insertTextBox = "Insert a text box"
+    override val fingerDrawsSwitch = "Your finger draws. Tap to scroll with your finger instead"
+    override val fingerScrollsSwitch = "Your finger scrolls. Tap to draw with your finger instead"
+    override val noteSettingsIcon = "Note settings: background, pages, finger"
+    override val undo = "Undo"
+    override val redo = "Redo"
+    override val eraser = "Eraser"
+    override val morePenSettings = "More pen settings"
+    override val deselect = "Deselect"
+    override val penTool = "Pen"
+    override val highlighterTool = "Highlighter"
+    override val shapeKindLabel = "Which shape"
+    override val shapeOutlineColourTitle = "Outline colour"
+    override val shapeFillLabel = "Fill"
+    override val shapeNoFill = "No fill"
+    override val shapeFillColourTitle = "Fill colour"
+    override val shapeSquareLock = "Equal sides"
+    override val shapeSquareAbout =
+        "With the lock on you get a circle and a square, and a line keeps to 45 degree steps. " +
+            "Shift, or a second finger on the screen while drawing, does the same."
+    override val shapeRotate = "Rotate the shape"
+    override val shapeResize = "Resize the shape"
+    override val shapeRemove = "Remove the shape"
+    override val eraserSize = "Eraser size"
+    override val widthLabel = "Width"
+    override val highlighterColourTitle = "Highlighter colour"
+    override val whatYouWriteWith = "What you write with"
+    override val inkColourTitle = "Ink colour"
+    override val penAboutPen = "The stroke thickens where you press harder with the stylus."
+    override val penAboutFineliner = "An even stroke of constant width."
+    override val penAboutPencil = "A grainy stroke, like a pencil on paper."
+    override val penAboutDashed = "A dashed line, for dividers and sketches."
+    override val textColourTitle = "Text colour"
+    override val addBoxBackground = "Add a background to the box"
+    override val changeBoxBackground = "Change the box background"
+    override val boxBackgroundTitle = "Text box background"
+    override val yourColour = "Your colour"
+    override val noteSettings = "Note settings"
+    override val pageKind = "Page kind"
+    override val pageA4Long = "Separate A4 sheets. Prints exactly the same way."
+    override val pageScrollLong = "One page that grows downwards as you write near the bottom."
+    override val pagesLabel = "Pages"
+    override val onePage = "This note has one page."
+    override val addPage = "Add one"
+    override val removeLastPage = "Delete the last one"
+    override val fingerLabel = "Finger"
+    override val palmRejectionAbout = "While the stylus is on the screen, your palm never draws. That " +
+        "always holds."
+    override val fitWidth = "Fit to width"
+    override val textBox = "Text box"
+    override val moveTextBox = "Move the text box"
+    override val deleteTextBox = "Delete the text box"
+    override val resizeTextBox = "Resize the box"
+
+    override val newNode = "New node"
+    override val addBranch = "Add a branch to the selected node"
+    override val addSibling = "Add a node next to the selected one"
+    override val finishConnecting = "Finish connecting"
+    override val connectToOthers = "Connect this node to others"
+    override val inkLabel = "Label with the stylus"
+    override val arrangeBranches = "Lay the branches out automatically"
+    override val fitWholeMap = "Fit the whole map in the window"
+    override val exportMap = "Save the map to a file"
+    override val releaseToConnect = "Let go to connect."
+    override val releaseOnEmpty = "Let go on empty space to put a new node there."
+    override val tapNodesToConnect = "Tap the nodes you want joined to the selected one. The same " +
+        "button finishes."
+    override val nodeWithoutName = "unnamed node"
+    override val disconnect = "Disconnect"
+    override val keepConnection = "Keep the connection"
+    override val zoomOut = "Zoom out"
+    override val zoomIn = "Zoom in"
+    override val emptyMap = "Empty map"
+    override val emptyMapAbout = "Add the first node with the button on the left, or double-tap the " +
+        "board, then hang branches off it."
+    override val tapTwiceToType = "Double-tap to type"
+    override val dragToConnect = "Drag to connect to another node"
+    override val dragToResize = "Drag to resize the node"
+    override val expandBranch = "Expand the branch"
+    override val collapseBranch = "Collapse the branch"
+    override val selectedNode = "Selected node"
+    override val hideSettings = "Hide the settings"
+    override val showMoreSettings = "Show more settings"
+    override val nodeText = "Node text"
+    override val typeNodeText = "Type what goes in the node"
+    override val textLabel = "Text"
+    override val nodeColour = "Node colour"
+    override val connections = "Connections"
+    override val connectionsAbout = "You can also tap a line on the board and disconnect it there."
+    override val nodeTextColour = "Text colour"
+    override val colourFromTheme = "follows the theme"
+    override val colourOwn = "your own"
+    override val shapeLabel = "Shape"
+    override val nodeColourTitle = "Node colour"
+    override val nodeTextColourTitle = "Text colour in the node"
+
+    override val fileReady = "The file is ready"
+    override val savingFile = "Saving..."
+    override val exportFailed = "Saving did not work. Try another format."
+    override val openFile = "Open"
+    override val linkFailed = "Kajet could not make a link."
+    override val exportNoHandwriting = "Handwriting will not go into this file."
+    override val exportNoPhotos = "Photos will not go into this file."
+    override val exportHandwrittenOnly = "This format only saves handwritten notes."
+    override val exportTextOnly = "Only the text will be saved, not the handwriting."
+    override val hue = "Hue"
+    override val presetColours = "Ready-made"
+    override val recentColours = "Recently used"
+    override val done = "Done"
+    override val libraryFolderName = "Library"
+    override val noNotesFolderPicked = "No folder has been picked for your notes."
+    override val sendLink = "Send the link"
+    override val sendFile = "Send"
+    override val shareWindowFailed = "The sharing window would not open. The link:"
+    override val shareWindowFailedFile = "The sharing window would not open. The file is in Kajet's own " +
+        "storage."
+    override val noSystemPrinting = "This device does not offer system printing."
+    override val printFailed = "Printing would not start:"
+    override val printOpenFailed = "The file for printing would not open."
+    override val printGaveUp = "Printing did not work."
+    override val unknownError = "unknown error"
+    override val emptyNoteInExport = "This note is still empty."
+    override val mapNodes = "Map nodes"
+    override val handwrittenInDocx = "This note is handwritten. A DOCX file will hold only the text " +
+        "boxes and any handwriting you already turned into text. To keep the handwriting " +
+        "itself, export to PDF."
+    override val pageWord = "Page"
+    override val noDescription = "no description"
+    override val handwrittenNoTextYet = "This note is handwritten and has no text in it yet. Select the " +
+        "handwriting with the select tool, turn it into text, then export again."
+
+    override val cloudAccount = "Cloud account"
+    override val cloudAccountAbout = "Kajet works without an account. Your notes then live only on this " +
+        "device, in the folder you picked. An account is for opening them on a computer and " +
+        "getting them back after you change phone or tablet."
+    override val waitingForApproval = "Waiting for you to approve the sign-in on the website. Come back " +
+        "yourself, or use the “Open the app” button once you have approved it."
+    override val cancelWaiting = "Stop waiting"
+    override val opening = "Opening..."
+    override val signInWithGoogle = "Sign in with Google"
+    override val signInWithGoogleAbout = "Opens the sign-in page inside the app, where you pick " +
+        "your Google account."
+    override val orAddressAndPassword = "Or an address and password"
+    override val emailAddress = "E-mail address"
+    override val password = "Password"
+    override val signIn = "Sign in"
+    override val signingIn = "Signing in..."
+    override val tokenFromBrowser = "Token from the browser"
+    override val tokenAbout = "Instead of a password you can paste a device token. On your Kajet account " +
+        "page, issue a token for this device and copy it here. It is the way in when signing " +
+        "in through the website does not work."
+    override val tokenFromSite = "Token from the website"
+    override val checking = "Checking..."
+    override val connect = "Connect"
+    override val signedIn = "Signed in"
+    override val spaceLabel = "Space"
+    override val takenNoLimit = "used, no limit"
+    override val syncSection = "Sync"
+    override val syncAbout = "Notes upload themselves after every save. With no internet they wait " +
+        "on the device and go up when the network is back."
+    override val syncing = "Syncing..."
+    override val syncNow = "Sync now"
+    override val signOut = "Sign out"
+    override val signOutAbout = "Signing out cuts off the cloud but deletes nothing from the device. " +
+        "Your notes stay in the folder you picked."
+    override val everythingSynced = "Everything is synced"
+    override val noInternet = "No internet"
+    override val sessionExpired = "Your session has expired. Sign in again."
+    override val closeMessage = "Close this message"
+    override val closePanel = "Close the panel"
+    override val deviceFallbackName = "Device"
+    override val giveEmailAndPassword = "Enter an e-mail address and a password."
+    override val serverUnreachable = "Kajet could not reach the server."
+    override val approveOnSite = "Sign in on the website (Google or password) and approve this device. " +
+        "Kajet is waiting in the background."
+    override val backFromBrowser = "Back from the browser. Checking the approval…"
+    override val checkingApproval = "Checking the sign-in approval…"
+    override val pasteTokenFromSite = "Paste the token from the website."
+    override val sessionExpiredServer = "The server ended your session. Sign in again."
+    override val signedOutNotesStay = "Signed out. Your notes stayed on the device."
+    override val syncFailedSafe = "Syncing did not work. Your notes are safe on the device."
+    override val alreadyInSync = "Everything is already in sync."
+    override val serverCopiesKept = "The server versions are saved alongside, so nothing is lost."
+    override val incompleteSignInAnswer = "The server sent back an incomplete sign-in response."
+    override val approvalTimedOut = "The time to approve ran out. Try again."
+    override val notSignedIn = "You are not signed in."
+    override val serverGibberish = "The server answered with something Kajet does not understand. Try " +
+        "again in a moment."
+    override val offlineNoteQueued = "There is no internet. The note is saved on the device and will go " +
+        "up when the network is back."
+    override val cannotReachServer = "Kajet cannot reach the server. Check your internet connection."
+    override val serverTimedOut = "The server did not answer in time. Kajet will try again later."
+    override val connectionDropped = "The connection to the server dropped. Kajet will try again later."
+    override val fileDownloadFailed = "The file would not download. Kajet will try later."
+    override val serverRefused = "The server refused access."
+    override val notOnServer = "That is not on the server."
+    override val noteChangedElsewhere = "This note has also changed somewhere else."
+    override val outOfSpace = "Your account is out of space."
+    override val serverTrouble = "The server is having trouble. Kajet will try again later."
+    override val noNotesDirToSend = "Kajet cannot see the notes folder, so there is nothing to send. " +
+        "Open settings and point it at a folder on this device."
+    override val noNotesDirToSave = "No notes folder has been picked, so there is nowhere to save them. " +
+        "Open settings and choose a folder on this device."
+    override val runOnServerNeedsAccount = "Running on the server needs an account. Sign in under " +
+        "settings, in the “Cloud account” section."
+    override val runOnServerNeedsInternet = "There is no internet, and this language runs on the server. " +
+        "Your code is saved and you can run it once you are back online."
+    override val codeWord = "code"
+
+    override val cloudAccountOn = "Your notes also go to the server, so you can open them on a computer."
+    override val cloudAccountOff = "Without an account Kajet works fine and your notes live only on this " +
+        "device. With one they also go to the server, so you can open them on a computer."
+    override val notesFolder = "Notes folder"
+    override val notesFolderAbout = "All your files live here. After you change the folder, Kajet reads " +
+        "it from scratch."
+    override val noFolderPicked = "No folder picked yet."
+    override val changeFolder = "Change the folder"
+    override val rebuildIndexAbout = "Rebuild the index when you have copied notes in from a computer, or " +
+        "when search cannot find something you know is there."
+    override val conflictCopyFailed = "The conflict copy could not be saved. I will try again."
+    override val retryStuckButton = "Try again"
+    override val stuckAbout = "These notes stayed on the device. Have a look at them or try uploading again."
+    override val stylusAndFinger = "Stylus and finger"
+    override val stylusAndFingerAbout = "While the stylus is on the screen, your palm never draws. That " +
+        "always holds."
+    override val fingerScrollsAbout = "Your finger moves the page, the stylus writes. That is the " +
+        "comfortable way round."
+    override val fingerDrawsAbout = "Your finger draws too. Handy when you have no stylus with you."
+    override val penHaptics = "Pen vibration"
+    override val penHapticsAbout = "The motor inside the Lenovo pen gives writing its feel. Kajet " +
+        "tells it what you are writing with — a pen, a pencil or the eraser."
+    override val penHapticsOn = "Working. The pen vibrates while writing in handwritten notes."
+    override val penHapticsOff = "A one-time permission is needed and it cannot be granted from the " +
+        "tablet. Connect the tablet to a computer with adb and run:"
+    override val appearanceAbout = "The light and dark themes are drawn separately, not inverted."
+    override val newHandwrittenNote = "New handwritten note"
+    override val newHandwrittenNoteAbout = "These settings are suggested when you create a note. You can " +
+        "always change them."
+    override val autosaveSection = "Autosave"
+    override val autosaveAbout = "The note saves itself after every change. There is no save button and " +
+        "nothing to remember."
+    override val deviceStorage = "Device storage / "
+    override val greetingWord = "Hello"
+    override val photoAltText = "photo"
+    override val greetingVariable = "greeting"
+    override val myPageTitle = "My page"
+    override val emptyNoteFile = "The note file is empty. Open a copy from the bin, or create the note again."
+    override val brokenContentFile = "Kajet cannot read content.json. The file is damaged, or it does not " +
+        "belong to Kajet."
+    override val newerKajet = "This note comes from a newer version of Kajet. Update the app to open it."
+    override val brokenInlineDrawing = "Kajet cannot read the drawing placed inside the text."
+    override val brokenFolderDescription = "Kajet cannot read the folder description."
+    override val noNotesFolderChosen = "No notes folder has been picked. Open settings and point Kajet at " +
+        "a folder on this device."
+    override val binEmpty = "The bin is empty."
+    override val notInBinAnyMore = "That entry is no longer in the bin."
+    override val binEntryNoDescription = "The bin entry has no description, so there is no telling where " +
+        "to put it back."
+    override val entryHasNoName = "The entry has no name."
+    override val cannotMoveIntoItself = "A folder cannot be moved inside itself."
+    override val noParentFolder = "The parent folder is gone."
+    override val handwritingLabel = "Handwriting"
+
+    override val firstRun = "First run"
+    override val whereToKeepNotes = "Where should Kajet keep your notes?"
+    override val whereToKeepNotesAbout = "Pick a folder on this device. Kajet will save everything you " +
+        "write there. Every folder in the app is an ordinary directory on disk, and every " +
+        "note is a directory with a file inside."
+    override val whereToKeepNotesWhy = "That way your notes stay on the device even if you uninstall " +
+        "Kajet. You can copy them to a computer or open them in another app. Documents is " +
+        "usually the best place."
+    override val pickNotesFolder = "Pick a folder for your notes"
+    override val pickNotesFolderAbout = "An Android window will open. Choose a folder and press the " +
+        "confirm button. You can change this later in settings."
+
+    override val starting = "Kajet is opening..."
+    override val startingSlow = "This is taking longer than usual. Your notes are safe on the " +
+        "device. If nothing changes, close Kajet and open it again."
+    override val errorScreenTitle = "The app hit an error"
+    override val errorScreenAbout = "Kajet stopped because of the error below. Your notes are " +
+        "saved on disk and are safe. Use the button to start the app again."
+    override val errorRestart = "Restart"
+    override val errorCopyDetails = "Copy details"
+    override val errorSendDetails = "Send log"
+    override val errorSendTitle = "Kajet error report"
+    override val errorNoDetails = "No saved error details."
+    override val screenBrokeTitle = "This screen did not draw"
+    override val screenBrokeAbout = "Kajet hit an error while building the screen. The rest of the " +
+        "app works and your notes are saved on disk. Try building the screen again."
+    override val screenBrokeReload = "Reload the screen"
+    override val noteNotOpened = "The note did not open"
+    override val noteNotOpenedAbout = "Kajet could not open the note. Check that the file is still in " +
+        "its folder."
+    override val noteOpening = "Opening the note"
+    override val noEditorYet = "This kind of note has no editor yet"
+    override val noEditorYetAbout = "The note is safe on disk. An editor for this kind of note is " +
+        "still being built."
+    override val backToLibrary = "Back to the library"
+
+    override val readingFolderFailed = "Kajet could not read the folder."
+    override val readingFavoritesFailed = "Kajet could not read your favourites."
+    override val readingRecentFailed = "Kajet could not read the recently opened notes."
+    override val walkingLibrary = "Going through the library..."
+    override val actionFailed = "That did not work out."
+    override val pythonOnTablet = "on the tablet"
+    override val pythonStartFailed = "Python would not start on the tablet. Close Kajet and open it " +
+        "again."
+
+    override val legalSection = "Legal"
+    override val legalSectionAbout = "The terms of service and the privacy policy open on the Kajet " +
+        "website, in your browser."
+    override val termsOfService = "Terms of service"
+    override val privacyPolicy = "Privacy policy"
+    override val documentNoNetwork = "Without an internet connection Kajet cannot open this " +
+        "document. Connect to a network and try again."
+    override val documentNoBrowser = "There is no browser on this device that could open the page."
+    override val aboutSection = "About"
+    override val aboutSectionAbout = "Kajet — a notebook for handwriting, text, mind maps and code."
+    override val appVersionWord = "Version"
+
+    override val updateTitle = "New version"
+    override val updateToDownload = "To download"
+    override val updateInstall = "Install"
+    override val updateLater = "Later"
+    override val updateWhatChanged = "What changed"
+    override val checkUpdates = "Check for updates"
+    override val checkingUpdates = "Checking..."
+    override val upToDate = "The installed version is the newest one."
+    override val updateCheckFailed = "The server could not be reached. Check the internet " +
+        "connection and try again."
+}

@@ -12,11 +12,13 @@ import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
+import wojtoteka.ovh.kajet.core.text.serverError
+import wojtoteka.ovh.kajet.core.text.words
 
 class CloudClient(
     private val context: Context,
     private val account: AccountStore,
-) {
+) : CloudTransport {
 
     sealed interface Result<out T> {
         data class Ok<T>(val data: T) : Result<T>
@@ -24,10 +26,15 @@ class CloudClient(
             val message: String,
             val worthRetrying: Boolean = false,
             val mustSignIn: Boolean = false,
+            // 404 — starszy serwer może nie znać nowego punktu (np. folderów);
+            // wtedy tę część synchronizacji po prostu się pomija.
+            val notFound: Boolean = false,
+            /** Powód podany przez serwer w polu `error`, np. „not-yours". */
+            val code: String = "",
         ) : Result<Nothing>
     }
 
-    fun hasNetwork(): Boolean {
+    override fun hasNetwork(): Boolean {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return true
         val network = manager.activeNetwork ?: return false
@@ -74,15 +81,19 @@ class CloudClient(
 
     // --- Notes ---
 
-    suspend fun fetchChanges(
+    override suspend fun fetchChanges(
         since: Long,
-        afterId: String? = null,
-        withContent: Boolean = true,
+        afterId: String?,
+        withContent: Boolean,
     ): Result<ChangesResponse> {
         val params = buildString {
             append("since=$since")
             if (!afterId.isNullOrBlank()) append("&afterId=").append(java.net.URLEncoder.encode(afterId, "UTF-8"))
             if (!withContent) append("&withContent=no")
+            // Bez tego serwer oddaje tylko zwykłe notatki. Pliki z kodem jadą
+            // jako notatki CODE i dostają je wyłącznie aplikacje, które o nie
+            // poproszą — starsze wersje nie umiały ich odczytać.
+            append("&kinds=all")
         }
         return request(
             url = "${account.serverUrl()}/api/v1/notes?$params",
@@ -90,18 +101,76 @@ class CloudClient(
         )
     }
 
-    suspend fun sendNote(note: OutgoingNote): Result<SaveResponse> = request(
+    override suspend fun sendNote(note: OutgoingNote): Result<SaveResponse> = request(
         url = "${account.serverUrl()}/api/v1/notes",
         method = "PUT",
         body = json.encodeToString(note),
     )
 
-    suspend fun listAttachments(noteId: String): Result<AttachmentsResponse> = request(
+    /** Trwałe kasowanie na serwerze — z bazy, z dysku, razem z załącznikami. */
+    override suspend fun deleteNote(noteId: String): Result<SaveResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId",
+        method = "DELETE",
+    )
+
+    /**
+     * Nagrobki: identyfikatory notatek skasowanych na zawsze od podanej chwili.
+     *
+     * Zwykłe pobranie zmian tego nie powie — wiersza skasowanej notatki po
+     * prostu nie ma, więc „co się zmieniło od…" nigdy jej nie wymieni.
+     * Starszy serwer nie zna tego punktu i odpowiada 404; wtedy zostaje
+     * porównanie pełnego spisu identyfikatorów.
+     */
+    override suspend fun fetchDeleted(since: Long, afterId: String?): Result<DeletedResponse> {
+        val params = buildString {
+            append("since=$since")
+            if (!afterId.isNullOrBlank()) {
+                append("&afterId=").append(java.net.URLEncoder.encode(afterId, "UTF-8"))
+            }
+        }
+        return request(
+            url = "${account.serverUrl()}/api/v1/sync/deleted?$params",
+            method = "GET",
+        )
+    }
+
+    // --- Folders ---
+
+    /** Cała struktura folderów konta. Starszy serwer odpowiada 404. */
+    override suspend fun fetchFolders(): Result<FoldersResponse> = request(
+        url = "${account.serverUrl()}/api/v1/folders",
+        method = "GET",
+    )
+
+    override suspend fun sendFolder(folder: OutgoingFolder): Result<FolderSaveResponse> = request(
+        url = "${account.serverUrl()}/api/v1/folders",
+        method = "PUT",
+        body = json.encodeToString(folder),
+    )
+
+    override suspend fun deleteFolder(folderId: String): Result<FolderSaveResponse> = request(
+        url = "${account.serverUrl()}/api/v1/folders/$folderId",
+        method = "DELETE",
+    )
+
+    /**
+     * Odnośnik do notatki — do podania komuś systemowym „Udostępnij".
+     *
+     * Serwer oddaje ten sam odnośnik przy kolejnych prośbach o te same prawa,
+     * więc udostępnienie tej samej notatki dwa razy nie mnoży linków.
+     */
+    suspend fun shareNote(noteId: String, canEdit: Boolean): Result<ShareResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/share",
+        method = "POST",
+        body = json.encodeToString(ShareRequest(if (canEdit) "edit" else "read")),
+    )
+
+    override suspend fun listAttachments(noteId: String): Result<AttachmentsResponse> = request(
         url = "${account.serverUrl()}/api/v1/notes/$noteId/attachments",
         method = "GET",
     )
 
-    suspend fun sendAttachment(
+    override suspend fun sendAttachment(
         noteId: String,
         name: String,
         mime: String,
@@ -133,7 +202,7 @@ class CloudClient(
         }.let { parse(it) }
     }
 
-    suspend fun fetchAttachment(noteId: String, name: String): Result<ByteArray> =
+    override suspend fun fetchAttachment(noteId: String, name: String): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             val encoded = java.net.URLEncoder.encode(name, "UTF-8")
             connectBytes(
@@ -173,8 +242,7 @@ class CloudClient(
                 onSuccess = { Result.Ok(it) },
                 onFailure = {
                     Result.Error(
-                        "Serwer odpowiedział czymś, czego nie rozumiem. " +
-                            "Spróbuj ponownie za chwilę.",
+                        words.serverGibberish,
                     )
                 },
             )
@@ -190,20 +258,20 @@ class CloudClient(
     ): Result<String> {
         if (!hasNetwork()) {
             return Result.Error(
-                "Nie ma połączenia z internetem. Notatka jest zapisana na urządzeniu i wyślemy ją, gdy sieć wróci.",
+                words.offlineNoteQueued,
                 worthRetrying = true,
             )
         }
 
         val token = if (withToken) account.token() else null
         if (withToken && token.isNullOrBlank()) {
-            return Result.Error("Nie jesteś zalogowany.", mustSignIn = true)
+            return Result.Error(words.notSignedIn, mustSignIn = true)
         }
 
         val connection = try {
             URL(url).openConnection() as HttpURLConnection
         } catch (e: Exception) {
-            return Result.Error("Nie udało się połączyć z serwerem.")
+            return Result.Error(words.serverUnreachable)
         }
 
         return try {
@@ -211,6 +279,15 @@ class CloudClient(
             connection.connectTimeout = CONNECT_TIMEOUT
             connection.readTimeout = READ_TIMEOUT
             connection.setRequestProperty("Accept", "application/json")
+            /*
+              Zdania o błędach układa serwer, a pokazuje je aplikacja - muszą
+              więc przyjść w JEJ języku, nie w języku serwera. Stąd zwykły
+              nagłówek HTTP; bez niego serwer odpowiada po polsku.
+            */
+            connection.setRequestProperty(
+                "Accept-Language",
+                if (words.english) "en" else "pl",
+            )
             if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
             if (method != "GET") {
                 connection.doOutput = true
@@ -230,17 +307,17 @@ class CloudClient(
                     Result.Ok("""{"status":"pending"}""")
                 }
             } else {
-                toError(status, body)
+                toError(status, body, tokenUsed = token != null)
             }
         } catch (e: UnknownHostException) {
             Result.Error(
-                "Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem.",
+                words.cannotReachServer,
                 worthRetrying = true,
             )
         } catch (e: SocketTimeoutException) {
-            Result.Error("Serwer nie odpowiedział na czas. Spróbuję jeszcze raz później.", worthRetrying = true)
+            Result.Error(words.serverTimedOut, worthRetrying = true)
         } catch (e: IOException) {
-            Result.Error("Połączenie z serwerem się urwało. Spróbuję jeszcze raz później.", worthRetrying = true)
+            Result.Error(words.connectionDropped, worthRetrying = true)
         } finally {
             connection.disconnect()
         }
@@ -248,17 +325,17 @@ class CloudClient(
 
     private fun connectBytes(url: String): Result<ByteArray> {
         if (!hasNetwork()) {
-            return Result.Error("Nie ma połączenia z internetem.", worthRetrying = true)
+            return Result.Error(words.noInternet, worthRetrying = true)
         }
         val token = account.token()
         if (token.isNullOrBlank()) {
-            return Result.Error("Nie jesteś zalogowany.", mustSignIn = true)
+            return Result.Error(words.notSignedIn, mustSignIn = true)
         }
 
         val connection = try {
             URL(url).openConnection() as HttpURLConnection
         } catch (e: Exception) {
-            return Result.Error("Nie udało się połączyć z serwerem.")
+            return Result.Error(words.serverUnreachable)
         }
 
         return try {
@@ -266,41 +343,91 @@ class CloudClient(
             connection.connectTimeout = CONNECT_TIMEOUT
             connection.readTimeout = READ_TIMEOUT
             connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty(
+                "Accept-Language",
+                if (words.english) "en" else "pl",
+            )
 
             val status = connection.responseCode
             if (status in 200..299) {
                 Result.Ok(connection.inputStream.use { it.readBytes() })
             } else {
-                toError(status, connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty())
+                toError(
+                    status = status,
+                    body = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty(),
+                    tokenUsed = true,
+                )
             }
         } catch (e: IOException) {
-            Result.Error("Nie udało się pobrać pliku. Spróbuję później.", worthRetrying = true)
+            Result.Error(words.fileDownloadFailed, worthRetrying = true)
         } finally {
             connection.disconnect()
         }
     }
 
-    private fun toError(status: Int, body: String): Result.Error {
+    /**
+     * Odpowiedź z błędem, przetłumaczona na [Result.Error] — i JEDYNE miejsce,
+     * które rozstrzyga, czy sesja jeszcze żyje.
+     *
+     * Serwer, który nie uznaje tokenu, kończy tu każdą prośbę: pobranie zmian,
+     * wysyłkę, załącznik, uruchomienie kodu. Sesja gaśnie więc od razu przy
+     * pierwszej takiej odpowiedzi i wszystkie ekrany dowiadują się o tym
+     * w tej samej chwili — czytają jeden [AccountStore.state].
+     */
+    private fun toError(status: Int, body: String, tokenUsed: Boolean): Result.Error {
         val fromServer = runCatching { json.decodeFromString<ServerError>(body) }.getOrNull()
+        val code = fromServer?.error.orEmpty()
+
+        val sessionDead = sessionDead(status, code, tokenUsed)
+        if (sessionDead) account.markSessionExpired()
 
         return Result.Error(
             message = fromServer?.message ?: when (status) {
-                401 -> "Sesja wygasła. Zaloguj się jeszcze raz."
-                403 -> "Serwer odmówił dostępu."
-                404 -> "Nie ma tego na serwerze."
-                409 -> "Ta notatka zmieniła się także gdzie indziej."
-                507 -> "Brakuje miejsca na koncie."
-                in 500..599 -> "Serwer ma kłopot. Spróbuję jeszcze raz później."
-                else -> "Serwer odpowiedział błędem $status."
+                401 -> words.sessionExpired
+                403 -> words.serverRefused
+                404 -> words.notOnServer
+                409 -> words.noteChangedElsewhere
+                507 -> words.outOfSpace
+                in 500..599 -> words.serverTrouble
+                else -> words.serverError(status)
             },
             worthRetrying = status >= 500 || status == 408 || status == 429,
-            mustSignIn = status == 401,
+            mustSignIn = sessionDead,
+            notFound = status == 404,
+            code = code,
         )
     }
 
     internal companion object {
         const val CONNECT_TIMEOUT = 15_000
         const val READ_TIMEOUT = 60_000
+
+        /**
+         * Powody, dla których serwer odmawia tożsamości (pole `error`): brak
+         * tokenu, token nieznany, token przeterminowany, konto zablokowane.
+         * Każdy z nich znaczy: sesji już nie ma.
+         */
+        val AUTH_REASONS = setOf("missing", "invalid", "expired", "blocked")
+
+        /**
+         * Czy taka odpowiedź znaczy koniec sesji.
+         *
+         * 401 zawsze: ten token już nic nie otwiera.
+         *
+         * 403 znaczy na serwerze dwie różne rzeczy — zablokowane konto (czyli
+         * też koniec sesji) albo „to nie twoja notatka" przy cudzym
+         * udostępnieniu. Ślepe wylogowywanie przy każdym 403 wyrzucałoby
+         * z konta przy zwykłym braku praw, dlatego liczy się powód podany
+         * przez serwer.
+         *
+         * Prośba wysłana BEZ tokenu (logowanie hasłem, pytanie o zgodę ze
+         * strony) nie mówi nic o sesji — odmowa znaczy tam tylko tyle, że
+         * podane dane są nie te.
+         */
+        fun sessionDead(status: Int, code: String, tokenUsed: Boolean): Boolean {
+            if (!tokenUsed) return false
+            return status == 401 || (status == 403 && code in AUTH_REASONS)
+        }
 
         // Internal, not private: the contract tests decode server-shaped JSON
         // with exactly this configuration, not a lookalike.
@@ -432,6 +559,15 @@ data class ChangesResponse(
     val hasMore: Boolean = false,
 )
 
+/** Strona spisu nagrobków: same identyfikatory i kursor po dacie skasowania. */
+@Serializable
+data class DeletedResponse(
+    val ids: List<String> = emptyList(),
+    val upTo: Long = 0,
+    val upToId: String? = null,
+    val hasMore: Boolean = false,
+)
+
 @Serializable
 data class AttachmentInfo(
     val name: String,
@@ -449,6 +585,47 @@ data class AttachmentResponse(
     val hash: String = "",
     val sizeBytes: Int = 0,
     val url: String = "",
+)
+
+@Serializable
+data class OutgoingFolder(
+    val id: String,
+    // Null znaczy: folder leży w korzeniu biblioteki.
+    val parentId: String? = null,
+    val name: String,
+    val colorId: String = "grafit",
+    val iconId: String = "folder",
+)
+
+@Serializable
+data class ServerFolder(
+    val id: String,
+    val parentId: String? = null,
+    val name: String = "",
+    val colorId: String = "grafit",
+    val iconId: String = "folder",
+    val updatedAt: Long = 0,
+)
+
+@Serializable
+data class FoldersResponse(val folders: List<ServerFolder> = emptyList())
+
+@Serializable
+private data class ShareRequest(val permission: String)
+
+@Serializable
+data class ShareResponse(
+    val url: String,
+    val permission: String = "read",
+    val title: String = "",
+    /** Fałsz znaczy, że taki odnośnik już istniał i dostajemy go z powrotem. */
+    val fresh: Boolean = true,
+)
+
+@Serializable
+data class FolderSaveResponse(
+    val status: String = "ok",
+    val updatedAt: Long = 0,
 )
 
 @Serializable

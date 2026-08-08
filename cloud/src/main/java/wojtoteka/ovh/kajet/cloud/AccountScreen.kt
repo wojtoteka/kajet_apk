@@ -43,9 +43,17 @@ import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.Strings
+import wojtoteka.ovh.kajet.core.text.notesStuck
+import wojtoteka.ovh.kajet.core.text.notesWaiting
+import wojtoteka.ovh.kajet.core.text.offlineWaiting
+import wojtoteka.ovh.kajet.core.text.spaceUsed
+import wojtoteka.ovh.kajet.core.text.spaceUsedNoLimit
 
 @Composable
 fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
+    val words = LocalStrings.current
     val state by model.accountState.collectAsStateWithLifecycle()
     val syncState by model.syncState.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
@@ -53,6 +61,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
     val message by model.message.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val waiting by model.waitingInQueue.collectAsStateWithLifecycle()
+    val stuck by model.stuckNotes.collectAsStateWithLifecycle()
     val authUri by DeviceAuthBridge.pending.collectAsStateWithLifecycle()
 
     LaunchedEffect(authUri) {
@@ -61,8 +70,10 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
         DeviceAuthBridge.clear()
     }
 
-    // Świeży stan konta z serwera przy każdym wejściu na ekran.
-    LaunchedEffect(Unit) {
+    // Świeży stan konta z serwera przy wejściu na ekran ORAZ po zalogowaniu —
+    // sam klucz Unit odpalał się, gdy jeszcze nie było tokenu, i zajętość
+    // zostawała zerowa aż do ponownego wejścia.
+    LaunchedEffect(state is SignInState.SignedIn) {
         model.refreshFromServer()
     }
 
@@ -80,7 +91,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                 .marginRule(colors.line),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconAction(KajetIcons.BackArrow, "Wróć", onBack)
+            IconAction(KajetIcons.BackArrow, words.back, onBack)
         }
 
         Column(
@@ -91,7 +102,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                 .padding(horizontal = sheetPadding, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text("Konto w chmurze", style = Kajet.type.display, color = colors.text)
+            Text(words.cloudAccount, style = Kajet.type.display, color = colors.text)
 
             if (error != null) {
                 Notice(text = error.orEmpty(), color = colors.danger, onClose = model::hideMessage)
@@ -110,12 +121,32 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                     onSignInWithToken = model::signInWithToken,
                 )
 
+                is SignInState.SessionExpired -> {
+                    // Sesja wygasła (np. wylogowanie wszystkich sesji przez
+                    // stronę): mówimy to wprost i od razu dajemy formularz.
+                    Notice(
+                        text = words.sessionExpired,
+                        color = colors.danger,
+                        onClose = null,
+                    )
+                    SignIn(
+                        busy = busy,
+                        waitingForBrowser = waitingForBrowser,
+                        onSignIn = model::signIn,
+                        onSignInWithBrowser = model::signInWithBrowser,
+                        onCancelBrowser = { model.cancelBrowserSignIn() },
+                        onSignInWithToken = model::signInWithToken,
+                    )
+                }
+
                 is SignInState.SignedIn -> SignedIn(
                     state = current,
                     syncState = syncState,
                     waitingInQueue = waiting,
+                    stuckNotes = stuck,
                     busy = busy,
                     onSynchronise = model::synchroniseNow,
+                    onRetryStuck = model::retryStuck,
                     onSignOut = model::signOut,
                 )
             }
@@ -132,6 +163,7 @@ private fun SignIn(
     onCancelBrowser: () -> Unit,
     onSignInWithToken: (String) -> Unit,
 ) {
+    val words = LocalStrings.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
@@ -142,71 +174,65 @@ private fun SignIn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Kajet działa bez konta. Notatki leżą wtedy tylko na tym urządzeniu, " +
-                "w katalogu, który sam wskazałeś. Konto przydaje się, żeby otworzyć " +
-                "je na komputerze i odzyskać po zmianie telefonu albo tabletu.",
+            text = words.cloudAccountAbout,
             style = Kajet.type.body,
             color = Kajet.colors.muted,
         )
 
         if (waitingForBrowser) {
             Text(
-                text = "Czekam, aż zatwierdzisz logowanie na stronie. Możesz wrócić do aplikacji " +
-                    "sam albo przyciskiem „Otwórz aplikację” po zatwierdzeniu.",
+                text = words.waitingForApproval,
                 style = Kajet.type.body,
                 color = Kajet.colors.text,
             )
-            SecondaryButton("Anuluj oczekiwanie", onCancelBrowser)
+            SecondaryButton(words.cancelWaiting, onCancelBrowser)
             return
         }
 
         if (!viaToken) {
             PrimaryButton(
-                text = if (busy) "Otwieram..." else "Zaloguj przez Google",
+                text = if (busy) words.opening else words.signInWithGoogle,
                 onClick = onSignInWithBrowser,
                 icon = KajetIcons.Account,
                 enabled = !busy,
             )
             Text(
-                text = "Otworzy stronę logowania w aplikacji. Tam wybierzesz konto Google " +
-                    "(albo hasło) i zatwierdzisz to urządzenie — zwykle wystarczą trzy tapnięcia.",
+                text = words.signInWithGoogleAbout,
                 style = Kajet.type.meta,
                 color = Kajet.colors.muted,
             )
 
             HorizontalRule()
-            SectionLabel("Albo adres i hasło")
+            SectionLabel(words.orAddressAndPassword)
 
-            Field("Adres e-mail", email, { email = it }, KeyboardType.Email)
-            Field("Hasło", password, { password = it }, KeyboardType.Password, hidden = true)
+            Field(words.emailAddress, email, { email = it }, KeyboardType.Email)
+            Field(words.password, password, { password = it }, KeyboardType.Password, hidden = true)
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(
-                    text = if (busy) "Loguję..." else "Zaloguj się",
+                    text = if (busy) words.signingIn else words.signIn,
                     onClick = { onSignIn(email, password) },
                     icon = KajetIcons.Account,
                     enabled = !busy,
                 )
-                SecondaryButton("Token z przeglądarki", { viaToken = true })
+                SecondaryButton(words.tokenFromBrowser, { viaToken = true })
             }
         } else {
             Text(
-                text = "Zamiast hasła możesz wkleić token urządzenia. Na stronie konta Kajetu " +
-                    "wydaj token dla tego urządzenia i przepisz go tutaj. " +
-                    "Przydaje się jako awaryjne wejście, gdy logowanie przez stronę nie zadziała.",
+                text = words.tokenAbout,
                 style = Kajet.type.body,
                 color = Kajet.colors.muted,
             )
-            Field("Token ze strony", token, { token = it }, KeyboardType.Ascii)
+            Field(words.tokenFromSite, token, { token = it }, KeyboardType.Ascii)
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(
-                    text = if (busy) "Sprawdzam..." else "Połącz",
+                    text = if (busy) words.checking else words.connect,
                     onClick = { onSignInWithToken(token) },
                     icon = KajetIcons.Confirm,
                     enabled = !busy,
                 )
-                SecondaryButton("Wróć", { viaToken = false })
+                SecondaryButton(words.back, { viaToken = false })
             }
         }
     }
@@ -217,10 +243,13 @@ private fun SignedIn(
     state: SignInState.SignedIn,
     syncState: SyncState,
     waitingInQueue: Int,
+    stuckNotes: Int,
     busy: Boolean,
     onSynchronise: () -> Unit,
+    onRetryStuck: () -> Unit,
     onSignOut: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
 
     Column(
@@ -234,18 +263,18 @@ private fun SignedIn(
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SectionLabel("Zalogowany")
+            SectionLabel(words.signedIn)
             Text(state.login, style = Kajet.type.title, color = colors.text)
             Text(state.email, style = Kajet.type.meta, color = colors.muted)
 
             HorizontalRule()
 
-            SectionLabel("Miejsce")
+            SectionLabel(words.spaceLabel)
             Text(
                 text = if (state.unlimited) {
-                    "${humanSize(state.usedBytes)} zajęte, bez limitu"
+                    words.spaceUsedNoLimit(humanSize(state.usedBytes))
                 } else {
-                    "${humanSize(state.usedBytes)} z ${humanSize(state.quotaBytes)}"
+                    words.spaceUsed(humanSize(state.usedBytes), humanSize(state.quotaBytes))
                 },
                 style = Kajet.type.body,
                 color = colors.text,
@@ -277,7 +306,7 @@ private fun SignedIn(
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SectionLabel("Synchronizacja")
+            SectionLabel(words.syncSection)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -298,52 +327,68 @@ private fun SignedIn(
                     modifier = Modifier.size(20.dp),
                 )
                 Text(
-                    text = describeState(syncState, waitingInQueue),
+                    text = describeState(syncState, waitingInQueue, words),
                     style = Kajet.type.body,
                     color = colors.text,
                 )
             }
 
             Text(
-                text = "Notatki wysyłają się same po każdym zapisie. Kiedy nie ma internetu, " +
-                    "czekają na urządzeniu i idą, gdy sieć wróci.",
+                text = words.syncAbout,
                 style = Kajet.type.meta,
                 color = colors.muted,
             )
 
+            /*
+              Notatki, które wyczerpały próby wysyłki. Kiedyś znikały z kolejki
+              po cichu i przestawały się synchronizować na zawsze — teraz mają
+              własny wiersz i przycisk, który daje im nową pulę prób.
+            */
+            if (stuckNotes > 0) {
+                Text(
+                    text = words.notesStuck(stuckNotes),
+                    style = Kajet.type.body,
+                    color = colors.danger,
+                )
+                Text(
+                    text = words.stuckAbout,
+                    style = Kajet.type.meta,
+                    color = colors.muted,
+                )
+                SecondaryButton(words.retryStuckButton, onRetryStuck)
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Przycisk gaśnie też, kiedy synchronizacja chodzi w tle (po
+                // autozapisie), nie tylko po jego własnym kliknięciu.
+                val syncBusy = busy || syncState is SyncState.InProgress
                 PrimaryButton(
-                    text = if (busy) "Synchronizuję..." else "Synchronizuj teraz",
+                    text = if (syncBusy) words.syncing else words.syncNow,
                     onClick = onSynchronise,
                     icon = KajetIcons.CloudMark,
-                    enabled = !busy,
+                    enabled = !syncBusy,
                 )
-                SecondaryButton("Wyloguj", onSignOut, color = colors.danger)
+                SecondaryButton(words.signOut, onSignOut, color = colors.danger)
             }
         }
 
         Text(
-            text = "Wylogowanie odcina chmurę, ale nie kasuje niczego z urządzenia. " +
-                "Notatki zostają w katalogu, który wskazałeś.",
+            text = words.signOutAbout,
             style = Kajet.type.meta,
             color = colors.muted,
         )
     }
 }
 
-private fun describeState(state: SyncState, waiting: Int): String = when (state) {
+private fun describeState(state: SyncState, waiting: Int, words: Strings): String = when (state) {
     SyncState.Idle ->
-        if (waiting > 0) "$waiting notatek czeka na wysłanie" else "Wszystko wysłane"
-    SyncState.InProgress -> "Synchronizuję..."
-    is SyncState.Done -> "Wszystko wysłane"
-    is SyncState.Waiting -> "${state.count} notatek czeka na wysłanie"
+        if (waiting > 0) words.notesWaiting(waiting) else words.everythingSynced
+    SyncState.InProgress -> words.syncing
+    is SyncState.Done -> words.everythingSynced
+    is SyncState.Waiting -> words.notesWaiting(state.count)
     is SyncState.NoNetwork ->
-        if (state.waiting > 0) {
-            "Brak internetu. ${state.waiting} notatek czeka i pójdzie, gdy sieć wróci."
-        } else {
-            "Brak internetu"
-        }
-    SyncState.MustSignIn -> "Sesja wygasła. Zaloguj się jeszcze raz."
+        if (state.waiting > 0) words.offlineWaiting(state.waiting) else words.noInternet
+    SyncState.MustSignIn -> words.sessionExpired
 }
 
 @Composable
@@ -378,7 +423,8 @@ private fun Field(
 }
 
 @Composable
-private fun Notice(text: String, color: androidx.compose.ui.graphics.Color, onClose: () -> Unit) {
+private fun Notice(text: String, color: androidx.compose.ui.graphics.Color, onClose: (() -> Unit)?) {
+    val words = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -388,6 +434,10 @@ private fun Notice(text: String, color: androidx.compose.ui.graphics.Color, onCl
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(text, style = Kajet.type.body, color = color, modifier = Modifier.weight(1f))
-        IconAction(KajetIcons.Close, "Zamknij komunikat", onClose, iconSize = 16.dp)
+        // Bez zamykania, gdy komunikat opisuje trwały stan (wygasła sesja) —
+        // zniknie sam po ponownym zalogowaniu.
+        if (onClose != null) {
+            IconAction(KajetIcons.Close, words.closeMessage, onClose, iconSize = 16.dp)
+        }
     }
 }

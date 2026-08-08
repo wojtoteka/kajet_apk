@@ -14,6 +14,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import wojtoteka.ovh.kajet.core.text.conflictsNoted
+import wojtoteka.ovh.kajet.core.text.signedInAs
+import wojtoteka.ovh.kajet.core.text.syncSummary
+import wojtoteka.ovh.kajet.core.text.words
 import kotlinx.coroutines.launch
 
 class AccountViewModel(
@@ -26,6 +30,14 @@ class AccountViewModel(
 
     val accountState: StateFlow<SignInState> = account.state
     val syncState: StateFlow<SyncState> = sync.state
+
+    /** Notatki, które wyczerpały próby wysyłki i czekają na ponowienie. */
+    val stuckNotes: StateFlow<Int> = sync.stuck
+
+    /** Nowa pula prób dla utkniętych i natychmiastowa synchronizacja. */
+    fun retryStuck() {
+        sync.retryStuck()
+    }
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -49,11 +61,11 @@ class AccountViewModel(
         get() = listOf(Build.MANUFACTURER, Build.MODEL)
             .filter { it.isNotBlank() }
             .joinToString(" ")
-            .ifBlank { "Urządzenie" }
+            .ifBlank { words.deviceFallbackName }
 
     fun signIn(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
-            _error.value = "Podaj adres e-mail i hasło."
+            _error.value = words.giveEmailAndPassword
             return
         }
 
@@ -64,7 +76,7 @@ class AccountViewModel(
             val outcome = runCatching { client.signIn(email.trim(), password, deviceName) }
                 .getOrElse { failure ->
                     CloudClient.Result.Error(
-                        message = failure.message ?: "Nie udało się połączyć z serwerem.",
+                        message = failure.message ?: words.serverUnreachable,
                         worthRetrying = true,
                     )
                 }
@@ -94,7 +106,7 @@ class AccountViewModel(
             val outcome = runCatching { client.createDeviceChallenge(deviceName) }
                 .getOrElse { failure ->
                     CloudClient.Result.Error(
-                        message = failure.message ?: "Nie udało się połączyć z serwerem.",
+                        message = failure.message ?: words.serverUnreachable,
                         worthRetrying = true,
                     )
                 }
@@ -105,8 +117,7 @@ class AccountViewModel(
                     openCustomTab(result.data.verificationUri)
                     _waitingForBrowser.value = true
                     _message.value =
-                        "Zaloguj się na stronie (Google albo hasło) i zatwierdź to urządzenie. " +
-                            "Kajet czeka w tle."
+                        words.approveOnSite
                     _busy.value = false
                     startPolling(
                         code = result.data.code,
@@ -130,14 +141,14 @@ class AccountViewModel(
 
         if (_waitingForBrowser.value && activeChallengeCode == code) {
             // Already polling this challenge; just bring focus back.
-            _message.value = "Wróciłeś z przeglądarki. Sprawdzam zatwierdzenie…"
+            _message.value = words.backFromBrowser
             return
         }
 
         cancelBrowserSignIn(clearMessage = false)
         activeChallengeCode = code
         _waitingForBrowser.value = true
-        _message.value = "Sprawdzam zatwierdzenie logowania…"
+        _message.value = words.checkingApproval
         startPolling(code = code, intervalSeconds = 2, expiresInSeconds = 10 * 60)
     }
 
@@ -154,7 +165,7 @@ class AccountViewModel(
 
     fun signInWithToken(token: String) {
         if (token.isBlank()) {
-            _error.value = "Wklej token ze strony."
+            _error.value = words.pasteTokenFromSite
             return
         }
 
@@ -176,7 +187,7 @@ class AccountViewModel(
 
             val outcome = runCatching { client.accountState() }.getOrElse { failure ->
                 CloudClient.Result.Error(
-                    message = failure.message ?: "Nie udało się połączyć z serwerem.",
+                    message = failure.message ?: words.serverUnreachable,
                     worthRetrying = true,
                 )
             }
@@ -184,7 +195,7 @@ class AccountViewModel(
             when (val result = outcome) {
                 is CloudClient.Result.Ok -> {
                     account.refresh(result.data)
-                    _message.value = "Zalogowano jako ${result.data.account.login}."
+                    _message.value = words.signedInAs(result.data.account.login)
                     SyncWork.scheduleNow(context)
                     SyncWork.schedulePeriodic(context)
                 }
@@ -200,9 +211,12 @@ class AccountViewModel(
     }
 
     /**
-     * Sprawdza token i odświeża stan konta prosto z serwera. Wołane przy
-     * wejściu na ekran: dzięki temu zajęte miejsce jest aktualne, a martwy
-     * token wychodzi na jaw od razu, a nie dopiero przy synchronizacji.
+     * Odświeża stan konta prosto z serwera. Wołane przy wejściu na ekran:
+     * dzięki temu zajęte miejsce jest aktualne.
+     *
+     * Martwy token gasi sesję sam, w [CloudClient] — tutaj zostaje wyłącznie
+     * powiedzenie o tym na głos. Kolejka wysyłki zostaje, żeby po ponownym
+     * zalogowaniu zaległe zmiany dojechały.
      */
     fun refreshFromServer() {
         if (!account.isSignedIn()) return
@@ -211,8 +225,7 @@ class AccountViewModel(
             when (outcome) {
                 is CloudClient.Result.Ok -> account.refresh(outcome.data)
                 is CloudClient.Result.Error -> if (outcome.mustSignIn) {
-                    account.signOut()
-                    _error.value = "Sesja wygasła po stronie serwera. Zaloguj się jeszcze raz."
+                    _error.value = words.sessionExpiredServer
                 }
             }
             refreshState()
@@ -225,36 +238,41 @@ class AccountViewModel(
         sync.forgetAllVersions()
         queue.clear()
         SyncWork.stop(context)
-        _message.value = "Wylogowano. Notatki zostały na urządzeniu."
+        _message.value = words.signedOutNotesStay
         refreshState()
     }
 
     fun synchroniseNow() {
+        // Zajęty znaczy zajęty: kolejne stuknięcia w przycisk nie mają prawa
+        // ustawiać kolejnych synchronizacji w ogonku. To one potrafiły ubić
+        // aplikację do czarnego ekranu przy spamowaniu przycisku.
+        if (_busy.value) return
+
         viewModelScope.launch {
             _busy.value = true
             _error.value = null
 
             // Awaria wysyłki nie może zabrać ze sobą aplikacji. Bez tego jeden
             // błąd z serwera zamykał Kajet i zostawał czarny ekran.
-            val result = runCatching { sync.synchronise() }.getOrElse { failure ->
+            //
+            // Synchronizacja chodzi we własnym zakresie Sync, nie w zakresie
+            // tego ekranu: wyjście z ekranu w trakcie już jej nie przerywa
+            // (przerwana w pół kroku mnożyła kopie „wersja z serwera").
+            val result = runCatching { sync.synchroniseInBackground().await() }.getOrElse { failure ->
                 SyncResult(
                     reason = failure.message
-                        ?: "Synchronizacja się nie udała. Notatki są bezpieczne na urządzeniu.",
+                        ?: words.syncFailedSafe,
                     worthRetrying = true,
                 )
             }
 
             _message.value = when {
                 result.reason != null -> null
-                result.sent == 0 && result.fetched == 0 -> "Wszystko jest już zsynchronizowane."
+                result.sent == 0 && result.fetched == 0 -> words.alreadyInSync
                 else -> buildString {
-                    if (result.sent > 0) append("Wysłano ${result.sent}. ")
-                    if (result.fetched > 0) append("Pobrano ${result.fetched}. ")
+                    append(words.syncSummary(result.sent, result.fetched))
                     if (result.conflicts > 0) {
-                        append(
-                            "${result.conflicts} notatek zmieniło się w dwóch miejscach naraz. " +
-                                "Wersje z serwera zapisałem obok, żeby nic nie przepadło.",
-                        )
+                        append(words.conflictsNoted(result.conflicts))
                     }
                 }.trim()
             }
@@ -282,7 +300,7 @@ class AccountViewModel(
                 val outcome = runCatching { client.pollDeviceChallenge(code) }
                     .getOrElse { failure ->
                         CloudClient.Result.Error(
-                            message = failure.message ?: "Nie udało się połączyć z serwerem.",
+                            message = failure.message ?: words.serverUnreachable,
                             worthRetrying = true,
                         )
                     }
@@ -298,7 +316,7 @@ class AccountViewModel(
                                     onSignedIn(signedIn)
                                     return@launch
                                 }
-                                _error.value = "Serwer oddał niepełną odpowiedź logowania."
+                                _error.value = words.incompleteSignInAnswer
                                 cancelBrowserSignIn()
                                 return@launch
                             }
@@ -317,7 +335,7 @@ class AccountViewModel(
             }
 
             if (isActive) {
-                _error.value = "Czas na zatwierdzenie minął. Spróbuj jeszcze raz."
+                _error.value = words.approvalTimedOut
                 cancelBrowserSignIn(clearMessage = false)
                 _message.value = null
             }
@@ -326,7 +344,7 @@ class AccountViewModel(
 
     private fun onSignedIn(response: SignInResponse) {
         account.save(response)
-        _message.value = "Zalogowano jako ${response.account.login}."
+        _message.value = words.signedInAs(response.account.login)
         SyncWork.scheduleNow(context)
         SyncWork.schedulePeriodic(context)
         refreshState()

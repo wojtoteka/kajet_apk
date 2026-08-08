@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class AccountStore(context: Context) {
+class AccountStore(context: Context) : SyncAccount {
 
     private val preferences: SharedPreferences = createStore(context)
 
@@ -20,12 +20,28 @@ class AccountStore(context: Context) {
 
     fun serverUrl(): String = SERVER_URL
 
-    fun isSignedIn(): Boolean = !token().isNullOrBlank()
+    override fun isSignedIn(): Boolean = !token().isNullOrBlank()
 
-    fun lastSync(): Long = preferences.getLong(KEY_LAST_SYNC, 0L)
+    override fun lastSync(): Long = preferences.getLong(KEY_LAST_SYNC, 0L)
 
-    fun rememberSync(moment: Long) {
+    override fun rememberSync(moment: Long) {
         preferences.edit().putLong(KEY_LAST_SYNC, moment).apply()
+    }
+
+    /**
+     * Do której chwili znamy nagrobki po notatkach skasowanych na zawsze.
+     * Osobno od [lastSync], bo to inny kursor: notatki idą po dacie zmiany,
+     * nagrobki po dacie skasowania.
+     */
+    override fun lastDeletedSync(): Long = preferences.getLong(KEY_LAST_DELETED_SYNC, 0L)
+
+    /**
+     * Przesuwa ten znacznik. Wołane DOPIERO po przejściu całego spisu do końca
+     * — przerwana w połowie synchronizacja nie ma prawa przeskoczyć nagrobków,
+     * których jeszcze nie zastosowano.
+     */
+    override fun rememberDeletedSync(moment: Long) {
+        preferences.edit().putLong(KEY_LAST_DELETED_SYNC, moment).apply()
     }
 
     fun save(response: SignInResponse) {
@@ -35,6 +51,38 @@ class AccountStore(context: Context) {
             .putString(KEY_LOGIN, response.account.login)
             .putString(KEY_EMAIL, response.account.email)
             .putBoolean(KEY_ADMIN, response.account.admin)
+            // Odpowiedź logowania niesie też zajętość konta. Bez zapisania jej
+            // tutaj ekran pokazywał „0 B, bez limitu" aż do ponownego wejścia.
+            .putLong(KEY_QUOTA, response.storage.quotaBytes)
+            .putLong(KEY_USED, response.storage.usedBytes)
+            .remove(KEY_SESSION_EXPIRED)
+            .apply()
+        _state.value = readState()
+    }
+
+    /**
+     * Serwer przestał uznawać token (wylogowanie przez stronę, wygaśnięcie).
+     *
+     * Schodzi token, a razem z nim WSZYSTKO, co mówi o człowieku: login, adres,
+     * zajęte miejsce. Sesji nie ma, więc aplikacja nie ma prawa dalej wyświetlać
+     * czyjejś nazwy — zostaje sam znacznik, dzięki któremu ekrany mówią wprost
+     * „sesja wygasła" zamiast udawać, że nikt się nigdy nie logował. Kolejka
+     * wysyłki zostaje nietknięta: po ponownym zalogowaniu zaległe zmiany dojadą.
+     *
+     * Wołane z jednego miejsca — [CloudClient] przy odpowiedzi odmawiającej
+     * tożsamości.
+     */
+    fun markSessionExpired() {
+        if (token().isNullOrBlank()) return
+        preferences.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_TOKEN_ID)
+            .remove(KEY_LOGIN)
+            .remove(KEY_EMAIL)
+            .remove(KEY_ADMIN)
+            .remove(KEY_QUOTA)
+            .remove(KEY_USED)
+            .putBoolean(KEY_SESSION_EXPIRED, true)
             .apply()
         _state.value = readState()
     }
@@ -60,6 +108,8 @@ class AccountStore(context: Context) {
             .remove(KEY_QUOTA)
             .remove(KEY_USED)
             .remove(KEY_LAST_SYNC)
+            .remove(KEY_LAST_DELETED_SYNC)
+            .remove(KEY_SESSION_EXPIRED)
             .apply()
         _state.value = readState()
     }
@@ -67,7 +117,11 @@ class AccountStore(context: Context) {
     private fun readState(): SignInState {
         val token = token()
         return if (token.isNullOrBlank()) {
-            SignInState.SignedOut(serverUrl())
+            if (preferences.getBoolean(KEY_SESSION_EXPIRED, false)) {
+                SignInState.SessionExpired(serverUrl())
+            } else {
+                SignInState.SignedOut(serverUrl())
+            }
         } else {
             SignInState.SignedIn(
                 serverUrl = serverUrl(),
@@ -143,6 +197,8 @@ class AccountStore(context: Context) {
         private const val KEY_QUOTA = "quota"
         private const val KEY_USED = "used"
         private const val KEY_LAST_SYNC = "last_sync"
+        private const val KEY_LAST_DELETED_SYNC = "last_deleted_sync"
+        private const val KEY_SESSION_EXPIRED = "session_expired"
     }
 }
 
@@ -150,6 +206,13 @@ sealed interface SignInState {
     val serverUrl: String
 
     data class SignedOut(override val serverUrl: String) : SignInState
+
+    /**
+     * Token przestał działać (wylogowanie przez stronę, wygaśnięcie). Bez
+     * nazwy konta — ta zeszła razem z sesją; zostaje sama wiadomość, że trzeba
+     * zalogować się jeszcze raz.
+     */
+    data class SessionExpired(override val serverUrl: String) : SignInState
 
     data class SignedIn(
         override val serverUrl: String,
