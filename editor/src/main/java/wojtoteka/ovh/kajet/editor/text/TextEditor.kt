@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -59,6 +61,8 @@ import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import wojtoteka.ovh.kajet.editor.SaveState
 import wojtoteka.ovh.kajet.editor.SaveIndicator
+import wojtoteka.ovh.kajet.editor.penWritingSurface
+import wojtoteka.ovh.kajet.ink.PenHaptics
 import kotlin.math.roundToInt
 
 @Composable
@@ -81,6 +85,21 @@ fun TextEditor(
     val colors = Kajet.colors
     val narrow = LocalConfiguration.current.screenWidthDp < 600
     val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
+
+    /*
+      Pisanie rysikiem w notatce tekstowej (system zamienia kreski na litery)
+      też ma drgać jak długopis — nie tylko okno rysowania. Zagnieżdżenia
+      liczy PenHaptics, więc okno rysowania nad notatką niczego nie psuje;
+      po jego zamknięciu wracamy do profilu pisania.
+    */
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        PenHaptics.enter(context)
+        onDispose { PenHaptics.leave(context) }
+    }
+    LaunchedEffect(drawing) {
+        if (!drawing) PenHaptics.use(context, PenHaptics.WRITING)
+    }
 
     var field by remember(document?.id) {
         mutableStateOf(TextFieldValue(document?.text?.markdown.orEmpty()))
@@ -236,6 +255,9 @@ fun TextEditor(
                 Modifier
                     .fillMaxSize()
                     .background(colors.sheet)
+                    // Pole treści to powierzchnia pisania rysikiem
+                    // (tablet zamienia kreski na litery) — tu rysik drga.
+                    .penWritingSurface(context)
                     .imePadding(),
             ) {
                 if (blockMode) {

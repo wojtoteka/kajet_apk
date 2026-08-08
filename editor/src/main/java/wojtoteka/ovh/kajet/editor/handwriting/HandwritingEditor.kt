@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -78,6 +80,7 @@ import wojtoteka.ovh.kajet.ink.Brushes
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.ink.CanvasListener
 import wojtoteka.ovh.kajet.ink.OnScreenPage
+import wojtoteka.ovh.kajet.ink.PenHaptics
 import wojtoteka.ovh.kajet.ink.PenSettings
 import wojtoteka.ovh.kajet.ink.RecognitionState
 import kotlin.math.roundToInt
@@ -105,6 +108,23 @@ fun HandwritingEditor(
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
 
     val colors = Kajet.colors
+
+    /*
+      Drganie przy pisaniu robi silniczek w rysiku, nie tablet. Systemowa usługa
+      Lenovo musi tylko wiedzieć, który przybór naśladować i jak mocno —
+      a mówimy jej to przy każdej zmianie narzędzia. Poza notatnikiem
+      obowiązuje profil „długopis", więc przy wyjściu nie gasimy niczego,
+      tylko wracamy do niego.
+    */
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        PenHaptics.enter(context)
+        onDispose { PenHaptics.leave(context) }
+    }
+    LaunchedEffect(tool, pens.penKind) {
+        PenHaptics.use(context, PenHaptics.profileFor(tool, pens.penKind))
+    }
+
     var penPanel by remember { mutableStateOf(false) }
     var settingsPanel by remember { mutableStateOf(false) }
 

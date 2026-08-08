@@ -444,6 +444,21 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
 
     // Touch
 
+    /*
+      Kartka to powierzchnia pisania: nad nią rysik ma drgać, nad paskami
+      narzędzi i menu — nie. Najechanie i zjazd zgłaszają się same; PenHaptics
+      odrzuca powtórki po jednym porównaniu.
+    */
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE ->
+                PenHaptics.surfaceHover(context, true)
+            MotionEvent.ACTION_HOVER_EXIT ->
+                PenHaptics.surfaceHover(context, false)
+        }
+        return super.onHoverEvent(event)
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val index = event.actionIndex
         val id = event.getPointerId(index)
@@ -468,6 +483,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
     private fun onDown(event: MotionEvent, index: Int, id: Int, type: Int): Boolean {
         val stylus = type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER
         val finger = !stylus && type != MotionEvent.TOOL_TYPE_MOUSE
+
+        // Rysik Lenovo gubi zamówiony profil, gdy aplikacja schodzi w tło
+        // albo rysik zaśnie. Przypomnienie tuż przed kreską jest tanie (idzie
+        // wątkiem w tle i odrzuca powtórki), a pilnuje, żeby drganie było.
+        if (stylus) {
+            // Dotknięcie kartki bez wcześniejszego najechania (nie każdy
+            // rysik je zgłasza) też znaczy „jestem nad powierzchnią pisania".
+            PenHaptics.surfaceHover(context, true)
+            PenHaptics.refresh(context)
+        }
 
         // Drugi palec na ekranie zawsze znaczy „przesuwam kartkę", nawet kiedy
         // palec rysuje. Kreska zaczęta pierwszym palcem znika, bo i tak brała się

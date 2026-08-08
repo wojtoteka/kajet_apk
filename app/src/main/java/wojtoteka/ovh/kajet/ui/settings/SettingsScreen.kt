@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.ink.PenHaptics
 import wojtoteka.ovh.kajet.ui.library.ChoiceRow
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
@@ -59,6 +61,7 @@ fun SettingsScreen(
 ) {
     val settings by settingsStore.settings.collectAsStateWithLifecycle(KajetSettings())
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val narrow = LocalConfiguration.current.screenWidthDp < 600
     val railWidth = if (narrow) 48.dp else Kajet.dimens.railWidth
     val sheetPadding = if (narrow) 16.dp else 32.dp
@@ -161,6 +164,42 @@ fun SettingsScreen(
                         selected = settings.fingerBehavior == option,
                         onClick = { scope.launch { settingsStore.setFingerBehavior(option) } },
                     )
+                }
+            }
+
+            /*
+              Drganie rysika Lenovo. Sekcja jest tylko na urządzeniach z usługą
+              rysika — gdzie indziej nie ma o czym mówić. Uprawnienia nie da
+              się nadać z tabletu i ginie ono przy odinstalowaniu aplikacji,
+              więc zamiast cichej degradacji pokazujemy stan i jedną komendę,
+              która załatwia sprawę.
+            */
+            if (PenHaptics.serviceAvailable(context)) {
+                SettingsSection(
+                    title = "Drganie rysika",
+                    description = "Silniczek w rysiku Lenovo daje odgłos pisania. Kajet mówi mu, " +
+                        "czym piszesz — piórem, ołówkiem czy gumką.",
+                ) {
+                    Text(
+                        text = if (PenHaptics.permitted(context)) {
+                            "Działa. Rysik drga przy pisaniu w notatkach odręcznych."
+                        } else {
+                            "Potrzebne jest jednorazowe pozwolenie, którego nie da się nadać " +
+                                "z tabletu. Podłącz tablet do komputera z adb i uruchom:"
+                        },
+                        style = Kajet.type.body,
+                        color = Kajet.colors.muted,
+                        modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
+                    )
+                    if (!PenHaptics.permitted(context)) {
+                        Text(
+                            text = "adb shell pm grant ${context.packageName} " +
+                                "android.permission.WRITE_SECURE_SETTINGS",
+                            style = Kajet.type.code,
+                            color = Kajet.colors.text,
+                            modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
+                        )
+                    }
                 }
             }
 

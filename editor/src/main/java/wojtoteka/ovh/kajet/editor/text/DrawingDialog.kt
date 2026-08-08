@@ -19,10 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,11 +44,13 @@ import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.InkStroke
+import wojtoteka.ovh.kajet.core.model.InkTool
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.ink.EditorTool
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.ink.CanvasListener
 import wojtoteka.ovh.kajet.ink.OnScreenPage
+import wojtoteka.ovh.kajet.ink.PenHaptics
 import wojtoteka.ovh.kajet.ink.PenSettings
 import wojtoteka.ovh.kajet.ink.Strokes
 
@@ -62,6 +67,18 @@ fun DrawingDialog(
     var tool by remember { mutableStateOf(EditorTool.PEN) }
     var color by remember { mutableStateOf(colors.defaultInk.toArgb()) }
     var width by remember { mutableStateOf(2.4f) }
+
+    // Rysunek w notatce tekstowej to też pisanie rysikiem, więc i tu rysik ma
+    // drgać tym, czym się rysuje. Zagnieżdżenia liczy PenHaptics, więc
+    // zamknięcie tego okna nie zabiera profilu ekranowi pod spodem.
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        PenHaptics.enter(context)
+        onDispose { PenHaptics.leave(context) }
+    }
+    LaunchedEffect(tool) {
+        PenHaptics.use(context, PenHaptics.profileFor(tool, InkTool.PEN))
+    }
 
     Dialog(onDismissRequest = onClose) {
         Column(

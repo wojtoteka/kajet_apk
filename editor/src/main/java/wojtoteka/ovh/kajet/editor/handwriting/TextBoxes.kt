@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -36,6 +37,7 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.editor.penWritingSurface
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import kotlin.math.roundToInt
 
@@ -83,6 +85,7 @@ private fun TextBoxOnSheet(
     onDelete: () -> Unit,
 ) {
     val density = LocalDensity.current
+    val context = LocalContext.current
     val left = (box.x - offsetX) * zoom
     val top = (box.y + pageTop - offsetY) * zoom
     val width = box.width * zoom
@@ -100,6 +103,9 @@ private fun TextBoxOnSheet(
                 if (box.background != 0) Modifier.background(Color(box.background)) else Modifier,
             )
             .then(if (edited) Modifier.border(1.dp, Kajet.colors.accent) else Modifier)
+            // Edytowane pole to powierzchnia pisania: pisze się w nim
+            // rysikiem tak samo jak po kartce, więc rysik ma nad nim drgać.
+            .then(if (edited) Modifier.penWritingSurface(context) else Modifier)
             .pointerInput(box.id) {
                 detectTapGestures(onTap = { onEdit() })
             },
