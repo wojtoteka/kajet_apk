@@ -100,8 +100,25 @@ class NoteTitlesTest {
         val title = NoteTitles.fromMarkdown(long)
 
         assertThat(title).isNotNull()
-        assertThat(title!!.length).isAtMost(84)
+        // 48 znaków granicy plus wielokropek — ta sama liczba co na serwerze.
+        assertThat(title!!.length).isAtMost(51)
         assertThat(title.endsWith("...")).isTrue()
+    }
+
+    @Test
+    fun `tnie na spacji, nie w polowie slowa`() {
+        val zdanie = "Pomaganie drugiemu człowiekowi to jedna z najważniejszych wartości w życiu."
+        val title = NoteTitles.fromMarkdown(zdanie)!!
+
+        assertThat(title.endsWith("...")).isTrue()
+        val bezKropek = title.dropLast(3)
+        assertThat(zdanie.startsWith(bezKropek)).isTrue()
+        assertThat(zdanie[bezKropek.length]).isEqualTo(' ')
+    }
+
+    @Test
+    fun `jedno slowo dluzsze niz granica tniemy rowno`() {
+        assertThat(NoteTitles.fromMarkdown("a".repeat(120))).isEqualTo("a".repeat(48) + "...")
     }
 
     @Test

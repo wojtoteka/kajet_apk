@@ -18,8 +18,17 @@ import wojtoteka.ovh.kajet.core.text.PolishStrings
  */
 object NoteTitles {
 
-    /** Dłuższy pierwszy wiersz obcinamy — w spisie i tak by się nie zmieścił. */
-    private const val LONGEST = 80
+    /**
+     * Dłuższy pierwszy wiersz obcinamy — w spisie i tak by się nie zmieścił.
+     *
+     * Osiemdziesiąt znaków zajmowało na karcie telefonu trzy wiersze i tytuł
+     * zjadał całą kartę. Czterdzieści osiem mieści się w jednym wierszu
+     * z zapasem.
+     *
+     * Ta sama liczba MUSI stać w note-title.ts na serwerze. Rozjazd znaczyłby,
+     * że te same notatki przetytułowują się nawzajem przy każdej synchronizacji.
+     */
+    private const val LONGEST = 48
 
     /**
      * Ile znaków musi mieć NIEDOKOŃCZONY wiersz, żeby dało się z niego zrobić
@@ -49,8 +58,21 @@ object NoteTitles {
     private val italic = Regex("""\*([^*]+)\*""")
     private val horizontalRule = Regex("""^(-{3,}|\*{3,}|_{3,})$""")
 
-    private fun shorten(text: String): String =
-        if (text.length > LONGEST) text.take(LONGEST).trimEnd() + "..." else text
+    /**
+     * Obcięcie na ostatniej spacji przed granicą, a nie w połowie słowa.
+     * „Pomaganie drugiemu człowiekowi to jedna z najważn..." czyta się jak
+     * usterka; ucięte na spacji czyta się jak tytuł.
+     *
+     * Wyjątek: jedno słowo dłuższe niż cała granica — wtedy nie ma gdzie ciąć.
+     */
+    private fun shorten(text: String): String {
+        if (text.length <= LONGEST) return text
+
+        val cut = text.take(LONGEST)
+        val space = cut.lastIndexOf(' ')
+        val kept = if (space > LONGEST / 2) cut.take(space) else cut
+        return kept.trimEnd() + "..."
+    }
 
     /** Znaczniki w środku wiersza. Zdejmujemy je, zostawiając samą treść. */
     private fun withoutMarkers(line: String): String = line
