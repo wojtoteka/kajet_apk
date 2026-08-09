@@ -1346,10 +1346,7 @@ class Sync(
         fromServer: ServerNote,
         document: NoteDocument,
     ): Boolean {
-        val whenChanged = java.text.SimpleDateFormat(
-            "d MMMM, HH:mm",
-            java.util.Locale.forLanguageTag("pl-PL"),
-        ).format(java.util.Date(fromServer.updatedAt))
+        val whenChanged = serverVersionStamp(fromServer.updatedAt)
 
         val saved = runCatching {
             repository.writeNoteFromCloud(
@@ -1368,6 +1365,16 @@ class Sync(
         fetchAttachments(fromServer.id, saved, fromServer.attachments)
         return true
     }
+
+    /**
+     * Kiedy serwer ostatnio widział tę wersję — do tytułu kopii konfliktu,
+     * żeby dwie kopie z różnych dni dało się odróżnić bez otwierania.
+     */
+    private fun serverVersionStamp(updatedAt: Long): String =
+        java.text.SimpleDateFormat(
+            "d MMMM, HH:mm",
+            java.util.Locale.forLanguageTag("pl-PL"),
+        ).format(java.util.Date(updatedAt))
 
     /**
      * Ta sama treść mimo nieznanej podstawy. Gwiazdka nie liczy się do
@@ -1469,14 +1476,17 @@ class Sync(
 
     /** Odpowiednik [saveServerCopyAlongside] dla pliku z kodem: kopia obok. */
     private suspend fun saveCodeVersionAlongside(path: String, onServer: ServerNote): Boolean {
-        val code = onServer.content?.let { parseCodeContent(it) } ?: return false
+        val content = onServer.content ?: return false
+        val code = parseCodeContent(content) ?: return false
         val fileName = path.substringAfterLast('/')
         val stem = fileName.substringBeforeLast('.', fileName)
         val extension = fileName.substringAfterLast('.', "")
+        // Dwukropek z godziny nie przejdzie w nazwie pliku — stąd podkreślnik.
+        val whenChanged = serverVersionStamp(onServer.updatedAt).replace(':', '_')
         val copyName = if (extension.isEmpty()) {
-            "$stem (wersja z serwera)"
+            "$stem (wersja z serwera, $whenChanged)"
         } else {
-            "$stem (wersja z serwera).$extension"
+            "$stem (wersja z serwera, $whenChanged).$extension"
         }
         return runCatching {
             repository.createTextFileFromCloud(

@@ -126,6 +126,34 @@ class SyncCodeTest {
     }
 
     @Test
+    fun `kopia konfliktu niesie znacznik czasu bez dwukropka`() {
+        library.texts[path] = "moja wersja"
+        val id = codeIds.idFor(path)
+        queue.add(path, id, QueueEntry.KIND_CODE)
+        transport.onSendNote = { note ->
+            if (note.id == id) {
+                CloudClient.Result.Ok(
+                    SaveResponse(
+                        status = "conflict",
+                        onServer = serverCode(id, version = 4, source = "wersja z serwera"),
+                    ),
+                )
+            } else {
+                CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1))
+            }
+        }
+
+        sync()
+
+        // Znacznik jak w kopii notatki, tylko godzina z podkreślnikiem —
+        // dwukropek nie przechodzi w nazwie pliku.
+        val copy = library.texts.keys.single { it != path }
+        assertThat(copy).contains("(wersja z serwera, ")
+        assertThat(copy).doesNotContain(":")
+        assertThat(copy).endsWith(".py")
+    }
+
+    @Test
     fun `nieudana kopia nie zdejmuje wpisu i nie zapamietuje wersji`() {
         library.texts[path] = "moja wersja"
         library.failWrites = true
