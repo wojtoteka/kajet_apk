@@ -98,7 +98,7 @@ class SyncTest {
         // Lokalny plik dokładnie ten sam, a obok stanęła kopia z serwera.
         assertThat(library.notes[path]!!.text!!.markdown).isEqualTo("lokalna wersja")
         val copy = library.notes.values.single { it.id != noteId }
-        assertThat(copy.title).contains("wersja z serwera")
+        assertThat(copy.title).contains("kopia z chmury")
         assertThat(copy.text!!.markdown).isEqualTo("z serwera")
         // Konflikt rozliczony: wersja zapamiętana, wpis zdjęty z kolejki.
         assertThat(knownVersion(noteId)).isEqualTo(7)
@@ -144,7 +144,7 @@ class SyncTest {
         assertThat(knownVersion(noteId)).isEqualTo(9)
         assertThat(queue.size()).isEqualTo(0)
         // Kopia konfliktu NIE powstaje — kosz to nie rozjazd treści.
-        assertThat(library.notes.values.none { it.title.contains("wersja z serwera") }).isTrue()
+        assertThat(library.notes.values.none { it.title.contains("kopia z chmury") }).isTrue()
     }
 
     @Test
@@ -271,7 +271,7 @@ class SyncTest {
         // Lokalny plik nietknięty, treść serwera w kopii obok.
         assertThat(library.notes[path]!!.text!!.markdown).isEqualTo("lokalna po reinstalacji")
         val copy = library.notes.values
-            .single { it.id != noteId && it.title.contains("wersja z serwera") }
+            .single { it.id != noteId && it.title.contains("kopia z chmury") }
         assertThat(copy.text!!.markdown).isEqualTo("nowsza na serwerze")
         assertThat(knownVersion(noteId)).isEqualTo(8)
         assertThat(queue.all().none { it.noteId == noteId }).isTrue()

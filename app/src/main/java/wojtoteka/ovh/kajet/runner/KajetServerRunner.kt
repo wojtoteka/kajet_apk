@@ -5,10 +5,11 @@ import wojtoteka.ovh.kajet.code.CodeRunner
 import wojtoteka.ovh.kajet.code.RunException
 import wojtoteka.ovh.kajet.code.RunResult
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
+import wojtoteka.ovh.kajet.core.text.words
 
 class KajetServerRunner(private val cloud: CloudCode) : CodeRunner {
 
-    override val name: String = "na serwerze Kajetu"
+    override val name: String get() = words.codeOnServer
     override val requiresInternet: Boolean = true
 
     // Python ma offline=true (Chaquopy na tablecie), ale na telefonie i tak

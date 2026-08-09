@@ -117,7 +117,7 @@ class SyncCodeTest {
         // Plik pod palcem nietknięty, treść z serwera leży OBOK, w tym folderze.
         assertThat(library.texts[path]).isEqualTo("moja wersja")
         val copy = library.texts.keys.single { it != path }
-        assertThat(copy).startsWith("szkola/skrypt (wersja z serwera")
+        assertThat(copy).startsWith("szkola/skrypt (kopia z chmury")
         assertThat(copy).endsWith(".py")
         assertThat(library.texts[copy]).isEqualTo("wersja z serwera")
         // Konflikt rozliczony: wersja zapamiętana, wpis zdjęty z kolejki.
@@ -148,7 +148,7 @@ class SyncCodeTest {
         // Znacznik jak w kopii notatki, tylko godzina z podkreślnikiem —
         // dwukropek nie przechodzi w nazwie pliku.
         val copy = library.texts.keys.single { it != path }
-        assertThat(copy).contains("(wersja z serwera, ")
+        assertThat(copy).contains("(kopia z chmury, ")
         assertThat(copy).doesNotContain(":")
         assertThat(copy).endsWith(".py")
     }
@@ -275,7 +275,7 @@ class SyncCodeTest {
         // tożsamość, a treść serwera leży obok jako podpisana kopia konfliktu.
         assertThat(library.texts["skrypt.py"]).isEqualTo("print(1)")
         val copy = library.texts.keys.single { it != "skrypt.py" }
-        assertThat(copy).startsWith("skrypt (wersja z serwera")
+        assertThat(copy).startsWith("skrypt (kopia z chmury")
         assertThat(library.texts[copy]).isEqualTo("print(2)")
         assertThat(codeIds.existingIdFor("skrypt.py")).isEqualTo("c1")
         assertThat(knownVersion("c1")).isEqualTo(5)
@@ -295,7 +295,7 @@ class SyncCodeTest {
         // z kosza po nagrobku) — serwer nie ma prawa po cichu nadpisać.
         assertThat(library.texts[path]).isEqualTo("moja wersja")
         val copy = library.texts.keys.single { it != path }
-        assertThat(copy).startsWith("szkola/skrypt (wersja z serwera")
+        assertThat(copy).startsWith("szkola/skrypt (kopia z chmury")
         assertThat(library.texts[copy]).isEqualTo("serwerowa")
         assertThat(knownVersion("c1")).isEqualTo(5)
         assertThat(result.conflicts).isEqualTo(1)

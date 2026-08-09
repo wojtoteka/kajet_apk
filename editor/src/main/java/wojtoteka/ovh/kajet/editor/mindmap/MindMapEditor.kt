@@ -84,6 +84,8 @@ import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.disconnectFrom
 import wojtoteka.ovh.kajet.core.text.mapTally
+import wojtoteka.ovh.kajet.core.text.percentOf
+import wojtoteka.ovh.kajet.core.text.pointsOf
 import wojtoteka.ovh.kajet.core.text.thisNode
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.editor.text.DrawingDialog
@@ -485,7 +487,7 @@ fun MindMapEditor(
                         touchTarget = 40.dp,
                     )
                     Text(
-                        text = "${(zoom * 100).roundToInt()}%",
+                        text = words.percentOf((zoom * 100).roundToInt()),
                         style = Kajet.type.label,
                         color = colors.text,
                         textAlign = TextAlign.Center,
@@ -952,7 +954,7 @@ private fun NodePanel(
         SegmentedChoice(
             options = NoteFont.entries,
             selected = node.font,
-            name = { it.labelPl },
+            name = { it.label(words) },
             onSelect = onFont,
         )
 
@@ -961,7 +963,7 @@ private fun NodePanel(
             value = node.fontSize,
             range = 8f..48f,
             onChange = onFontSize,
-            readout = { "${it.roundToInt()} pkt" },
+            readout = { words.pointsOf(it.roundToInt().toString()) },
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {

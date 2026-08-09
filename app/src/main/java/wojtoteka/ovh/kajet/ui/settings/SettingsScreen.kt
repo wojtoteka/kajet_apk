@@ -544,5 +544,7 @@ private fun appVersion(context: Context): String = runCatching {
 fun readableFolder(uri: String): String {
     val decoded = Uri.decode(uri)
     val tail = decoded.substringAfterLast("/tree/")
-    return tail.replace("primary:", words.deviceStorage).ifBlank { decoded }
+    // Ukośnik doklejamy tutaj, a nie w słowniku: w napisie do tłumaczenia
+    // wyglądał jak literówka i ginie przy pierwszej poprawce.
+    return tail.replace("primary:", words.deviceStorage + " / ").ifBlank { decoded }
 }

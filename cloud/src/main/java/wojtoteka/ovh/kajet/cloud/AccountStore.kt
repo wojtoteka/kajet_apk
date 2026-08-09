@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import wojtoteka.ovh.kajet.core.text.words
 
 class AccountStore(context: Context) : SyncAccount {
 
@@ -270,7 +271,10 @@ fun humanSize(bytes: Long): String {
         value /= 1024
         i += 1
     }
+    // Przecinek albo kropka według języka: w angielskim interfejsie
+    // „12,4 MB” wygląda jak pomyłka.
+    val separator = if (words.english) java.util.Locale.UK else java.util.Locale.forLanguageTag("pl")
     val rounded = if (value >= 100) Math.round(value).toString()
-    else String.format(java.util.Locale.forLanguageTag("pl"), "%.1f", value)
+    else String.format(separator, "%.1f", value)
     return "$rounded ${units[i]}"
 }

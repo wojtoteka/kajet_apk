@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import wojtoteka.ovh.kajet.core.text.andMoreNotes
+import wojtoteka.ovh.kajet.core.text.cloudCopyOf
 import wojtoteka.ovh.kajet.core.text.codeNoteUnknownShape
 import wojtoteka.ovh.kajet.core.text.noteSaveOnDeviceFailed
 import wojtoteka.ovh.kajet.core.text.words
@@ -978,7 +980,7 @@ class Sync(
 
         // Notatka z lokalną zmianą czekającą na wysłanie nie może zostać
         // nadpisana treścią z serwera — konflikt ma rozstrzygnąć wysyłka
-        // (kopią „wersja z serwera" obok), nie ciche pobranie. Zakładka staje
+        // (kopią „kopia z chmury" obok), nie ciche pobranie. Zakładka staje
         // przed taką notatką, żeby następny przebieg po niej wrócił.
         fun deferred(note: ServerNote) {
             bookmark = minOf(bookmark, (note.updatedAt - 1).coerceAtLeast(0))
@@ -1223,7 +1225,7 @@ class Sync(
             count = fetched,
             conflicts = conflicts,
             reason = firstFailure?.let { first ->
-                if (failures > 1) "$first (takich notatek jest $failures)" else first
+                if (failures > 1) words.andMoreNotes(first, failures) else first
             },
             retryNeeded = resolvedPending,
             completed = sawEnd && failures == 0,
@@ -1563,7 +1565,7 @@ class Sync(
                     // A new identifier, because this is meant to be a separate
                     // note rather than a swap of the one somebody is sitting at.
                     id = java.util.UUID.randomUUID().toString(),
-                    title = "${document.title} (wersja z serwera, $whenChanged)",
+                    title = words.cloudCopyOf(document.title, whenChanged),
                 ),
                 targetFolder = path.substringBeforeLast('/', ""),
             )
@@ -1573,7 +1575,7 @@ class Sync(
         // is a new local note that still points at assets/... in its content.
         if (!fetchAttachments(fromServer.id, saved, fromServer.attachments)) {
             // Kopia już stoi i cofnąć jej nie wolno — ponowienie mnożyłoby
-            // kopie „(wersja z serwera)". Brak załącznika zostaje w dzienniku.
+            // kopie „(kopia z chmury)". Brak załącznika zostaje w dzienniku.
             Log.w("Kajet", "Kopia konfliktu ${fromServer.id} bez części załączników")
         }
         return true
@@ -1586,7 +1588,9 @@ class Sync(
     private fun serverVersionStamp(updatedAt: Long): String =
         java.text.SimpleDateFormat(
             "d MMMM, HH:mm",
-            java.util.Locale.forLanguageTag("pl-PL"),
+            // Nazwa miesiąca musi iść za wyborem języka w Kajecie — inaczej
+            // w angielskim tytule kopii siedziało „5 sierpnia”.
+            if (words.english) java.util.Locale.UK else java.util.Locale.forLanguageTag("pl-PL"),
         ).format(java.util.Date(updatedAt))
 
     /**
@@ -1739,9 +1743,9 @@ class Sync(
         // Dwukropek z godziny nie przejdzie w nazwie pliku — stąd podkreślnik.
         val whenChanged = serverVersionStamp(onServer.updatedAt).replace(':', '_')
         val copyName = if (extension.isEmpty()) {
-            "$stem (wersja z serwera, $whenChanged)"
+            words.cloudCopyOf(stem, whenChanged)
         } else {
-            "$stem (wersja z serwera, $whenChanged).$extension"
+            words.cloudCopyOf(stem, whenChanged) + ".$extension"
         }
         return runCatching {
             repository.createTextFileFromCloud(

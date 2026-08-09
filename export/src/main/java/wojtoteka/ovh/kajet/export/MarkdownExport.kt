@@ -50,7 +50,7 @@ object MarkdownExport {
                 .filter { it.isNotBlank() }
             if (pieces.isEmpty()) return@forEachIndexed
             anything = true
-            append("## Strona ").append(index + 1).append("\n\n")
+            append("## ").append(words.pageWord).append(" ").append(index + 1).append("\n\n")
             pieces.forEach { append(it).append("\n\n") }
         }
         if (!anything) {

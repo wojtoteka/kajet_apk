@@ -60,6 +60,7 @@ import wojtoteka.ovh.kajet.core.design.fontFamilyFor
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.percentOf
 import wojtoteka.ovh.kajet.core.text.photoNotFound
 
 @Composable
@@ -625,7 +626,7 @@ private fun ImageBlock(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${(block.width * 100).roundToInt()} %",
+                text = words.percentOf((block.width * 100).roundToInt()),
                 style = Kajet.type.meta,
                 color = colors.muted,
             )
@@ -677,12 +678,12 @@ private fun ImageBlock(
                     value = block.width.coerceIn(Block.SMALLEST_WIDTH, Block.FULL_WIDTH),
                     range = Block.SMALLEST_WIDTH..Block.FULL_WIDTH,
                     onChange = onWidth,
-                    readout = { "${(it * 100).roundToInt()} %" },
+                    readout = { words.percentOf((it * 100).roundToInt()) },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(0.25f, 0.5f, 0.75f, 1f).forEach { part ->
                         SecondaryButton(
-                            text = "${(part * 100).roundToInt()} %",
+                            text = words.percentOf((part * 100).roundToInt()),
                             onClick = { onWidth(part) },
                         )
                     }

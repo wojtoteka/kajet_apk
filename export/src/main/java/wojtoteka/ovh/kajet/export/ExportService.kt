@@ -276,7 +276,10 @@ class ExportService(
             )
         }
         return outcome.exceptionOrNull()?.let {
-            "${words.printFailed} ${it.message ?: words.unknownError}."
+            // Treść wyjątku zostaje w dzienniku: na ekranie było z niej
+            // angielskie zdanie o wskaźniku na null.
+            Log.w("Kajet", "Drukowanie nie ruszyło", it)
+            words.printFailed
         }
     }
 }

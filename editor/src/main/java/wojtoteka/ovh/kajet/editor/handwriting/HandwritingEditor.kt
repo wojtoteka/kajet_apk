@@ -83,6 +83,8 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.eraserSizeOf
 import wojtoteka.ovh.kajet.core.text.pagesCount
 import wojtoteka.ovh.kajet.core.text.pagesShort
+import wojtoteka.ovh.kajet.core.text.percentOf
+import wojtoteka.ovh.kajet.core.text.pointsOf
 import wojtoteka.ovh.kajet.core.text.selectedStrokes
 import wojtoteka.ovh.kajet.core.text.strokeWidthOf
 import wojtoteka.ovh.kajet.editor.SaveState
@@ -1036,14 +1038,14 @@ private fun PenPanel(
                     value = pens.eraserRadius,
                     range = 2f..80f,
                     onChange = onEraserRadius,
-                    readout = { "${it.roundToInt()} pkt" },
+                    readout = { words.pointsOf(it.roundToInt().toString()) },
                 )
                 PenStrokePreview(
                     argb = Kajet.colors.text.toArgb(),
                     width = pens.eraserRadius,
                     opacity = 0.2f,
                 )
-                Text(tool.descriptionPl, style = Kajet.type.meta, color = Kajet.colors.muted)
+                Text(tool.description(words), style = Kajet.type.meta, color = Kajet.colors.muted)
             }
 
             tool == EditorTool.HIGHLIGHTER -> {
@@ -1059,14 +1061,14 @@ private fun PenPanel(
                     value = pens.highlighterWidth,
                     range = 4f..40f,
                     onChange = onHighlighterWidth,
-                    readout = { "%.0f pkt".format(it) },
+                    readout = { words.pointsOf("%.0f".format(it)) },
                 )
                 SettingSlider(
                     name = words.opacity,
                     value = pens.highlighterOpacity,
                     range = 0.1f..1f,
                     onChange = onHighlighterOpacity,
-                    readout = { "${(it * 100).roundToInt()} %" },
+                    readout = { words.percentOf((it * 100).roundToInt()) },
                 )
                 PenStrokePreview(
                     argb = pens.highlighterColor,
@@ -1112,14 +1114,14 @@ private fun PenPanel(
                     value = pens.penWidth,
                     range = 0.4f..20f,
                     onChange = onPenWidth,
-                    readout = { "%.1f pkt".format(it) },
+                    readout = { words.pointsOf("%.1f".format(it)) },
                 )
                 SettingSlider(
                     name = words.opacity,
                     value = pens.penOpacity,
                     range = 0.1f..1f,
                     onChange = onPenOpacity,
-                    readout = { "${(it * 100).roundToInt()} %" },
+                    readout = { words.percentOf((it * 100).roundToInt()) },
                 )
 
                 PenStrokePreview(
@@ -1217,14 +1219,14 @@ private fun ShapePanel(
             value = shapes.strokeWidth,
             range = 0.4f..20f,
             onChange = onWidth,
-            readout = { "%.1f pkt".format(it) },
+            readout = { words.pointsOf("%.1f".format(it)) },
         )
         SettingSlider(
             name = words.opacity,
             value = shapes.opacity,
             range = 0.1f..1f,
             onChange = onOpacity,
-            readout = { "${(it * 100).roundToInt()} %" },
+            readout = { words.percentOf((it * 100).roundToInt()) },
         )
 
         // Wypełnienie tylko dla figur zamkniętych — linii i strzałki nie ma czym wypełnić.

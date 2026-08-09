@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.export
 
 import wojtoteka.ovh.kajet.core.model.MindMapContent
+import wojtoteka.ovh.kajet.core.text.docxImageHere
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.TextMarkers
@@ -56,7 +57,7 @@ object DocxExport {
                     append(paragraph(trimmed.drop(2), style = "Quote", italic = true))
 
                 trimmed.startsWith("![") ->
-                    append(paragraph("[W tym miejscu jest obrazek: " + imageCaption(trimmed) + "]", italic = true))
+                    append(paragraph(words.docxImageHere(imageCaption(trimmed)), italic = true))
 
                 trimmed.startsWith("$$") ->
                     append(paragraph(trimmed.trim('$').trim(), monospace = true))
