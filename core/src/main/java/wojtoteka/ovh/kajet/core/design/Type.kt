@@ -8,23 +8,37 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 import wojtoteka.ovh.kajet.core.R
 
+/*
+ * Archivo i Plex Sans to fonty zmienne: jeden plik niesie wszystkie grubości.
+ * Grubość trzeba nastawić jawnie na osi wght — bez tego każda odmiana
+ * wygląda jak zwykła i pogrubienie w notatce nie robi nic.
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun weighted(resId: Int, weight: FontWeight): Font = Font(
+    resId = resId,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
+)
+
 val Archivo = FontFamily(
-    Font(R.font.archivo, FontWeight.Normal),
-    Font(R.font.archivo, FontWeight.Medium),
-    Font(R.font.archivo, FontWeight.SemiBold),
-    Font(R.font.archivo, FontWeight.Bold),
+    weighted(R.font.archivo, FontWeight.Normal),
+    weighted(R.font.archivo, FontWeight.Medium),
+    weighted(R.font.archivo, FontWeight.SemiBold),
+    weighted(R.font.archivo, FontWeight.Bold),
 )
 
 val PlexSans = FontFamily(
-    Font(R.font.plex_sans, FontWeight.Light),
-    Font(R.font.plex_sans, FontWeight.Normal),
-    Font(R.font.plex_sans, FontWeight.Medium),
-    Font(R.font.plex_sans, FontWeight.SemiBold),
+    weighted(R.font.plex_sans, FontWeight.Light),
+    weighted(R.font.plex_sans, FontWeight.Normal),
+    weighted(R.font.plex_sans, FontWeight.Medium),
+    weighted(R.font.plex_sans, FontWeight.SemiBold),
+    weighted(R.font.plex_sans, FontWeight.Bold),
 )
 
 val PlexMono = FontFamily(

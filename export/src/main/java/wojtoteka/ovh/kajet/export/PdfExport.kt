@@ -13,10 +13,13 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import wojtoteka.ovh.kajet.core.model.MindMapContent
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.ink.ShapeGeometry
+import wojtoteka.ovh.kajet.ink.ShapePainter
 import wojtoteka.ovh.kajet.ink.Strokes
 import java.io.OutputStream
 import kotlin.math.max
@@ -55,6 +58,7 @@ object PdfExport {
     ) {
         val handwriting = document.handwriting ?: return
         val renderer = CanvasStrokeRenderer.create()
+        val shapePainter = ShapePainter()
 
         handwriting.pages.forEachIndexed { index, page ->
             // A scroll can be taller than A4, so we slice it into consecutive pages.
@@ -74,6 +78,13 @@ object PdfExport {
 
                 canvas.save()
                 canvas.translate(0f, -offset)
+
+                // Kształty pod atramentem — tak samo jak na ekranie.
+                for (shape in page.shapes) {
+                    val bounds = ShapeGeometry.bounds(shape)
+                    if (bounds.bottom < offset || bounds.top > offset + A4_HEIGHT) continue
+                    shapePainter.draw(canvas, shape)
+                }
 
                 for (stroke in page.strokes) {
                     val bounds = stroke.bounds()
@@ -253,7 +264,7 @@ object PdfExport {
         drawText(page.canvas, title, 64f, 72f, A4_WIDTH - 128f, 20f, Color.BLACK, true)
         drawText(
             page.canvas,
-            "Ta notatka jest jeszcze pusta.",
+            words.emptyNoteInExport,
             64f, 116f, A4_WIDTH - 128f, 11f, Color.DKGRAY, false,
         )
         pdf.finishPage(page)
@@ -368,9 +379,13 @@ object PdfExport {
         canvas.drawColor(Color.WHITE)
         canvas.scale(density, density)
         val renderer = CanvasStrokeRenderer.create()
+        // Macierz mówi rendererowi o skali canvasa; bez niej teselacja
+        // liczy się dla skali 1 i kreski wychodzą kanciaste.
+        val strokeMatrix = Matrix().apply { setScale(density, density) }
+        ShapePainter().draw(canvas, page.shapes)
         for (stroke in page.strokes) {
             val engineStroke = runCatching { Strokes.toEngine(stroke) }.getOrNull() ?: continue
-            renderer.draw(canvas, engineStroke, Matrix())
+            renderer.draw(canvas, engineStroke, strokeMatrix)
         }
         for (field in page.texts) {
             if (field.text.isBlank()) continue

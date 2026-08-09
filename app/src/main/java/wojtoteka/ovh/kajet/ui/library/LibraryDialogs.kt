@@ -3,15 +3,20 @@ package wojtoteka.ovh.kajet.ui.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -33,10 +38,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
@@ -49,6 +56,9 @@ import wojtoteka.ovh.kajet.core.model.FolderIcon
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.nameOnDiskAbout
+import wojtoteka.ovh.kajet.storage.FileNames
 
 @Composable
 fun KajetDialog(
@@ -57,29 +67,66 @@ fun KajetDialog(
     width: Int = 480,
     content: @Composable () -> Unit,
 ) {
-    Dialog(onDismissRequest = onClose) {
-        Column(
+    /*
+      Okno dialogu bierze cały ekran i samo układa w nim swoją zawartość.
+
+      decorFitsSystemWindows=false oddaje mu wgląd w klawiaturę — dzięki temu
+      imePadding kurczy dialog nad nią i przyciski nie giną pod spodem. Samo
+      to jednak nie wystarczy: bez usePlatformDefaultWidth=false okno zostaje
+      przy swojej domyślnej wielkości, a zawartość liczy odstępy od krawędzi
+      CAŁEGO ekranu. Rysunek i dotyk rozjeżdżały się wtedy o pasek stanu, czyli
+      mniej więcej o jeden wiersz menu — palec trafiał w „Zrób kopię",
+      a uruchamiało się „Przenieś do folderu".
+    */
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(
+            decorFitsSystemWindows = false,
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = width.dp)
-                .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
-                .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner)),
+                .fillMaxSize()
+                // Stuknięcie obok okna zamyka je, tak jak zawsze. Pełnoekranowa
+                // zawartość łapie ten dotyk sama, więc musi go oddać dalej.
+                .pointerInput(Unit) { detectTapGestures { onClose() } }
+                .systemBarsPadding()
+                .imePadding()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = title,
-                style = Kajet.type.title,
-                color = Kajet.colors.text,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
-            )
-            HorizontalRule()
             Column(
                 modifier = Modifier
-                    .heightIn(max = 520.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    // Kolejność jest tu istotna i łatwo ją odwrócić. `fillMaxWidth`
+                    // daje temu, co pod spodem, szerokość sztywną — równą całemu
+                    // ekranowi — a `widthIn` postawione PO nim może już tylko
+                    // zmieścić się w tym, co dostało, więc górna granica przepadała
+                    // bez śladu. Na tablecie okna szły przez to od krawędzi do
+                    // krawędzi. Najpierw granica, dopiero potem wypełnienie.
+                    .widthIn(max = width.dp)
+                    .fillMaxWidth()
+                    // Dotyk w samo okno nie ma go zamykać.
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
+                    .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner)),
             ) {
-                content()
+                Text(
+                    text = title,
+                    style = Kajet.type.title,
+                    color = Kajet.colors.text,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
+                )
+                HorizontalRule()
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 520.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    content()
+                }
             }
         }
     }
@@ -121,16 +168,21 @@ fun NewFolderDialog(
     onClose: () -> Unit,
     onCreate: (name: String, colorId: String, iconId: String) -> Unit,
 ) {
+    val words = LocalStrings.current
     var name by remember { mutableStateOf("") }
     var color by remember { mutableStateOf(FolderColor.Graphite) }
     var icon by remember { mutableStateOf(FolderIcon.FOLDER) }
 
-    KajetDialog("Nowy folder", onClose) {
-        KajetTextField(name, { name = it }, "Nazwa folderu", autoFocus = true)
+    KajetDialog(words.newFolder, onClose) {
+        KajetTextField(name, { name = it }, words.folderName, autoFocus = true)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel("Kolor")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionLabel(words.colour)
+            // Kolorów jest więcej, niż mieści wąski ekran — pasek jeździ w bok.
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 FolderColor.entries.forEach { option ->
                     FolderColourDot(option, option == color) { color = option }
                 }
@@ -145,11 +197,11 @@ fun NewFolderDialog(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryButton(
-                text = "Utwórz folder",
+                text = words.createFolder,
                 onClick = { onCreate(name, color.id, icon.id) },
                 enabled = name.isNotBlank(),
             )
-            SecondaryButton("Anuluj", onClose)
+            SecondaryButton(words.cancel, onClose)
         }
     }
 }
@@ -160,10 +212,11 @@ fun FolderIconGrid(
     color: FolderColor,
     onSelect: (FolderIcon) -> Unit,
 ) {
+    val words = LocalStrings.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SectionLabel("Ikona", modifier = Modifier.weight(1f))
-            Text(selected.labelPl, style = Kajet.type.meta, color = Kajet.colors.muted)
+            SectionLabel(words.icon, modifier = Modifier.weight(1f))
+            Text(selected.label(words), style = Kajet.type.meta, color = Kajet.colors.muted)
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 52.dp),
@@ -183,12 +236,12 @@ fun FolderIconGrid(
                             if (option == selected) Kajet.colors.accentWash else Kajet.colors.sheet,
                             RoundedCornerShape(Kajet.dimens.corner),
                         )
-                        .clickable(onClickLabel = option.labelPl) { onSelect(option) },
+                        .clickable(onClickLabel = option.label(words)) { onSelect(option) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = KajetIcons.folderIcon(option.id),
-                        contentDescription = option.labelPl,
+                        contentDescription = option.label(words),
                         tint = color.color(Kajet.colors.isDark),
                         modifier = Modifier.size(21.dp),
                     )
@@ -228,6 +281,7 @@ fun NewNoteDialog(
     defaultMode: PageMode,
     defaultBackground: PageBackground,
 ) {
+    val words = LocalStrings.current
     var title by remember { mutableStateOf("") }
     val narrowPhone = LocalConfiguration.current.screenWidthDp < 600
     var kind by remember {
@@ -236,18 +290,18 @@ fun NewNoteDialog(
     var mode by remember { mutableStateOf(defaultMode) }
     var background by remember { mutableStateOf(defaultBackground) }
 
-    KajetDialog("Nowa notatka", onClose, width = 520) {
-        KajetTextField(title, { title = it }, "Tytuł", autoFocus = true)
+    KajetDialog(words.newNote, onClose, width = 520) {
+        KajetTextField(title, { title = it }, words.titleLabel, autoFocus = true)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel("Rodzaj")
+            SectionLabel(words.noteKindLabel)
             NoteKind.entries.forEach { option ->
                 ChoiceRow(
-                    text = option.labelPl,
+                    text = option.label(words),
                     description = when (option) {
-                        NoteKind.HANDWRITTEN -> "Piszesz rysikiem, możesz też wstawić pole z tekstem."
-                        NoteKind.TEXT -> "Piszesz z klawiatury, możesz wstawić zdjęcie i mały rysunek."
-                        NoteKind.MINDMAP -> "Węzły połączone liniami, podpisy z klawiatury albo rysikiem."
+                        NoteKind.HANDWRITTEN -> words.kindHandwrittenAbout
+                        NoteKind.TEXT -> words.kindTextAbout
+                        NoteKind.MINDMAP -> words.kindMindMapAbout
                     },
                     selected = option == kind,
                     onClick = { kind = option },
@@ -257,14 +311,14 @@ fun NewNoteDialog(
 
         if (kind == NoteKind.HANDWRITTEN) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Strona")
+                SectionLabel(words.pageLabel)
                 PageMode.entries.forEach { option ->
                     ChoiceRow(
-                        text = option.labelPl,
+                        text = option.label(words),
                         description = if (option == PageMode.A4) {
-                            "Tak jak w zeszycie. Wydruk wychodzi bez przycinania."
+                            words.pageA4About
                         } else {
-                            "Strona rośnie w dół, kiedy piszesz przy dolnej krawędzi."
+                            words.pageScrollAbout
                         },
                         selected = option == mode,
                         onClick = { mode = option },
@@ -273,7 +327,7 @@ fun NewNoteDialog(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Tło strony")
+                SectionLabel(words.pageBackgroundLabel)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PageBackground.entries.forEach { option ->
                         Box(
@@ -289,7 +343,7 @@ fun NewNoteDialog(
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = option.labelPl,
+                                text = option.label(words),
                                 style = Kajet.type.meta,
                                 color = if (option == background) Kajet.colors.accent else Kajet.colors.muted,
                             )
@@ -301,10 +355,10 @@ fun NewNoteDialog(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryButton(
-                text = "Utwórz notatkę",
-                onClick = { onCreate(title.ifBlank { "Bez tytułu" }, kind, mode, background) },
+                text = words.createNote,
+                onClick = { onCreate(title.ifBlank { words.untitled }, kind, mode, background) },
             )
-            SecondaryButton("Anuluj", onClose)
+            SecondaryButton(words.cancel, onClose)
         }
     }
 }
@@ -314,38 +368,42 @@ fun NewFileDialog(
     onClose: () -> Unit,
     onCreate: (name: String, language: CodeLanguage) -> Unit,
 ) {
+    val words = LocalStrings.current
     var name by remember { mutableStateOf("") }
     var language by remember { mutableStateOf(CodeLanguage.PYTHON) }
 
-    KajetDialog("Nowy plik z kodem", onClose, width = 520) {
-        KajetTextField(name, { name = it }, "Nazwa pliku", autoFocus = true)
+    KajetDialog(words.newCodeFile, onClose, width = 520) {
+        KajetTextField(name, { name = it }, words.fileName, autoFocus = true)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel("Język")
-            CodeLanguage.entries.filter { it.runnable }.forEach { option ->
-                val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
-                ChoiceRow(
-                    text = option.labelPl,
-                    description = when {
-                        option == CodeLanguage.PYTHON && phone ->
-                            "Uruchamia się na serwerze, potrzebne konto i internet."
-                        option.offline ->
-                            "Uruchamia się na tablecie, bez internetu."
-                        else ->
-                            "Uruchamia się na serwerze, potrzebny internet."
-                    },
-                    selected = option == language,
-                    onClick = { language = option },
-                )
-            }
+            SectionLabel(words.settingsLanguage)
+            // Zwykłego tekstu tu nie ma: od pisania tekstu jest notatka, a plik
+            // .txt założony w „Nowy plik z kodem" tylko mylił. Istniejące pliki
+            // .txt dalej się otwierają - PLAIN_TEXT zostaje w spisie języków.
+            CodeLanguage.entries
+                .filter { it.runnable || it == CodeLanguage.HTML }
+                .forEach { option ->
+                    val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
+                    ChoiceRow(
+                        text = option.label(words),
+                        description = when {
+                            option == CodeLanguage.HTML -> words.langHtmlAbout
+                            option == CodeLanguage.PYTHON && phone -> words.langNeedsAccountAbout
+                            option.offline -> words.codeRunsOnTablet
+                            else -> words.codeRunsOnServer
+                        },
+                        selected = option == language,
+                        onClick = { language = option },
+                    )
+                }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryButton(
-                text = "Utwórz plik",
-                onClick = { onCreate(name.ifBlank { "program" }, language) },
+                text = words.createFile,
+                onClick = { onCreate(name.ifBlank { words.defaultFileName }, language) },
             )
-            SecondaryButton("Anuluj", onClose)
+            SecondaryButton(words.cancel, onClose)
         }
     }
 }
@@ -356,12 +414,27 @@ fun RenameDialog(
     onClose: () -> Unit,
     onSave: (String) -> Unit,
 ) {
+    val words = LocalStrings.current
     var name by remember { mutableStateOf(current) }
-    KajetDialog("Zmień nazwę", onClose) {
-        KajetTextField(name, { name = it }, "Nowa nazwa", autoFocus = true)
+    KajetDialog(words.rename, onClose) {
+        KajetTextField(name, { name = it }, words.newName, autoFocus = true)
+
+        // Dwukropka ani ukośnika nie da się wpisać w nazwę pliku — magazyn
+        // zamienia je na podkreślenie. Nazwa na liście zostaje wtedy taka, jak
+        // wpisana, a katalog na dysku nazywa się inaczej. Lepiej powiedzieć to
+        // wprost, niż zostawić dwie różne nazwy bez wyjaśnienia.
+        val onDisk = FileNames.safe(name)
+        if (name.isNotBlank() && onDisk != name.trim()) {
+            Text(
+                text = words.nameOnDiskAbout(onDisk),
+                style = Kajet.type.meta,
+                color = Kajet.colors.muted,
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton("Zapisz", { onSave(name) }, enabled = name.isNotBlank())
-            SecondaryButton("Anuluj", onClose)
+            PrimaryButton(words.save, { onSave(name) }, enabled = name.isNotBlank())
+            SecondaryButton(words.cancel, onClose)
         }
     }
 }

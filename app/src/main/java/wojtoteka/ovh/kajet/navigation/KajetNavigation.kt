@@ -5,6 +5,9 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +33,7 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.ui.library.CloudStuckNotes
 import wojtoteka.ovh.kajet.ui.library.LibraryScreen
 import wojtoteka.ovh.kajet.ui.library.LibraryViewModel
+import wojtoteka.ovh.kajet.ui.note.CodeAiOverlay
 import wojtoteka.ovh.kajet.ui.note.NoteScreen
 import wojtoteka.ovh.kajet.ui.note.remoteDeletionGuard
 import wojtoteka.ovh.kajet.ui.start.FolderPickerScreen
@@ -184,10 +188,23 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 },
             )
 
+            val assistant = container.ai.takeIf { it.available() }
+            var aiOpen by remember(codeModel.path) { mutableStateOf(false) }
+
             CodeEditor(
                 model = codeModel,
                 onBack = guardedBack,
+                onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
+            if (assistant != null) {
+                CodeAiOverlay(
+                    assistant = assistant,
+                    open = aiOpen,
+                    path = codeModel.path,
+                    hooks = codeModel,
+                    onClose = { aiOpen = false },
+                )
+            }
         }
 
         composable(Routes.SETTINGS) { entry ->

@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import wojtoteka.ovh.kajet.core.ai.AiNoteKind
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
@@ -172,6 +173,9 @@ fun NoteScreen(
             }
 
             val guardedBack = remoteDeletionGuard(model, onBack)
+            val assistant = context.container.ai.takeIf { it.available() }
+            var aiOpen by remember(path) { mutableStateOf(false) }
+            val note by model.document.collectAsStateWithLifecycle()
 
             TextEditor(
                 model = model,
@@ -183,8 +187,12 @@ fun NoteScreen(
                     cameraFile = file
                     fromCamera.launch(uri)
                 },
+                onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
+            if (assistant != null) {
+                AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.TEXT, model) { aiOpen = false }
+            }
         }
 
         kind == NoteKind.MINDMAP -> {
@@ -193,8 +201,21 @@ fun NoteScreen(
                 factory = MindMapViewModel.Factory(repo, settings, path),
             )
             val guardedBack = remoteDeletionGuard(model, onBack)
-            MindMapEditor(model = model, onBack = guardedBack, onExport = { exportDialog = true })
+            val context = LocalContext.current
+            val assistant = context.container.ai.takeIf { it.available() }
+            var aiOpen by remember(path) { mutableStateOf(false) }
+            val note by model.document.collectAsStateWithLifecycle()
+
+            MindMapEditor(
+                model = model,
+                onBack = guardedBack,
+                onExport = { exportDialog = true },
+                onAi = if (assistant != null) ({ aiOpen = true }) else null,
+            )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
+            if (assistant != null) {
+                AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.MINDMAP, model) { aiOpen = false }
+            }
         }
 
         kind != null -> Column(

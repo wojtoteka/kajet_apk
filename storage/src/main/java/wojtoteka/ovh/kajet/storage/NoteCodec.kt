@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.FolderMeta
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.text.words
 
 class FormatException(
     val userMessage: String,
@@ -28,19 +29,19 @@ object NoteCodec {
 
     fun decodeNote(content: String): NoteDocument {
         if (content.isBlank()) {
-            throw FormatException("Plik notatki jest pusty. Otwórz kopię z kosza albo utwórz notatkę na nowo.")
+            throw FormatException(words.emptyNoteFile)
         }
         val document = try {
             json.decodeFromString<NoteDocument>(content)
         } catch (e: SerializationException) {
             throw FormatException(
-                "Nie da się odczytać pliku content.json. Plik jest uszkodzony albo nie należy do Kajetu.",
+                words.brokenContentFile,
                 e,
             )
         }
         if (document.format > NoteDocument.FORMAT_CURRENT) {
             throw FormatException(
-                "Ta notatka pochodzi z nowszej wersji Kajetu. Zaktualizuj aplikację, żeby ją otworzyć.",
+                words.newerKajet,
             )
         }
         return document
@@ -51,7 +52,7 @@ object NoteCodec {
     fun decodeDrawing(content: String): DrawingSource = try {
         json.decodeFromString<DrawingSource>(content)
     } catch (e: SerializationException) {
-        throw FormatException("Nie da się odczytać rysunku wstawionego w tekst.", e)
+        throw FormatException(words.brokenInlineDrawing, e)
     }
 
     fun encodeFolder(meta: FolderMeta): String = json.encodeToString(meta)
@@ -59,6 +60,6 @@ object NoteCodec {
     fun decodeFolder(content: String): FolderMeta = try {
         json.decodeFromString<FolderMeta>(content)
     } catch (e: SerializationException) {
-        throw FormatException("Nie da się odczytać opisu folderu.", e)
+        throw FormatException(words.brokenFolderDescription, e)
     }
 }

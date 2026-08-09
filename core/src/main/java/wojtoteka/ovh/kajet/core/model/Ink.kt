@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.core.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import wojtoteka.ovh.kajet.core.text.Strings
 
 @Serializable
 enum class InkTool {
@@ -29,6 +30,14 @@ enum class InkTool {
             PENCIL -> "Ołówek"
             DASHED -> "Linia przerywana"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        PEN -> "Fountain pen"
+        HIGHLIGHTER -> "Highlighter"
+        FINELINER -> "Fineliner"
+        PENCIL -> "Pencil"
+        DASHED -> "Dashed line"
+    }
 }
 
 @Serializable

@@ -18,12 +18,10 @@ security = "1.1.0-beta01"
 browser = "1.8.0"
 ink = "1.0.0"
 graphicsCore = "1.0.4"
-mlkitInk = "19.0.0"
 
 # Kotlinx
 serialization = "1.9.0"
 coroutines = "1.10.2"
-coroutinesPlayServices = "1.10.2"
 
 # Testy
 junit = "4.13.2"
@@ -82,9 +80,7 @@ androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.r
 androidx-graphics-core = { group = "androidx.graphics", name = "graphics-core", version.ref = "graphicsCore" }
 
 # Rozpoznawanie pisma odrecznego po polsku, model pobierany raz i dzialajacy offline
-mlkit-digital-ink = { group = "com.google.mlkit", name = "digital-ink-recognition", version.ref = "mlkitInk" }
 # Zamiana zadan Google Play Services na funkcje zawieszane
-kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 
 # Zapis i odczyt pliku content.json wewnatrz notatki
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }

@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.Strings
+import wojtoteka.ovh.kajet.core.text.savedAt
 import java.util.Calendar
 
 @Composable
@@ -39,12 +42,13 @@ fun SaveIndicator(
     inCloud: Boolean? = null,
 ) {
     val colors = Kajet.colors
+    val words = LocalStrings.current
     val (label, color) = when (state) {
-        SaveState.LOADING -> "Wczytuję" to colors.muted
-        SaveState.CHANGED -> "Zmiany czekają" to colors.muted
-        SaveState.SAVING -> "Zapisuję" to colors.accent
-        SaveState.SAVED -> savedLabel(lastSave) to colors.muted
-        SaveState.ERROR -> "Zapis się nie udał" to colors.danger
+        SaveState.LOADING -> words.loading to colors.muted
+        SaveState.CHANGED -> words.changesWaiting to colors.muted
+        SaveState.SAVING -> words.saving to colors.accent
+        SaveState.SAVED -> savedLabel(lastSave, words) to colors.muted
+        SaveState.ERROR -> words.saveFailed to colors.danger
     }
 
     Row(
@@ -84,9 +88,9 @@ fun SaveIndicator(
             Icon(
                 imageVector = if (inCloud == true) KajetIcons.CloudDone else KajetIcons.Offline,
                 contentDescription = if (inCloud == true) {
-                    "Notatka jest w chmurze"
+                    words.noteInCloud
                 } else {
-                    "Notatka czeka na wysłanie do chmury"
+                    words.noteWaitingForCloud
                 },
                 tint = if (inCloud == true) colors.accent else colors.muted,
                 modifier = Modifier.size(15.dp),
@@ -143,10 +147,10 @@ private fun BreathingDot(color: Color) {
     )
 }
 
-private fun savedLabel(lastSave: Long?): String {
-    if (lastSave == null) return "Zapisane"
+private fun savedLabel(lastSave: Long?, words: Strings): String {
+    if (lastSave == null) return words.saved
     val calendar = Calendar.getInstance().apply { timeInMillis = lastSave }
-    return "Zapisane %02d:%02d".format(
+    return words.savedAt(
         calendar.get(Calendar.HOUR_OF_DAY),
         calendar.get(Calendar.MINUTE),
     )

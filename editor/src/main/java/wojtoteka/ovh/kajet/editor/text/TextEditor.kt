@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
@@ -58,7 +60,8 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
-import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.editor.SaveState
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.editor.penWritingSurface
@@ -72,7 +75,10 @@ fun TextEditor(
     onExport: () -> Unit,
     onPhotoFromGallery: () -> Unit,
     onPhotoFromCamera: () -> Unit,
+    /* Puste, gdy konto nie ma asystenta - wtedy nie ma po nim ani śladu. */
+    onAi: (() -> Unit)? = null,
 ) {
+    val words = LocalStrings.current
     val document by model.document.collectAsStateWithLifecycle()
     val drawing by model.drawing.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
@@ -146,6 +152,23 @@ fun TextEditor(
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
 
+    // Jednorazowa naprawa starych notatek: zagnieżdżone i osierocone znaczniki
+    // koloru i rozmiaru schodzą do czystej postaci. Naprawiona treść idzie
+    // zwykłą drogą zapisu i synchronizacji, więc zdarza się to raz na notatkę.
+    LaunchedEffect(document?.id) {
+        if (document == null) return@LaunchedEffect
+        val repaired = RichTextCodec.flatten(model.markdown)
+        if (repaired != model.markdown) model.setContent(repaired)
+    }
+
+    /*
+      Format zapamiętany na przyszłość: nic nie jest zaznaczone, więc czeka na
+      tekst, który człowiek zaraz napisze. Tak samo działa każdy porządny
+      edytor — naciśnięcie pogrubienia przed pisaniem ma pogrubić to, co
+      dopiero powstanie, a nie cofać się do słowa obok.
+    */
+    var pending by remember(document?.id) { mutableStateOf(PendingFormat()) }
+
     // Miejsce, w które ma trafić wstawiana treść: za blokiem z kursorem,
     // a nie na końcu całej notatki.
     fun insertPosition(): Int = if (blockMode) {
@@ -154,11 +177,16 @@ fun TextEditor(
         field.selection.start
     }
 
-    fun format(transform: (TextFieldValue) -> TextFieldValue) {
+    /**
+     * Przestawia pole, w którym stoi kursor. Transformacja może oddać null —
+     * znaczy to „nie ma czego zmienić", bo nic nie jest zaznaczone. Zwraca,
+     * czy treść naprawdę się zmieniła.
+     */
+    fun format(transform: (TextFieldValue) -> TextFieldValue?): Boolean {
         if (blockMode) {
-            val key = focusedKey ?: return
-            val set = setFocusedField ?: return
-            val next = transform(focusedField)
+            val key = focusedKey ?: return false
+            val set = setFocusedField ?: return false
+            val next = transform(focusedField) ?: return false
 
             focusedField = next
             set(next)
@@ -166,50 +194,170 @@ fun TextEditor(
             val changed = Blocks.setText(blocks, key, next.text)
             blocks = changed
             model.setContent(Blocks.join(changed))
-        } else {
-            val next = transform(field)
-            field = next
-            model.setContent(next.text)
+            return true
+        }
+        val next = transform(field) ?: return false
+        field = next
+        model.setContent(next.text)
+        return true
+    }
+
+    // Pole, w którym stoi kursor — na nim działa pasek narzędzi.
+    val cursorField = if (blockMode) focusedField else field
+
+    /** Wiersz, w którym stoi kursor. */
+    fun lineAtCursor(value: TextFieldValue): String {
+        val content = value.text
+        val at = value.selection.start.coerceIn(0, content.length)
+        val from = content.lastIndexOf('\n', (at - 1).coerceAtLeast(0))
+            .let { if (it < 0) 0 else it + 1 }
+        val to = content.indexOf('\n', from).let { if (it < 0) content.length else it }
+        return content.substring(from.coerceAtMost(to), to)
+    }
+
+    /**
+     * Przelicza bloki od nowa i wraca kursorem tam, gdzie stał.
+     *
+     * Notatka układa się na bloki tylko wtedy, gdy treść zmieni się z zewnątrz
+     * — inaczej przeliczanie przy każdym naciśnięciu klawisza przerywałoby
+     * pisanie. Znacznik zadania jest jednak wyjątkiem: zmienia budowę notatki,
+     * bo wiersz przestaje być akapitem, a staje się zadaniem z kwadracikiem.
+     * Bez przeliczenia od razu kwadracik pojawiałby się dopiero po ponownym
+     * otwarciu notatki, a do tego czasu straszył surowy znacznik.
+     */
+    fun rebuildBlocks(line: String) {
+        val next = Blocks.split(model.markdown)
+        blocks = next
+        val wanted = Blocks.taskContent(line)
+        keyToFocus = next.firstOrNull { it is Block.Task && it.content == wanted }?.key
+    }
+
+    /** Podmienia bloki razem z treścią i stawia kursor tam, gdzie ma stanąć. */
+    fun applySplit(split: Blocks.Split) {
+        blocks = split.blocks
+        model.setContent(Blocks.join(split.blocks))
+        keyToFocus = split.focusKey
+    }
+
+    /** Czy kursor stoi w zadaniu — wtedy budowa wiersza rządzi się inaczej. */
+    fun taskUnderCursor(): Block.Task? {
+        if (!blockMode) return null
+        val key = focusedKey ?: return null
+        return blocks.firstOrNull { it.key == key } as? Block.Task
+    }
+
+    /**
+     * Stuknięcie w pustą kartkę pod tekstem: kursor idzie do ostatniego
+     * akapitu. Bez tego świeża notatka trzymała skupienie przy tytule i pisany
+     * tekst szedł do tytułu, a stuknięcie w kartkę nie robiło nic.
+     */
+    fun focusPageBottom() {
+        val next = Blocks.appendParagraph(blocks)
+        if (next.blocks !== blocks) blocks = next.blocks
+        keyToFocus = next.focusKey
+    }
+
+    // Formaty pod kursorem albo w zaznaczeniu. Pasek zapala po nich przyciski.
+    val atCursor = remember(cursorField) { TextFormat.formatsIn(cursorField) }
+
+    fun isActive(type: SpanType): Boolean =
+        pending.willHave(type, atCursor.any { it.type == type })
+
+    /**
+     * Nadaje format zaznaczeniu. Bez zaznaczenia format czeka na pisanie —
+     * i tak samo się wtedy przełącza, żeby drugie naciśnięcie go zdejmowało.
+     */
+    fun toggleFormat(type: SpanType, value: String = "") {
+        val active = isActive(type)
+        val changed = format { TextFormat.toggle(it, type, value) }
+        if (!changed) {
+            pending = if (active) pending.without(type) else pending.with(type, value)
         }
     }
 
+    /**
+     * Nadaje zapamiętany format tekstowi dopiero co wpisanemu. Oddaje nowe
+     * pole albo null, gdy nie ma czego zmieniać — wtedy pole zostaje takie,
+     * jakie przyszło z klawiatury i nic nie gubi kursora.
+     */
+    fun onTyped(previous: String, typed: TextFieldValue): TextFieldValue? {
+        if (previous == typed.text) {
+            // Sam ruch kursora: zapamiętany format przestaje obowiązywać.
+            if (!pending.isEmpty) pending = PendingFormat()
+            return null
+        }
+
+        /*
+          W widoku blokowym znaczników nie widać, więc zmiany przebudowujące
+          treść idą przez model. Inaczej Compose kasuje i rozcina znaki
+          ZAPISU — połówka znacznika przestaje być znacznikiem i wychodzi
+          na wierzch jako goły tekst. W widoku surowego Markdownu znaczniki
+          są widoczne i pisze się je wprost, więc tam nic nie pośredniczy.
+        */
+        if (blockMode) {
+            // Nowa linia: format spod kursora idzie dalej, a lista sama
+            // zaczyna następną pozycję.
+            val newline = TextFormat.typedNewline(previous, typed, pending)
+            if (newline != null) {
+                pending = newline.carry
+                return newline.field
+            }
+
+            // Kasowanie i podmiana zaznaczenia: liczy się to, co widać.
+            TextFormat.typedDeletion(previous, typed)?.let { return it }
+        }
+
+        val applied = TextFormat.applyPending(typed, previous, pending) ?: return null
+        pending = PendingFormat()
+        return applied
+    }
+
+    val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
+
     Row(Modifier.fillMaxSize().background(colors.desk)) {
 
+        // Pasek narzędzi. Domyślnie po lewej; leworęczni przestawiają go w
+        // ustawieniach na prawo, żeby dłoń nie klikała go po drodze.
+        val rail: @Composable () -> Unit = {
         Column(
             Modifier
                 .width(railWidth)
-                .fillMaxSize()
+                .fillMaxHeight()
                 .background(colors.desk)
-                .marginRule(colors.line)
+                .marginRule(colors.line, atEnd = !toolbarOnRight)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", { model.saveNow(); onBack() })
+            IconAction(KajetIcons.BackArrow, words.backToLibrary, { model.saveNow(); onBack() })
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-            IconAction(KajetIcons.PhotoFrame, "Wstaw zdjęcie z galerii", {
+            IconAction(KajetIcons.PhotoFrame, words.insertPhotoFromGallery, {
                 model.rememberPhotoPosition(insertPosition())
                 onPhotoFromGallery()
             })
-            IconAction(KajetIcons.CameraBody, "Zrób zdjęcie", {
+            IconAction(KajetIcons.CameraBody, words.takePhoto, {
                 model.rememberPhotoPosition(insertPosition())
                 onPhotoFromCamera()
             })
-            IconAction(KajetIcons.DrawingPad, "Wstaw rysunek", model::openDrawing)
+            IconAction(KajetIcons.DrawingPad, words.insertDrawing, model::openDrawing)
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
             IconAction(
                 icon = KajetIcons.Favourites,
-                description = if (document?.favorite == true) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                description = if (document?.favorite == true) words.removeFromFavorites else words.addToFavorites,
                 onClick = model::toggleFavorite,
                 selected = document?.favorite == true,
             )
-            IconAction(KajetIcons.Export, "Eksportuj notatkę", onExport)
+            IconAction(KajetIcons.Export, words.exportNote, onExport)
+            if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi)
             Spacer(Modifier.height(12.dp))
         }
+        }
 
-        Column(Modifier.fillMaxSize()) {
+        if (!toolbarOnRight) rail()
+
+        Column(Modifier.weight(1f).fillMaxHeight()) {
             NoteHeader(
                 title = document?.title.orEmpty(),
                 state = saveState,
@@ -230,24 +378,99 @@ fun TextEditor(
                 ) {
                     Icon(KajetIcons.ErrorMark, null, tint = colors.danger, modifier = Modifier.size(18.dp))
                     Text(error.orEmpty(), style = Kajet.type.body, color = colors.text, modifier = Modifier.weight(1f))
-                    SecondaryButton("Rozumiem", model::dismissError)
+                    SecondaryButton(words.understood, model::dismissError)
                 }
                 HorizontalRule()
+            }
+
+            // Wielkość pisma CAŁEJ notatki. Od niej liczy się wielkość
+            // fragmentu, ale to dwie osobne rzeczy i osobne przyciski.
+            val noteSize = if (appearance.fontSize > 0f) {
+                appearance.fontSize
+            } else {
+                TextContent.DEFAULT_SIZE
             }
 
             FormatBar(
                 appearance = appearance,
                 blockMode = blockMode,
                 recentColors = recentColors,
+                isActive = { type -> isActive(type) },
+                // Wielkość fragmentu pod kursorem; zapamiętana wygrywa,
+                // bo to ona trafi na tekst pisany za chwilę.
+                fragmentSize = pending.on[SpanType.SIZE]?.toFloatOrNull()
+                    ?: TextFormat.sizeIn(cursorField, noteSize),
+                noteSize = noteSize,
                 onBlockMode = { blockMode = it },
                 onFont = model::setFont,
-                onFontSize = model::setFontSize,
+                onNoteSize = model::setFontSize,
+                onFragmentSize = { delta ->
+                    // Rośnie SAM fragment. Bez zaznaczenia wielkość czeka na
+                    // tekst, który człowiek zaraz napisze — całej notatki
+                    // nie rusza, od tego jest osobny przycisk obok.
+                    //
+                    // Czekać ma jednak na CO: bez kursora w notatce nie ma
+                    // gdzie pisać, a licznik i tak rósł przy każdym naciśnięciu
+                    // i pokazywał wielkość, której nic nie dostawało.
+                    val somewhereToType = !blockMode || focusedKey != null
+                    if (!format { TextFormat.resize(it, delta, noteSize) } && somewhereToType) {
+                        val current = pending.on[SpanType.SIZE]?.toFloatOrNull()
+                            ?: TextFormat.sizeIn(cursorField, noteSize)
+                        val next = (current + delta).coerceIn(
+                            TextFormat.SMALLEST_FRAGMENT,
+                            TextFormat.LARGEST_FRAGMENT,
+                        )
+                        pending = if (next == noteSize) {
+                            pending.without(SpanType.SIZE)
+                        } else {
+                            pending.with(SpanType.SIZE, RichTextCodec.sizeText(next))
+                        }
+                    }
+                },
                 onTextColor = model::setTextColor,
+                onRememberColor = model::rememberColor,
                 onAlign = model::setAlign,
-                onWrap = { marker -> format { TextFormat.wrap(it, marker) } },
-                onWrapPair = { opening, closing -> format { TextFormat.wrapPair(it, opening, closing) } },
-                onBeforeLine = { marker -> format { TextFormat.beforeLine(it, marker) } },
+                onToggle = { type -> toggleFormat(type) },
+                onBeforeLine = { marker ->
+                    val task = taskUnderCursor()
+                    if (task != null) {
+                        /*
+                          Kursor stoi w zadaniu. Nagłówek, cytat i punkt to
+                          budowa wiersza, tak samo jak kwadracik — doklejone do
+                          treści zadania dawały „- [ ] > cytat", czyli znacznik
+                          na wierzchu w środku listy. Wiersz może być albo
+                          zadaniem, albo cytatem, więc zadanie ustępuje miejsca.
+                          Ten sam przycisk zadania po prostu je zdejmuje.
+                        */
+                        val line = if (marker == Blocks.TASK_MARKER) "" else marker
+                        Blocks.taskToLine(blocks, task.key, line)?.let { applySplit(it) }
+                    } else {
+                        val changed = format { TextFormat.beforeLine(it, marker) }
+                        // Zadanie zmienia budowę notatki, więc bloki idą od nowa.
+                        if (changed && blockMode && marker == Blocks.TASK_MARKER) {
+                            rebuildBlocks(lineAtCursor(focusedField))
+                        }
+                    }
+                },
                 onInsert = { fragment, stepBack -> format { TextFormat.insert(it, fragment, stepBack) } },
+                // Okno koloru to osobne okno — pole traci skupienie i zaznaczenie
+                // zwija się, zanim człowiek wybierze barwę. Dlatego pasek bierze
+                // zrzut pola PRZED otwarciem okna i to jemu nadaje kolor.
+                currentField = { cursorField },
+                onApplyColour = { snapshot, argb ->
+                    val changed = format { current ->
+                        // Treść nie mogła się zmienić przy otwartym oknie; gdyby
+                        // jednak, bieżące pole wygrywa ze zrzutem.
+                        val base = if (current.text == snapshot.text) snapshot else current
+                        TextFormat.applyColor(base, argb)
+                    }
+                    // Nic nie było zaznaczone: barwa czeka na pisanie.
+                    if (!changed) {
+                        pending = pending.with(SpanType.COLOR, RichTextCodec.colorHex(argb))
+                    }
+                    // Po zamknięciu okna kursor ma wrócić do pisania.
+                    if (blockMode) keyToFocus = focusedKey
+                },
             )
             HorizontalRule()
 
@@ -268,20 +491,24 @@ fun TextEditor(
                             blocks = next
                             model.setContent(Blocks.join(next))
                         },
+                        onTapBelow = { focusPageBottom() },
                         keyToFocus = keyToFocus,
                         onFocusTaken = { keyToFocus = null },
                         onBlockFocused = { key, set ->
                             focusedKey = key
                             setFocusedField = set
                         },
+                        onFocusBlock = { key -> keyToFocus = key },
                         onSelection = { focusedField = it },
+                        onTyped = { previous, typed -> onTyped(previous, typed) },
                         appearance = appearance,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
                     BasicTextField(
                         value = field,
-                        onValueChange = { next ->
+                        onValueChange = { typed ->
+                            val next = onTyped(field.text, typed) ?: typed
                             field = next
                             model.setContent(next.text)
                         },
@@ -295,7 +522,7 @@ fun TextEditor(
                     )
                     if (field.text.isEmpty()) {
                         Text(
-                            text = "Surowy zapis notatki. Wróć do widoku treści, żeby zobaczyć formatowanie.",
+                            text = words.rawMarkdownAbout,
                             style = Kajet.type.code,
                             color = colors.muted,
                             modifier = Modifier.padding(start = 28.dp, top = 20.dp),
@@ -304,6 +531,8 @@ fun TextEditor(
                 }
             }
         }
+
+        if (toolbarOnRight) rail()
     }
 
     if (drawing) {
@@ -331,6 +560,7 @@ private fun NoteHeader(
     busy: String?,
     onTitle: (String) -> Unit,
 ) {
+    val words = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -348,7 +578,7 @@ private fun NoteHeader(
             modifier = Modifier.weight(1f),
             decorationBox = { field ->
                 if (title.isEmpty()) {
-                    Text("Bez nazwy", style = Kajet.type.display, color = Kajet.colors.muted)
+                    Text(words.unnamed, style = Kajet.type.display, color = Kajet.colors.muted)
                 }
                 field()
             },
@@ -365,21 +595,35 @@ private fun FormatBar(
     appearance: TextContent,
     blockMode: Boolean,
     recentColors: List<Int>,
+    /** Czy format będzie miał tekst pisany od kursora — po tym zapalają się przyciski. */
+    isActive: (SpanType) -> Boolean,
+    /** Wielkość pisma fragmentu pod kursorem. */
+    fragmentSize: Float,
+    /** Wielkość pisma całej notatki — osobna rzecz, osobny przycisk. */
+    noteSize: Float,
     onBlockMode: (Boolean) -> Unit,
     onFont: (NoteFont) -> Unit,
-    onFontSize: (Float) -> Unit,
+    onNoteSize: (Float) -> Unit,
+    /** Plus i minus: wielkość zaznaczonego fragmentu, nigdy całej notatki. */
+    onFragmentSize: (Float) -> Unit,
     onTextColor: (Int) -> Unit,
+    /** Dokłada barwę do spisu „twoich kolorów" - po zamknięciu okna z tęczą. */
+    onRememberColor: (Int) -> Unit,
     onAlign: (NoteAlign) -> Unit,
-    onWrap: (String) -> Unit,
-    onWrapPair: (String, String) -> Unit,
+    onToggle: (SpanType) -> Unit,
     onBeforeLine: (String) -> Unit,
     onInsert: (fragment: String, stepBack: Int) -> Unit,
+    /** Pole z zaznaczeniem w chwili naciśnięcia — zrzut na czas okna koloru. */
+    currentField: () -> TextFieldValue,
+    /** Nadaje kolor zaznaczeniu ze zrzutu (zaznaczenie w polu już nie żyje). */
+    onApplyColour: (snapshot: TextFieldValue, argb: Int) -> Unit,
 ) {
+    val words = LocalStrings.current
     var fontPicker by remember { mutableStateOf(false) }
+    var notePicker by remember { mutableStateOf(false) }
     var wholeNoteColour by remember { mutableStateOf(false) }
     var selectionColour by remember { mutableStateOf(false) }
-
-    val size = if (appearance.fontSize > 0f) appearance.fontSize else TextContent.DEFAULT_SIZE
+    var selectionSnapshot by remember { mutableStateOf(TextFieldValue()) }
 
     Column(
         Modifier
@@ -397,13 +641,13 @@ private fun FormatBar(
             // Krój pisma całej notatki.
             IconAction(
                 icon = KajetIcons.Letters,
-                description = "Krój pisma: ${appearance.font.labelPl}",
+                description = "${words.fontFamily}: ${appearance.font.label(words)}",
                 onClick = { fontPicker = !fontPicker },
                 selected = fontPicker,
                 iconSize = 18.dp,
             )
             Text(
-                text = appearance.font.labelPl,
+                text = appearance.font.label(words),
                 style = Kajet.type.label,
                 color = Kajet.colors.muted,
                 modifier = Modifier.padding(end = 4.dp),
@@ -411,40 +655,47 @@ private fun FormatBar(
 
             Divider()
 
-            // Wielkość pisma.
+            // Wielkość pisma CAŁEJ notatki — pod osobnym przyciskiem, żeby
+            // nie mieszała się z wielkością zaznaczonego fragmentu.
             IconAction(
                 icon = KajetIcons.TextSize,
-                description = "Wielkość pisma",
-                onClick = { onFontSize(TextContent.DEFAULT_SIZE) },
+                description = words.wholeNoteLook,
+                onClick = { notePicker = !notePicker },
+                selected = notePicker,
                 iconSize = 18.dp,
             )
-            FormatGlyph("−", "Mniejsze pismo", { onFontSize(size - 1f) })
+
+            // Plus i minus: wielkość samego fragmentu.
+            FormatGlyph("−", words.smallerText, { onFragmentSize(-1f) })
             Text(
-                text = "${size.roundToInt()}",
+                text = "${fragmentSize.roundToInt()}",
                 style = Kajet.type.label,
                 color = Kajet.colors.text,
                 modifier = Modifier.width(24.dp),
             )
-            FormatGlyph("+", "Większe pismo", { onFontSize(size + 1f) })
+            FormatGlyph("+", words.largerText, { onFragmentSize(1f) })
 
             Divider()
 
-            // Kolor: całej notatki i samego zaznaczenia.
-            ColourDot(
-                color = if (appearance.textColor != 0) appearance.textColor else Kajet.colors.text.toArgb(),
-                description = "Kolor pisma całej notatki",
-                onClick = { wholeNoteColour = true },
-            )
+            // Barwa samego zaznaczenia. Barwa CAŁEJ notatki stoi osobno,
+            // pod przyciskiem obok — mieszanie ich dawało notatkę, w której
+            // pokolorowanie słowa przemalowywało całą stronę.
             IconAction(
                 icon = KajetIcons.TextColour,
-                description = "Kolor zaznaczonego fragmentu",
-                onClick = { selectionColour = true },
+                description = words.colourSelection,
+                onClick = {
+                    // Zrzut zaznaczenia PRZED otwarciem okna — samo okno
+                    // zabiera skupienie i zaznaczenie znika.
+                    selectionSnapshot = currentField()
+                    selectionColour = true
+                },
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Highlight,
-                description = "Wyróżnij zaznaczony fragment",
-                onClick = { onWrap("==") },
+                description = words.highlightSelection,
+                onClick = { onToggle(SpanType.HIGHLIGHT) },
+                selected = isActive(SpanType.HIGHLIGHT),
                 iconSize = 18.dp,
             )
 
@@ -452,26 +703,30 @@ private fun FormatBar(
 
             IconAction(
                 icon = KajetIcons.Bold,
-                description = "Pogrubienie",
-                onClick = { onWrap("**") },
+                description = words.bold,
+                onClick = { onToggle(SpanType.BOLD) },
+                selected = isActive(SpanType.BOLD),
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Italic,
-                description = "Kursywa",
-                onClick = { onWrap("*") },
+                description = words.italic,
+                onClick = { onToggle(SpanType.ITALIC) },
+                selected = isActive(SpanType.ITALIC),
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Underline,
-                description = "Podkreślenie",
-                onClick = { onWrapPair("<u>", "</u>") },
+                description = words.underline,
+                onClick = { onToggle(SpanType.UNDERLINE) },
+                selected = isActive(SpanType.UNDERLINE),
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Strikethrough,
-                description = "Przekreślenie",
-                onClick = { onWrap("~~") },
+                description = words.strike,
+                onClick = { onToggle(SpanType.STRIKETHROUGH) },
+                selected = isActive(SpanType.STRIKETHROUGH),
                 iconSize = 18.dp,
             )
 
@@ -484,7 +739,7 @@ private fun FormatBar(
                         NoteAlign.CENTER -> KajetIcons.AlignCentre
                         NoteAlign.RIGHT -> KajetIcons.AlignRight
                     },
-                    description = variant.labelPl,
+                    description = variant.label(words),
                     onClick = { onAlign(variant) },
                     selected = appearance.align == variant,
                     iconSize = 18.dp,
@@ -500,13 +755,64 @@ private fun FormatBar(
                 SegmentedChoice(
                     options = NoteFont.entries,
                     selected = appearance.font,
-                    name = { it.labelPl },
-                    onSelect = { font ->
-                        onFont(font)
-                        fontPicker = false
-                    },
+                    name = { it.label(words) },
+                    // Menu zostaje otwarte: krój porównuje się na żywo,
+                    // zamyka się je samemu tym samym przyciskiem „abc".
+                    onSelect = { font -> onFont(font) },
                     modifier = Modifier.width(360.dp),
                 )
+            }
+        }
+
+        // Wielkość pisma całej notatki. Osobny rząd, bo to osobna rzecz niż
+        // wielkość zaznaczonego fragmentu — mieszanie ich dawało notatkę,
+        // w której powiększenie słowa skalowało całą stronę.
+        if (notePicker) {
+            Row(
+                Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = words.fontSizeWholeNote,
+                    style = Kajet.type.label,
+                    color = Kajet.colors.muted,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                FormatGlyph("−", words.smallerText, { onNoteSize(noteSize - 1f) })
+                Text(
+                    text = "${noteSize.roundToInt()}",
+                    style = Kajet.type.label,
+                    color = Kajet.colors.text,
+                    modifier = Modifier.width(24.dp),
+                )
+                FormatGlyph("+", words.largerText, { onNoteSize(noteSize + 1f) })
+                SecondaryButton(words.defaultSize, { onNoteSize(TextContent.DEFAULT_SIZE) })
+
+                Divider()
+
+                // Barwa CAŁEJ notatki — tutaj, a nie w pasku obok barwy
+                // zaznaczenia, żeby nie dało się ich pomylić.
+                Text(
+                    text = words.colourWholeNote,
+                    style = Kajet.type.label,
+                    color = Kajet.colors.muted,
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp),
+                )
+                ColourDot(
+                    color = if (appearance.textColor != 0) {
+                        appearance.textColor
+                    } else {
+                        Kajet.colors.text.toArgb()
+                    },
+                    description = words.colourWholeNote,
+                    onClick = { wholeNoteColour = true },
+                )
+                // Wyjście dla notatek, którym barwę całej strony nadano
+                // wcześniej przez pomyłkę.
+                if (appearance.textColor != 0) {
+                    SecondaryButton(words.defaultColour, { onTextColor(0) })
+                }
             }
         }
 
@@ -520,63 +826,56 @@ private fun FormatBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            FormatGlyph("H1", "Nagłówek największy", { onBeforeLine("# ") }, bold = true)
-            FormatGlyph("H2", "Nagłówek średni", { onBeforeLine("## ") }, bold = true)
-            FormatGlyph("H3", "Nagłówek mały", { onBeforeLine("### ") }, bold = true)
+            FormatGlyph("H1", words.heading1, { onBeforeLine("# ") }, bold = true)
+            FormatGlyph("H2", words.heading2, { onBeforeLine("## ") }, bold = true)
+            FormatGlyph("H3", words.heading3, { onBeforeLine("### ") }, bold = true)
 
             Divider()
 
             IconAction(
                 icon = KajetIcons.BulletList,
-                description = "Lista",
+                description = words.bulletList,
                 onClick = { onBeforeLine("- ") },
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.NumberedList,
-                description = "Lista numerowana",
+                description = words.numberedList,
                 onClick = { onBeforeLine("1. ") },
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.TaskList,
-                description = "Lista zadań, na przykład lista zakupów",
-                onClick = { onBeforeLine("- [ ] ") },
+                description = words.taskList,
+                onClick = { onBeforeLine(Blocks.TASK_MARKER) },
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Quote,
-                description = "Cytat",
+                description = words.quote,
                 onClick = { onBeforeLine("> ") },
                 iconSize = 18.dp,
             )
 
             Divider()
 
-            FormatGlyph("`", "Kod w tekście", { onWrap("`") })
+            FormatGlyph(
+                glyph = "`",
+                description = words.inlineCode,
+                onClick = { onToggle(SpanType.CODE) },
+                selected = isActive(SpanType.CODE),
+            )
             IconAction(
                 icon = KajetIcons.CodeFile,
-                description = "Blok kodu",
+                description = words.codeBlock,
                 // Kursor ma stanąć w środku, między znacznikami, bo tam pisze się kod.
                 onClick = { onInsert("\n```\n\n```\n", 5) },
                 iconSize = 18.dp,
             )
-            IconAction(
-                icon = KajetIcons.TableGrid,
-                description = "Tabela",
-                onClick = { onInsert(TABLE_TEMPLATE, TABLE_TEMPLATE.length - 12) },
-                iconSize = 18.dp,
-            )
-            FormatGlyph("Σ", "Wzór matematyczny", { onInsert("\n$$\n\n$$\n", 4) })
-            IconAction(
-                icon = KajetIcons.LinkChain,
-                description = "Odnośnik",
-                onClick = { onInsert("[opis](https://)", 1) },
-                iconSize = 18.dp,
-            )
+            FormatGlyph("Σ", words.formula, { onInsert("\n$$\n\n$$\n", 4) })
             IconAction(
                 icon = KajetIcons.DividerLine,
-                description = "Linia oddzielająca",
+                description = words.dividerLine,
                 onClick = { onInsert("\n---\n", 0) },
                 iconSize = 18.dp,
             )
@@ -585,7 +884,7 @@ private fun FormatBar(
 
             IconAction(
                 icon = KajetIcons.CodeFile,
-                description = if (blockMode) "Pokaż surowy zapis Markdown" else "Wróć do widoku treści",
+                description = if (blockMode) words.showRawMarkdown else words.backToContentView,
                 onClick = { onBlockMode(!blockMode) },
                 selected = !blockMode,
                 iconSize = 18.dp,
@@ -595,44 +894,48 @@ private fun FormatBar(
 
     if (wholeNoteColour) {
         ColourPickerDialog(
-            title = "Kolor pisma w całej notatce",
+            title = words.colourWholeNoteTitle,
             color = if (appearance.textColor != 0) appearance.textColor else Kajet.colors.text.toArgb(),
             onChange = onTextColor,
-            onClose = { wholeNoteColour = false },
+            onClose = { wholeNoteColour = false; onRememberColor(appearance.textColor) },
             withAlpha = false,
-            presetColors = InkPalette.pens,
+            presetColors = InkPalette.pens(words),
             recentColors = recentColors,
         )
     }
 
     if (selectionColour) {
         // Kolor zaznaczenia bierzemy dopiero przy zamknięciu okna. Okno oddaje
-        // barwę przy każdym ruchu palca po kwadracie, a otaczanie fragmentu
-        // znacznikiem przy każdym ruchu obłożyłoby go nimi kilkadziesiąt razy.
-        var picked by remember {
-            mutableStateOf(if (appearance.textColor != 0) appearance.textColor else 0)
-        }
+        // barwę przy każdym ruchu palca po kwadracie, a przestawianie fragmentu
+        // przy każdym ruchu mieliłoby treść kilkadziesiąt razy.
+        //
+        // Okno otwiera się na barwie, którą zaznaczony fragment już ma. Wcześniej
+        // zaczynało od zera, a zero znaczyło „nic nie wybrano" i przy zamykaniu
+        // nie działo się NIC — także wtedy, gdy barwa była wybrana, a potem
+        // trafiona jeszcze raz ta sama.
+        val startColour = TextFormat.colorIn(selectionSnapshot)
+            ?: appearance.textColor.takeIf { it != 0 }
+            ?: Kajet.colors.text.toArgb()
+        var picked by remember { mutableStateOf(startColour) }
         ColourPickerDialog(
-            title = "Kolor zaznaczonego fragmentu",
-            color = if (picked != 0) picked else Kajet.colors.text.toArgb(),
+            title = words.colourSelectionTitle,
+            color = picked,
             onChange = { picked = it },
             onClose = {
                 selectionColour = false
-                if (picked != 0) {
-                    onWrapPair(
-                        "<span style=\"color:${TextMarkers.colorHex(picked)}\">",
-                        "</span>",
-                    )
-                }
+                onApplyColour(selectionSnapshot, picked)
+                onRememberColor(picked)
             },
             withAlpha = false,
-            presetColors = InkPalette.pens,
+            presetColors = InkPalette.pens(words),
             recentColors = recentColors,
         )
     }
 }
 
-private const val TABLE_TEMPLATE = "\n| Kolumna | Kolumna |\n| --- | --- |\n|  |  |\n"
+/** Pusta tabelka do wstawienia. Nagłówki idą w wybranym języku. */
+private fun tableTemplate(words: Strings): String =
+    "\n| ${words.tableColumn} | ${words.tableColumn} |\n| --- | --- |\n|  |  |\n"
 
 @Composable
 private fun Divider() {
@@ -651,6 +954,8 @@ private fun FormatGlyph(
     onClick: () -> Unit,
     bold: Boolean = false,
     italic: Boolean = false,
+    /** Zapalony, gdy format obowiązuje w miejscu, w którym stoi kursor. */
+    selected: Boolean = false,
 ) {
     Box(
         Modifier
@@ -659,7 +964,14 @@ private fun FormatGlyph(
                 contentDescription = description
                 role = Role.Button
             }
-            .clickable(onClick = onClick),
+            // Jak IconAction: przycisk paska nie przejmuje skupienia, żeby
+            // nie zwijać zaznaczenia w polu tekstu.
+            .focusProperties { canFocus = false }
+            .clickable(onClick = onClick)
+            .background(
+                color = if (selected) Kajet.colors.accentWash else androidx.compose.ui.graphics.Color.Transparent,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(Kajet.dimens.corner),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -668,7 +980,7 @@ private fun FormatGlyph(
                 fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null,
                 fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
             ),
-            color = Kajet.colors.text,
+            color = if (selected) Kajet.colors.accent else Kajet.colors.text,
         )
     }
 }

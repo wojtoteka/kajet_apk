@@ -187,6 +187,6 @@ object SyntaxHighlight {
             "on", "group", "by", "order", "having", "limit", "as", "and", "or", "not", "null",
             "primary", "key", "foreign", "references", "distinct", "count", "sum", "avg",
         )
-        CodeLanguage.PLAIN_TEXT -> emptySet()
+        CodeLanguage.HTML, CodeLanguage.PLAIN_TEXT -> emptySet()
     }
 }

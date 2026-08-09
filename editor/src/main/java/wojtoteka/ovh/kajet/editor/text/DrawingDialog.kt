@@ -46,6 +46,7 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InkTool
 import wojtoteka.ovh.kajet.core.model.PageBackground
+import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.ink.EditorTool
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.ink.CanvasListener
@@ -62,6 +63,7 @@ fun DrawingDialog(
     onClose: () -> Unit,
     onDone: (strokes: List<InkStroke>, width: Float, height: Float) -> Unit,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     var strokes by remember { mutableStateOf<List<InkStroke>>(emptyList()) }
     var tool by remember { mutableStateOf(EditorTool.PEN) }
@@ -94,8 +96,8 @@ fun DrawingDialog(
                     .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Rysunek w notatce", style = Kajet.type.title, color = colors.text, modifier = Modifier.weight(1f))
-                IconAction(KajetIcons.Close, "Zamknij bez zapisywania", onClose)
+                Text(words.drawingInNote, style = Kajet.type.title, color = colors.text, modifier = Modifier.weight(1f))
+                IconAction(KajetIcons.Close, words.closeWithoutSaving, onClose)
             }
             HorizontalRule()
 
@@ -112,21 +114,21 @@ fun DrawingDialog(
             ) {
                 IconAction(
                     KajetIcons.Pen,
-                    "Pióro",
+                    EditorTool.PEN.label(words),
                     { tool = EditorTool.PEN },
                     selected = tool == EditorTool.PEN,
                 )
                 IconAction(
                     KajetIcons.EraserStroke,
-                    "Gumka do całej kreski",
+                    EditorTool.ERASER_STROKE.label(words),
                     { tool = EditorTool.ERASER_STROKE },
                     selected = tool == EditorTool.ERASER_STROKE,
                 )
                 Box(Modifier.width(12.dp))
-                InkPalette.pens.forEach { (name, variant) ->
+                InkPalette.pens(words).forEach { (name, variant) ->
                     ColourDot(
                         color = variant.toArgb(),
-                        description = "Kolor $name",
+                        description = "${words.colourNamed} $name",
                         onClick = { color = variant.toArgb() },
                         selected = color == variant.toArgb(),
                     )
@@ -140,7 +142,7 @@ fun DrawingDialog(
                                 if (width == variant) colors.accentWash else Color.Transparent,
                                 RoundedCornerShape(Kajet.dimens.corner),
                             )
-                            .clickable(onClickLabel = "Grubość kreski") { width = variant },
+                            .clickable(onClickLabel = words.strokeWidth) { width = variant },
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
@@ -190,6 +192,7 @@ fun DrawingDialog(
                                 override fun lassoFinished(page: Int, polygon: List<Float>) = Unit
                                 override fun selectionMoved(dx: Float, dy: Float, finished: Boolean) = Unit
                                 override fun viewChanged(x: Float, y: Float, scale: Float) = Unit
+                                override fun imageTapped(page: Int, id: String) = Unit
                                 override fun emptyAreaTapped() = Unit
                             }
                         }
@@ -226,17 +229,17 @@ fun DrawingDialog(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PrimaryButton(
-                    text = "Wstaw rysunek",
+                    text = words.insertDrawing,
                     onClick = { onDone(strokes, DRAWING_WIDTH, DRAWING_HEIGHT) },
                     icon = KajetIcons.Confirm,
                     enabled = strokes.isNotEmpty(),
                 )
-                SecondaryButton("Wyczyść", { strokes = emptyList() })
+                SecondaryButton(words.clearDrawing, { strokes = emptyList() })
                 // Zamknięcie stoi obok pozostałych przycisków, a nie tylko
                 // krzyżykiem w rogu, bo tam się go nie szuka.
-                SecondaryButton("Zamknij", onClose, icon = KajetIcons.Close)
+                SecondaryButton(words.close, onClose, icon = KajetIcons.Close)
                 Box(Modifier.weight(1f))
-                SectionLabel("Rysuj palcem albo rysikiem")
+                SectionLabel(words.drawWithFingerOrStylus)
             }
         }
     }

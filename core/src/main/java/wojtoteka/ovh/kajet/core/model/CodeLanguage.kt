@@ -1,5 +1,7 @@
 package wojtoteka.ovh.kajet.core.model
 
+import wojtoteka.ovh.kajet.core.text.Strings
+
 enum class CodeLanguage(
     val id: String,
     val labelPl: String,
@@ -23,8 +25,18 @@ enum class CodeLanguage(
     RUBY("ruby", "Ruby", listOf("rb"), "ruby", false, "main.rb", "#"),
     BASH("bash", "Bash", listOf("sh", "bash"), "bash", false, "main.sh", "#"),
     SQL("sql", "SQL", listOf("sql"), "sqlite3", false, "main.sql", "--"),
+    // HTML się nie uruchamia jak program — zamiast tego edytor kodu ma podgląd
+    // strony. Prefiks komentarza jest liniowy z braku lepszego mechanizmu.
+    HTML("html", "HTML", listOf("html", "htm"), null, false, "index.html", "<!--"),
     PLAIN_TEXT("text", "Zwykły tekst", listOf("txt", "log", "csv"), null, false, "main.txt", "#"),
     ;
+
+    /*
+      Nazwy języków są własne („Python", „C++") i tłumaczeniu nie podlegają.
+      Jedyny wyjątek to zwykły tekst, który nazwą nie jest.
+    */
+    fun label(words: Strings): String =
+        if (words.english && this == PLAIN_TEXT) "Plain text" else labelPl
 
     val runnable: Boolean get() = serverRuntime != null
 

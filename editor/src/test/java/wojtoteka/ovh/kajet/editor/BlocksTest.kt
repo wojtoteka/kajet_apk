@@ -179,7 +179,22 @@ class BlocksTest {
         val blocks = Blocks.split("- [ ] chleb")
         val after = Blocks.splitTask(blocks, blocks[0].key, "chleb\nmleko")
 
-        assertThat(Blocks.join(after)).isEqualTo("- [ ] chleb\n- [ ] mleko")
+        assertThat(Blocks.join(after.blocks)).isEqualTo("- [ ] chleb\n- [ ] mleko")
+    }
+
+    /*
+      Sedno naprawy listy zakupów: kursor MUSI przejść do świeżej pozycji.
+      Dopóki zostawał w poprzedniej, wszystko pisane po klawiszu nowej linii
+      doklejało się do niej, a lista rosła o same puste kwadraciki.
+    */
+    @Test
+    fun `kursor przechodzi do swiezej pozycji listy`() {
+        val blocks = Blocks.split("- [ ] chleb")
+        val after = Blocks.splitTask(blocks, blocks[0].key, "chleb\n")
+
+        assertThat(after.focusKey).isNotEqualTo(blocks[0].key)
+        assertThat(after.blocks.first { it.key == after.focusKey })
+            .isEqualTo(Block.Task(after.focusKey, done = false, content = ""))
     }
 
     @Test
@@ -187,7 +202,7 @@ class BlocksTest {
         val blocks = Blocks.split("- [x] chleb")
         val after = Blocks.splitTask(blocks, blocks[0].key, "chleb\n")
 
-        assertThat(Blocks.join(after)).isEqualTo("- [x] chleb\n- [ ] ")
+        assertThat(Blocks.join(after.blocks)).isEqualTo("- [x] chleb\n- [ ] ")
     }
 
     @Test
@@ -195,8 +210,11 @@ class BlocksTest {
         val blocks = Blocks.split("- [ ] ")
         val after = Blocks.splitTask(blocks, blocks[0].key, "\n")
 
-        assertThat(after).hasSize(1)
-        assertThat(after[0]).isInstanceOf(Block.Text::class.java)
+        assertThat(after.blocks).hasSize(1)
+        assertThat(after.blocks[0]).isInstanceOf(Block.Text::class.java)
+        // Kursor idzie do akapitu, który został po liście — inaczej człowiek
+        // wychodzi z listy i nie ma gdzie pisać dalej.
+        assertThat(after.focusKey).isEqualTo(after.blocks[0].key)
     }
 
     @Test
@@ -204,7 +222,70 @@ class BlocksTest {
         val blocks = Blocks.split("- [ ] chleb\n- [ ] maslo")
         val after = Blocks.splitTask(blocks, blocks[0].key, "chleb\nmleko")
 
-        assertThat(Blocks.join(after)).isEqualTo("- [ ] chleb\n- [ ] mleko\n- [ ] maslo")
+        assertThat(Blocks.join(after.blocks)).isEqualTo("- [ ] chleb\n- [ ] mleko\n- [ ] maslo")
+    }
+
+    /*
+      Nagłówek, cytat i punkt to budowa wiersza, tak samo jak kwadracik zadania.
+      Doklejone do treści zadania dawały „- [ ] > cytat" — znacznik na wierzchu
+      w środku listy. Wiersz może być albo zadaniem, albo cytatem.
+    */
+    @Test
+    fun `cytat zamienia zadanie w cytat, a nie wchodzi do jego srodka`() {
+        val blocks = Blocks.split("- [ ] chleb")
+        val after = Blocks.taskToLine(blocks, blocks[0].key, "> ")!!
+
+        assertThat(Blocks.join(after.blocks)).isEqualTo("> chleb")
+    }
+
+    @Test
+    fun `naglowek zamienia zadanie w naglowek`() {
+        val blocks = Blocks.split("- [ ] chleb\n- [ ] maslo")
+        val after = Blocks.taskToLine(blocks, blocks[1].key, "## ")!!
+
+        assertThat(Blocks.join(after.blocks)).isEqualTo("- [ ] chleb\n\n## maslo")
+    }
+
+    @Test
+    fun `pusty znacznik zdejmuje kwadracik i zostawia zwykly akapit`() {
+        val blocks = Blocks.split("- [x] chleb")
+        val after = Blocks.taskToLine(blocks, blocks[0].key, "")!!
+
+        assertThat(Blocks.join(after.blocks)).isEqualTo("chleb")
+        assertThat(after.blocks[0]).isInstanceOf(Block.Text::class.java)
+    }
+
+    @Test
+    fun `zamiana dziala tylko na zadaniu`() {
+        val blocks = Blocks.split("zwykly akapit")
+
+        assertThat(Blocks.taskToLine(blocks, blocks[0].key, "> ")).isNull()
+    }
+
+    /*
+      Miejsce do pisania pod ostatnim blokiem. Notatka kończąca się listą albo
+      tabelką nie miała już żadnego pola tekstowego, więc stuknięcie w pustą
+      kartkę pod nią nie miało w co trafić.
+    */
+    @Test
+    fun `pod lista zadan dokladamy akapit do pisania`() {
+        val blocks = Blocks.split("- [ ] chleb")
+        val after = Blocks.appendParagraph(blocks)
+
+        assertThat(after.blocks).hasSize(2)
+        assertThat(after.blocks[1]).isInstanceOf(Block.Text::class.java)
+        assertThat(after.focusKey).isEqualTo(after.blocks[1].key)
+        // Pusty akapit z końca nie jest treścią i do pliku nie trafia.
+        assertThat(Blocks.join(after.blocks)).isEqualTo("- [ ] chleb")
+    }
+
+    @Test
+    fun `pod akapitem nie dokladamy niczego, tylko stajemy w nim`() {
+        val blocks = Blocks.split("Ala ma kota")
+        val after = Blocks.appendParagraph(blocks)
+
+        assertThat(after.blocks).isSameInstanceAs(blocks)
+        assertThat(after.focusKey).isEqualTo(blocks[0].key)
     }
 
     @Test
@@ -220,28 +301,26 @@ class BlocksTest {
 class TextFormatTest {
 
     @Test
-    fun `otoczenie zaznaczenia dodaje znaczniki i zostawia je zaznaczone`() {
-        val field = TextFieldValue("Ala ma kota", TextRange(4, 6))
-        val after = TextFormat.wrap(field, "**")
+    fun `wiersz zadania rozpoznaje sie po znaczniku`() {
+        assertThat(Blocks.isTaskLine("- [ ] mleko")).isTrue()
+        assertThat(Blocks.isTaskLine("- [x] mleko")).isTrue()
+        assertThat(Blocks.isTaskLine("  - [ ] wciete")).isTrue()
+        assertThat(Blocks.isTaskLine("- mleko")).isFalse()
+        assertThat(Blocks.isTaskLine("zwykly wiersz")).isFalse()
 
-        assertThat(after.text).isEqualTo("Ala **ma** kota")
-        assertThat(after.text.substring(after.selection.min, after.selection.max)).isEqualTo("ma")
+        assertThat(Blocks.taskContent("- [ ] mleko")).isEqualTo("mleko")
+        assertThat(Blocks.taskContent("- [x] chleb")).isEqualTo("chleb")
+        // Puste zadanie tuż po naciśnięciu przycisku.
+        assertThat(Blocks.taskContent(Blocks.TASK_MARKER.trimEnd())).isEqualTo("")
     }
 
     @Test
-    fun `otoczenie bez zaznaczenia wstawia slowo do nadpisania`() {
-        val after = TextFormat.wrap(TextFieldValue("", TextRange(0)), "*")
+    fun `znacznik zadania z paska od razu daje blok zadania`() {
+        // Tak wygląda treść po naciśnięciu przycisku na pustym wierszu.
+        val blocks = Blocks.split("Przed\n\n${Blocks.TASK_MARKER}")
 
-        assertThat(after.text).isEqualTo("*tekst*")
-        assertThat(after.text.substring(after.selection.min, after.selection.max)).isEqualTo("tekst")
-    }
-
-    @Test
-    fun `powtorne otoczenie zdejmuje znaczniki`() {
-        val field = TextFieldValue("Ala **ma** kota", TextRange(6, 8))
-        val after = TextFormat.wrap(field, "**")
-
-        assertThat(after.text).isEqualTo("Ala ma kota")
+        assertThat(blocks.filterIsInstance<Block.Task>()).hasSize(1)
+        assertThat(blocks.filterIsInstance<Block.Task>().single().content).isEmpty()
     }
 
     @Test
@@ -279,36 +358,124 @@ class TextFormatTest {
         assertThat(after.text).isEqualTo("Ala nie ma kota")
     }
 
-    // Podkreślenie i kolor. Markdown nie ma na nie własnego zapisu,
-    // więc otaczamy zaznaczenie parą różnych znaczników.
+    // Podkreślenie, barwa i wielkość fragmentu nie chodzą już przez
+    // doklejanie znaczników do tekstu — idą przez model zakresów.
+    // Ich testy siedzą w TextFormatTest.kt i RichTextTest.kt.
+}
+
+/*
+  Tabelka. W pliku notatki zostaje zwykłym markdownem, więc najważniejsze jest
+  to, żeby przeszła tam i z powrotem bez straty — inaczej strona i eksport
+  zobaczyłyby coś innego niż tablet.
+*/
+class TableBlockTest {
+
+    private val markdown = "| Imię | Wiek |\n| --- | --- |\n| Ala | 7 |\n| Ola | 9 |"
+
+    private fun table(blocks: List<Block>): Block.Table =
+        blocks.filterIsInstance<Block.Table>().single()
 
     @Test
-    fun `podkreslenie otacza zaznaczenie para znacznikow`() {
-        val field = TextFieldValue("Ala ma kota", TextRange(4, 6))
-        val after = TextFormat.wrapPair(field, "<u>", "</u>")
+    fun `wiersze z kreskami staja sie jedna tabelka`() {
+        val blocks = Blocks.split(markdown)
+        val table = table(blocks)
 
-        assertThat(after.text).isEqualTo("Ala <u>ma</u> kota")
-        assertThat(after.text.substring(after.selection.min, after.selection.max)).isEqualTo("ma")
+        assertThat(table.rows).hasSize(3)
+        assertThat(table.rows[0]).containsExactly("Imię", "Wiek").inOrder()
+        assertThat(table.rows[2]).containsExactly("Ola", "9").inOrder()
+        // Wiersz z myślnikami to sama składnia, nie treść.
+        assertThat(table.rows.none { it.all { cell -> cell == "---" } }).isTrue()
     }
 
     @Test
-    fun `powtorne podkreslenie zdejmuje znaczniki`() {
-        val field = TextFieldValue("Ala <u>ma</u> kota", TextRange(7, 9))
-        val after = TextFormat.wrapPair(field, "<u>", "</u>")
-
-        assertThat(after.text).isEqualTo("Ala ma kota")
+    fun `tabelka wraca na markdown bez straty`() {
+        assertThat(Blocks.join(Blocks.split(markdown))).isEqualTo(markdown)
     }
 
     @Test
-    fun `kolor bez zaznaczenia wstawia slowo do nadpisania`() {
-        val after = TextFormat.wrapPair(
-            TextFieldValue("", TextRange(0)),
-            "<span style=\"color:#C81E1E\">",
-            "</span>",
-        )
+    fun `tabelka w srodku notatki nie zjada tekstu wokol`() {
+        val note = "Przed\n\n$markdown\n\nPo"
+        val blocks = Blocks.split(note)
 
-        assertThat(after.text).isEqualTo("<span style=\"color:#C81E1E\">tekst</span>")
-        assertThat(after.text.substring(after.selection.min, after.selection.max)).isEqualTo("tekst")
+        assertThat(blocks.filterIsInstance<Block.Text>().map { it.content })
+            .containsExactly("Przed", "Po").inOrder()
+        assertThat(Blocks.join(blocks)).isEqualTo(note)
+    }
+
+    @Test
+    fun `pod tabelka na koncu notatki zostaje miejsce na pisanie`() {
+        val blocks = Blocks.split(markdown)
+
+        assertThat(blocks.last()).isInstanceOf(Block.Text::class.java)
+        // Pusty akapit z końca nie trafia do pliku.
+        assertThat(Blocks.join(blocks)).isEqualTo(markdown)
+    }
+
+    @Test
+    fun `zmiana komorki zostaje w tabelce`() {
+        val blocks = Blocks.split(markdown)
+        val key = table(blocks).key
+        val after = Blocks.setCell(blocks, key, row = 1, column = 1, text = "8")
+
+        assertThat(table(after).cell(1, 1)).isEqualTo("8")
+        assertThat(Blocks.join(after)).contains("| Ala | 8 |")
+    }
+
+    @Test
+    fun `kreska pionowa w komorce nie rozbija tabelki`() {
+        val blocks = Blocks.split(markdown)
+        val key = table(blocks).key
+        val after = Blocks.setCell(blocks, key, 1, 0, "Ala | Ola")
+
+        // Po zapisaniu i ponownym odczycie tabelka ma nadal dwie kolumny.
+        assertThat(table(Blocks.split(Blocks.join(after))).columns).isEqualTo(2)
+    }
+
+    @Test
+    fun `dodanie wiersza i kolumny trzyma prostokat`() {
+        val blocks = Blocks.split(markdown)
+        val key = table(blocks).key
+
+        val withRow = Blocks.addRow(blocks, key, after = 2)
+        assertThat(table(withRow).rows).hasSize(4)
+
+        val withColumn = Blocks.addColumn(withRow, key, after = 1)
+        val table = table(withColumn)
+        assertThat(table.columns).isEqualTo(3)
+        assertThat(table.rows.all { it.size == 3 }).isTrue()
+        assertThat(Blocks.join(withColumn)).contains("| --- | --- | --- |")
+    }
+
+    @Test
+    fun `usuwanie zostawia nagłowek i jedna kolumne`() {
+        val blocks = Blocks.split(markdown)
+        val key = table(blocks).key
+
+        val fewer = Blocks.removeRow(Blocks.removeRow(blocks, key, 2), key, 1)
+        assertThat(table(fewer).rows).hasSize(1)
+        // Nagłówek zostaje: tabelka bez niego przestaje być tabelką.
+        assertThat(table(Blocks.removeRow(fewer, key, 0)).rows).hasSize(1)
+
+        val narrow = Blocks.removeColumn(blocks, key, 1)
+        assertThat(table(narrow).columns).isEqualTo(1)
+        assertThat(table(Blocks.removeColumn(narrow, key, 0)).columns).isEqualTo(1)
+    }
+
+    @Test
+    fun `wstawiona pusta tabelka od razu jest blokiem tabelki`() {
+        val blocks = Blocks.split(Blocks.emptyTable("Kolumna"))
+
+        assertThat(table(blocks).rows).hasSize(2)
+        assertThat(table(blocks).columns).isEqualTo(2)
+    }
+
+    @Test
+    fun `tabelka w bloku kodu zostaje tekstem`() {
+        val note = "```\n| nie | tabelka |\n```"
+        val blocks = Blocks.split(note)
+
+        assertThat(blocks.filterIsInstance<Block.Table>()).isEmpty()
+        assertThat(Blocks.join(blocks)).isEqualTo(note)
     }
 }
 
@@ -327,6 +494,19 @@ class TextMarkersTest {
         assertThat(TextMarkers.plain("""<span style="color:#C81E1E">czerwone</span>"""))
             .isEqualTo("czerwone")
         assertThat(TextMarkers.plain("<u>podkreslone</u>")).isEqualTo("podkreslone")
+    }
+
+    @Test
+    fun `zagniezdzone i osierocone znaczniki tez znikaja`() {
+        // Stary zepsuty zapis: kolor w rozmiarze i domknięcie bez pary.
+        assertThat(
+            TextMarkers.plain(
+                """<span style="font-size:21px"><span style="color:#665222">duze</span></span>""",
+            ),
+        ).isEqualTo("duze")
+        assertThat(TextMarkers.plain("tekst</span> dalej")).isEqualTo("tekst dalej")
+        assertThat(TextMarkers.plain("""<span style="font-size:21px">duze</span>"""))
+            .isEqualTo("duze")
     }
 
     @Test

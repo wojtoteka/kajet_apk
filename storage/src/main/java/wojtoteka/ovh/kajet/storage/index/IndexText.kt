@@ -1,7 +1,10 @@
 package wojtoteka.ovh.kajet.storage.index
 
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.core.text.handwritingSummary
+import wojtoteka.ovh.kajet.core.text.nodesCount
 
 object IndexText {
 
@@ -48,7 +51,7 @@ object IndexText {
             val mindMap = document.mindMap
             return when {
                 document.handwriting != null -> emptyHandwriting(document)
-                mindMap != null -> "${mindMap.nodes.size} węzłów"
+                mindMap != null -> words.nodesCount(mindMap.nodes.size)
                 else -> ""
             }
         }
@@ -62,10 +65,6 @@ object IndexText {
     private fun emptyHandwriting(document: NoteDocument): String {
         val pages = document.handwriting?.pages ?: return ""
         val strokes = pages.sumOf { it.strokes.size }
-        return when {
-            strokes == 0 -> "Pusta notatka"
-            pages.size == 1 -> "Pismo odręczne, $strokes kresek"
-            else -> "Pismo odręczne, ${pages.size} stron"
-        }
+        return words.handwritingSummary(strokes, pages.size)
     }
 }

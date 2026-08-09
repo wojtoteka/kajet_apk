@@ -248,6 +248,49 @@ class CloudClient(
         body = json.encodeToString(CodeRequest(language, code, input)),
     )
 
+    // --- Asystent KajetAI ---
+    //
+    // Wysyłamy WYŁĄCZNIE identyfikator notatki i polecenie. Treści nie -
+    // serwer ją ma, a te same bajty w obie strony byłyby marnowaniem łącza.
+    //
+    // Konto bez uprawnienia dostaje z tych punktów dokładnie to samo, co
+    // z nieistniejącego adresu (404, „no-route"). Tak ma być: odmowa nie ma
+    // prawa zdradzić, że asystent w Kajecie w ogóle jest.
+
+    /**
+     * Prosi asystenta o zmianę notatki.
+     *
+     * Czeka dłużej niż reszta połączeń: model potrafi mielić kilkadziesiąt
+     * sekund, a serwer i tak poddaje się pierwszy i mówi, dlaczego.
+     */
+    suspend fun aiEdit(
+        noteId: String,
+        instruction: String,
+        baseVersion: Int,
+    ): Result<AiEditResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/ai-edit",
+        method = "POST",
+        body = json.encodeToString(AiEditRequest(instruction, baseVersion)),
+        readTimeout = AI_READ_TIMEOUT,
+    )
+
+    suspend fun aiHistory(noteId: String): Result<AiHistoryResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/ai-history",
+        method = "GET",
+    )
+
+    suspend fun aiForgetHistory(noteId: String): Result<AiClearedResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/ai-history",
+        method = "DELETE",
+    )
+
+    /** Zgoda na wysyłanie treści notatek do Google. Zapisana przy koncie. */
+    suspend fun aiSetConsent(consented: Boolean): Result<AiConsentResponse> = request(
+        url = "${account.serverUrl()}/api/v1/account/ai-consent",
+        method = "POST",
+        body = json.encodeToString(AiConsentRequest(consented)),
+    )
+
     // --- Middle ---
 
     private suspend inline fun <reified T> request(
@@ -256,8 +299,16 @@ class CloudClient(
         body: String? = null,
         withToken: Boolean = true,
         acceptPending: Boolean = false,
+        readTimeout: Int = READ_TIMEOUT,
     ): Result<T> = withContext(Dispatchers.IO) {
-        val raw = connect(url, method, "application/json", withToken, acceptPending) { connection ->
+        val raw = connect(
+            url = url,
+            method = method,
+            contentType = "application/json",
+            withToken = withToken,
+            acceptPending = acceptPending,
+            readTimeout = readTimeout,
+        ) { connection ->
             if (body != null) {
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
@@ -284,6 +335,13 @@ class CloudClient(
         contentType: String,
         withToken: Boolean,
         acceptPending: Boolean = false,
+        /**
+         * Ile czekać na odpowiedź. Asystent potrzebuje więcej niż reszta - i to
+         * SERWER ma się poddać pierwszy, bo tylko on umie powiedzieć, dlaczego
+         * się nie udało. Urwanie połączenia u nas zostawiłoby człowieka
+         * z „brak odpowiedzi" przy zmianie, która może właśnie się zapisała.
+         */
+        readTimeout: Int = READ_TIMEOUT,
         sendBody: (HttpURLConnection) -> Unit,
     ): Result<String> {
         if (!hasNetwork()) {
@@ -307,7 +365,7 @@ class CloudClient(
         return try {
             connection.requestMethod = method
             connection.connectTimeout = CONNECT_TIMEOUT
-            connection.readTimeout = READ_TIMEOUT
+            connection.readTimeout = readTimeout
             connection.setRequestProperty("Accept", "application/json")
             /*
               Zdania o błędach układa serwer, a pokazuje je aplikacja - muszą
@@ -433,6 +491,14 @@ class CloudClient(
         const val READ_TIMEOUT = 60_000
 
         /**
+         * Asystent czeka dłużej niż serwer daje modelowi (AI_TIMEOUT_SECONDS,
+         * domyślnie 60 s). Zapas jest po to, żeby to serwer poddał się
+         * pierwszy: on jeden wie, czy zmiana zdążyła się zapisać, i umie
+         * powiedzieć, co poszło nie tak.
+         */
+        const val AI_READ_TIMEOUT = 90_000
+
+        /**
          * Powody, dla których serwer odmawia tożsamości (pole `error`): brak
          * tokenu, token nieznany, token przeterminowany, konto zablokowane.
          * Każdy z nich znaczy: sesji już nie ma.
@@ -540,7 +606,53 @@ data class AccountState(
     val account: AccountData,
     val storage: Storage,
     val noteCount: Int = 0,
+    /**
+     * Asystent. Pole przychodzi WYŁĄCZNIE dla konta z uprawnieniem - brak
+     * gałęzi znaczy „nie ma takiej funkcji", a nie „jest, ale wyłączona".
+     * Dlatego aplikacja pyta o `ai != null`, nie o żadną flagę w środku.
+     */
+    val ai: AiState? = null,
 )
+
+@Serializable
+data class AiState(
+    /** Czy właściciel konta zgodził się na wysyłanie treści notatek do Google. */
+    val consented: Boolean = false,
+)
+
+@Serializable
+private data class AiEditRequest(val instruction: String, val baseVersion: Int)
+
+/**
+ * Odpowiedź asystenta. `status` mówi, co się stało:
+ *  - „zmieniono" - notatka zapisana, `content` niesie nową treść,
+ *  - „pytanie"   - asystent nie zrozumiał i dopytuje, notatka nietknięta,
+ *  - „konflikt"  - ktoś zapisał notatkę w międzyczasie, nic nie nadpisano.
+ */
+@Serializable
+data class AiEditResponse(
+    val status: String = "",
+    val opis: String = "",
+    val pytanie: String = "",
+    val version: Int = 0,
+    val updatedAt: Long = 0,
+    val content: String? = null,
+)
+
+@Serializable
+data class AiTurn(val request: String = "", val reply: String = "")
+
+@Serializable
+data class AiHistoryResponse(val turns: List<AiTurn> = emptyList())
+
+@Serializable
+data class AiClearedResponse(val status: String = "ok", val cleared: Int = 0)
+
+@Serializable
+private data class AiConsentRequest(val consented: Boolean)
+
+@Serializable
+data class AiConsentResponse(val status: String = "ok", val consented: Boolean = false)
 
 @Serializable
 data class OutgoingNote(

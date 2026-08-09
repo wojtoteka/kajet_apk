@@ -33,6 +33,16 @@ class MindMapViewModel(
     private val _connecting = MutableStateFlow(false)
     val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
 
+    /*
+      Węzeł, od którego łączymy. Trzymamy go osobno od zaznaczenia, bo tryb
+      łączenia ma zostać włączony po pierwszej linii: jedna myśl łączy się
+      zwykle z kilkoma naraz, a przedtem trzeba było po każdej linii na nowo
+      wybierać węzeł i klikać w przycisk. Teraz stukasz kolejno we wszystko, co
+      ma się z nim połączyć, i dopiero potem wyłączasz tryb.
+    */
+    private val _connectFrom = MutableStateFlow<String?>(null)
+    val connectFrom: StateFlow<String?> = _connectFrom.asStateFlow()
+
     private val _draggedLine = MutableStateFlow<DraggedLine?>(null)
     val draggedLine: StateFlow<DraggedLine?> = _draggedLine.asStateFlow()
 
@@ -100,10 +110,11 @@ class MindMapViewModel(
     fun select(id: String?) {
         _selectedEdge.value = null
         if (_connecting.value && id != null) {
-            val from = _selected.value
+            val from = _connectFrom.value ?: _selected.value
             if (from != null && from != id) {
                 connect(from, id)
-                _connecting.value = false
+                // Tryb zostaje włączony - można od razu stuknąć w następny
+                // węzeł i połączyć ten sam z kilkoma naraz.
                 return
             }
         }
@@ -117,7 +128,12 @@ class MindMapViewModel(
     }
 
     fun toggleConnecting() {
-        _connecting.value = !_connecting.value
+        val next = !_connecting.value
+        _connecting.value = next
+        // Źródło zapamiętujemy w chwili włączenia trybu; bez tego stuknięcie
+        // w kolejny węzeł przestawiałoby je i linie szłyby nie stamtąd, skąd
+        // człowiek chciał.
+        _connectFrom.value = if (next) _selected.value else null
     }
 
     // Łączenie przeciąganiem
@@ -128,12 +144,45 @@ class MindMapViewModel(
 
     fun dragConnection(x: Float, y: Float) {
         val current = _draggedLine.value ?: return
-        val target = map.nodes.lastOrNull { node ->
-            node.id != current.fromId &&
-                x >= node.x && x <= node.x + node.width &&
+        _draggedLine.value = current.copy(x = x, y = y, targetId = nodeNear(x, y, current.fromId))
+    }
+
+    /**
+     * Węzeł pod palcem - a jeśli palec minął się o włos, to najbliższy w zasięgu
+     * [GRAB_MARGIN].
+     *
+     * Wcześniej liczyło się samo trafienie w prostokąt węzła. Przy mapie z wielu
+     * małych myśli oznaczało to, że połowa prób łączenia kończyła się nowym,
+     * pustym węzłem obok - i wyglądało to tak, jakby niektórych węzłów nie dało
+     * się ze sobą połączyć w ogóle.
+     */
+    private fun nodeNear(x: Float, y: Float, exceptId: String): String? {
+        val candidates = map.nodes.filter { it.id != exceptId }
+        candidates.lastOrNull { node ->
+            x >= node.x && x <= node.x + node.width &&
                 y >= node.y && y <= node.y + node.height
-        }
-        _draggedLine.value = current.copy(x = x, y = y, targetId = target?.id)
+        }?.let { return it.id }
+
+        return candidates
+            .map { node -> node to distanceToBox(x, y, node.x, node.y, node.width, node.height) }
+            .filter { (_, distance) -> distance <= GRAB_MARGIN }
+            .minByOrNull { (_, distance) -> distance }
+            ?.first
+            ?.id
+    }
+
+    /** Odległość punktu od prostokąta; zero, gdy punkt leży w środku. */
+    private fun distanceToBox(
+        x: Float,
+        y: Float,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+    ): Float {
+        val dx = maxOf(left - x, 0f, x - (left + width))
+        val dy = maxOf(top - y, 0f, y - (top + height))
+        return kotlin.math.hypot(dx, dy)
     }
 
     fun finishConnecting(createInEmpty: Boolean = true) {
@@ -279,14 +328,15 @@ class MindMapViewModel(
         updateNode(id) { it.copy(colorId = colorId, customColor = 0) }
     }
 
+    // Do spisu „twoich kolorów" barwa trafia dopiero po zamknięciu okna z
+    // tęczą (rememberColor woła panel węzła). Tęcza zgłasza każdy odcień
+    // mijany pod palcem, więc zapisywanie po drodze zapychało cały spis.
     fun setCustomColor(id: String, argb: Int) {
         updateNode(id) { it.copy(customColor = argb) }
-        rememberColor(argb)
     }
 
     fun setTextColor(id: String, argb: Int) {
         updateNode(id) { it.copy(textColor = argb) }
-        rememberColor(argb)
     }
 
     fun setFont(id: String, font: NoteFont) = updateNode(id) { it.copy(font = font) }
@@ -425,6 +475,12 @@ class MindMapViewModel(
         const val GAP_Y = 24f
 
         const val CONNECT_THRESHOLD = 60f
+
+        /**
+         * O ile palec może minąć się z węzłem, a i tak trafić. Mniej więcej
+         * szerokość opuszka na mapie w zwykłym powiększeniu.
+         */
+        const val GRAB_MARGIN = 36f
     }
 
     class Factory(

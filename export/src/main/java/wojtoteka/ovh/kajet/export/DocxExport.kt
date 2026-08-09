@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.export
 
 import wojtoteka.ovh.kajet.core.model.MindMapContent
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import java.io.OutputStream
@@ -66,7 +67,7 @@ object DocxExport {
     }
 
     private fun fromMindMap(map: MindMapContent): String = buildString {
-        append(paragraph("Węzły mapy", style = "Heading1"))
+        append(paragraph(words.mapNodes, style = "Heading1"))
         val byId = map.nodes.associateBy { it.id }
         val hasParent = map.edges.map { it.toId }.toSet()
         val children = map.edges.groupBy({ it.fromId }, { it.toId })
@@ -75,7 +76,7 @@ object DocxExport {
             if (!visited.add(id)) return
             val node = byId[id] ?: return
             val indent = "    ".repeat(depth)
-            append(paragraph(indent + "•  " + node.text.ifBlank { "Bez podpisu" }, style = "ListParagraph"))
+            append(paragraph(indent + "•  " + node.text.ifBlank { words.noCaption }, style = "ListParagraph"))
             children[id].orEmpty().forEach { walk(it, depth + 1, visited) }
         }
 
@@ -88,9 +89,7 @@ object DocxExport {
         val pages = document.handwriting?.pages.orEmpty()
         append(
             paragraph(
-                "Ta notatka jest pisana odręcznie. W pliku DOCX znajdziesz tylko " +
-                    "pola tekstowe i pismo zamienione wcześniej na tekst. " +
-                    "Do zapisania samego pisma użyj eksportu do pliku PDF.",
+                words.handwrittenInDocx,
                 italic = true,
             ),
         )
@@ -98,13 +97,13 @@ object DocxExport {
             val pieces = page.recognized.map { it.text } + page.texts.map { it.text }
             val nonEmpty = pieces.filter { it.isNotBlank() }
             if (nonEmpty.isEmpty()) return@forEachIndexed
-            append(paragraph("Strona ${index + 1}", style = "Heading2"))
+            append(paragraph("${words.pageWord} ${index + 1}", style = "Heading2"))
             nonEmpty.forEach { append(paragraph(it)) }
         }
     }
 
     private fun imageCaption(line: String): String =
-        Regex("!\\[([^\\]]*)]").find(line)?.groupValues?.get(1)?.ifBlank { "bez opisu" } ?: "bez opisu"
+        Regex("!\\[([^\\]]*)]").find(line)?.groupValues?.get(1)?.ifBlank { words.noDescription } ?: words.noDescription
 
     private fun formattedParagraph(text: String): String {
         val runs = StringBuilder()

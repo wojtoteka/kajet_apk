@@ -94,9 +94,27 @@ class AccountStore(context: Context) : SyncAccount {
             .putBoolean(KEY_ADMIN, accountState.account.admin)
             .putLong(KEY_QUOTA, accountState.storage.quotaBytes)
             .putLong(KEY_USED, accountState.storage.usedBytes)
+            // Brak gałęzi „ai" znaczy, że konto nie ma asystenta - i wtedy
+            // trzeba wyczyścić to, co pamiętaliśmy, bo uprawnienie mógł
+            // właśnie odebrać administrator.
+            .putBoolean(KEY_AI, accountState.ai != null)
+            .putBoolean(KEY_AI_CONSENT, accountState.ai?.consented == true)
             .apply()
         _state.value = readState()
     }
+
+    /**
+     * Zgoda potwierdzona albo wycofana w aplikacji. Serwer już o niej wie -
+     * to tylko żeby ekran nie czekał na najbliższe odświeżenie konta.
+     */
+    fun rememberAiConsent(consented: Boolean) {
+        preferences.edit().putBoolean(KEY_AI_CONSENT, consented).apply()
+        _state.value = readState()
+    }
+
+    fun aiAvailable(): Boolean = preferences.getBoolean(KEY_AI, false)
+
+    fun aiConsented(): Boolean = preferences.getBoolean(KEY_AI_CONSENT, false)
 
     fun signOut() {
         preferences.edit()
@@ -110,6 +128,8 @@ class AccountStore(context: Context) : SyncAccount {
             .remove(KEY_LAST_SYNC)
             .remove(KEY_LAST_DELETED_SYNC)
             .remove(KEY_SESSION_EXPIRED)
+            .remove(KEY_AI)
+            .remove(KEY_AI_CONSENT)
             .apply()
         _state.value = readState()
     }
@@ -130,6 +150,8 @@ class AccountStore(context: Context) : SyncAccount {
                 admin = preferences.getBoolean(KEY_ADMIN, false),
                 quotaBytes = preferences.getLong(KEY_QUOTA, 0L),
                 usedBytes = preferences.getLong(KEY_USED, 0L),
+                aiAvailable = preferences.getBoolean(KEY_AI, false),
+                aiConsented = preferences.getBoolean(KEY_AI_CONSENT, false),
             )
         }
     }
@@ -199,6 +221,8 @@ class AccountStore(context: Context) : SyncAccount {
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_LAST_DELETED_SYNC = "last_deleted_sync"
         private const val KEY_SESSION_EXPIRED = "session_expired"
+        private const val KEY_AI = "ai"
+        private const val KEY_AI_CONSENT = "ai_consent"
     }
 }
 
@@ -221,6 +245,13 @@ sealed interface SignInState {
         val admin: Boolean,
         val quotaBytes: Long,
         val usedBytes: Long,
+        /**
+         * Czy konto ma asystenta. Serwer przysyła gałąź „ai" wyłącznie wtedy,
+         * gdy ma - jej brak znaczy „nie ma takiej funkcji", więc fałsz tutaj
+         * ma chować asystenta zupełnie, a nie pokazywać go jako wyłączonego.
+         */
+        val aiAvailable: Boolean = false,
+        val aiConsented: Boolean = false,
     ) : SignInState {
         val unlimited: Boolean get() = quotaBytes == 0L
 

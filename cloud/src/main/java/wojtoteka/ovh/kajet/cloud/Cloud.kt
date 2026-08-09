@@ -13,6 +13,14 @@ object Cloud {
         val client: CloudClient,
         val queue: SendQueue,
         val sync: Sync,
+        val auth: AuthWatch,
+        /*
+          Rejestr „ścieżka pliku -> identyfikator notatki CODE". Do tej pory
+          znała go sama synchronizacja; asystentowi też jest potrzebny, bo
+          plik z kodem nie niesie identyfikatora w sobie, a serwer rozpoznaje
+          notatki wyłącznie po nim.
+        */
+        val codeIds: CodeFileIds,
     )
 
     fun parts(context: Context, repository: LibraryRepository): Parts {
@@ -24,9 +32,11 @@ object Cloud {
                 val account = AccountStore(appContext)
                 val client = CloudClient(appContext, account)
                 val queue = SendQueue(appContext)
-                val sync = Sync(appContext, repository, account, client, queue)
+                val codeIds = CodeFileIds(appContext)
+                val sync = Sync(appContext, repository, account, client, queue, codeIds)
+                val auth = AuthWatch(account, client)
 
-                val created = Parts(account, client, queue, sync)
+                val created = Parts(account, client, queue, sync, auth, codeIds)
                 parts = created
 
                 // Background work runs in a separate process and has no other way
@@ -36,6 +46,10 @@ object Cloud {
                 if (account.isSignedIn()) {
                     SyncWork.schedulePeriodic(appContext)
                     SyncWork.scheduleNow(appContext)
+                    // Start aplikacji: token trzeba sprawdzić, zanim ktokolwiek
+                    // zobaczy „Zalogowano jako…". Wylogowanie przez stronę
+                    // mogło się zdarzyć, gdy Kajet był zamknięty.
+                    auth.check()
                 }
 
                 created

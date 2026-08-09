@@ -9,7 +9,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import wojtoteka.ovh.kajet.core.awaria.failureHandler
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
+import wojtoteka.ovh.kajet.core.text.Strings
+import wojtoteka.ovh.kajet.core.text.cannotRunLanguage
+import wojtoteka.ovh.kajet.core.ai.AiHooks
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 
@@ -19,12 +24,11 @@ enum class PanelTab {
     INPUT,
     ;
 
-    val labelPl: String
-        get() = when (this) {
-            OUTPUT -> "Wynik"
-            ERRORS -> "Błędy"
-            INPUT -> "Wejście"
-        }
+    fun label(words: Strings): String = when (this) {
+        OUTPUT -> words.codeOutput
+        ERRORS -> words.codeErrors
+        INPUT -> words.codeInput
+    }
 }
 
 class CodeViewModel(
@@ -32,7 +36,7 @@ class CodeViewModel(
     private val settings: SettingsStore,
     private val registry: RunnerRegistry,
     val path: String,
-) : ViewModel() {
+) : ViewModel(), AiHooks {
 
     val language: CodeLanguage = CodeLanguage.fromExtension(path.substringAfterLast('/'))
         ?: CodeLanguage.PLAIN_TEXT
@@ -60,6 +64,17 @@ class CodeViewModel(
     private val _saved = MutableStateFlow(true)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
+    /*
+      Plik zniknął z dysku na polecenie serwera — skasowany na innym
+      urządzeniu, kiedy tu był otwarty. Kod na ekranie wciąż jest w pamięci;
+      edytor pyta wtedy człowieka, czy zapisać go jako nowy plik, czy odrzucić.
+    */
+    private val _remotelyDeleted = MutableStateFlow(false)
+    val remotelyDeleted: StateFlow<Boolean> = _remotelyDeleted.asStateFlow()
+
+    /** Człowiek wybrał „Odrzuć zmiany" — zamknięcie modelu nie zapisuje w tle. */
+    private var discarded = false
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -68,6 +83,17 @@ class CodeViewModel(
 
     private val _wordWrap = MutableStateFlow(false)
     val wordWrap: StateFlow<Boolean> = _wordWrap.asStateFlow()
+
+    /**
+     * Pomoc przy pisaniu (domykanie nawiasów i znaczników). Ustawienie konta na
+     * urządzeniu — kto woli pisać wszystko sam, gasi ją w ustawieniach.
+     */
+    private val _assist = MutableStateFlow(true)
+    val assist: StateFlow<Boolean> = _assist.asStateFlow()
+
+    /** Pasek narzędzi po prawej stronie — ustawienie dla leworęcznych. */
+    private val _toolbarOnRight = MutableStateFlow(false)
+    val toolbarOnRight: StateFlow<Boolean> = _toolbarOnRight.asStateFlow()
 
     val offline: Boolean = registry.runsOffline(language)
     val runner: CodeRunner? = registry.forLanguage(language)
@@ -81,9 +107,44 @@ class CodeViewModel(
             try {
                 _code.value = repo.readText(path)
             } catch (e: Exception) {
-                _error.value = e.message ?: "Nie udało się otworzyć pliku."
+                _error.value = e.message ?: words.codeOpenFailed
             }
         }
+        // Własny handler: nieudany odczyt ustawień ma zgasić podpowiadanie
+        // składni, a nie zamknąć edytor kodu razem z niezapisanym plikiem.
+        viewModelScope.launch(failureHandler("ustawienia edytora kodu")) {
+            settings.settings.collect {
+                _assist.value = it.codeAssist
+                _toolbarOnRight.value =
+                    it.toolbarSide == wojtoteka.ovh.kajet.storage.ToolbarSide.RIGHT
+            }
+        }
+        // Kasowanie przysłane z serwera dzieje się w tle, pod otwartym
+        // edytorem. Przedrostek, bo plik potrafi zniknąć razem z folderem.
+        viewModelScope.launch(failureHandler("nasłuch kasowania pliku $path")) {
+            repo.remotelyRemovedPaths.collect { removed ->
+                if (removed == path || path.startsWith("$removed/")) {
+                    _remotelyDeleted.value = true
+                }
+            }
+        }
+    }
+
+    /**
+     * Zmiana w polu z kodem, przepuszczona przez pomocnika. Oddaje stan, który
+     * ma naprawdę wejść do pola — z domkniętym nawiasem albo znacznikiem.
+     */
+    fun onTyping(
+        before: androidx.compose.ui.text.input.TextFieldValue,
+        after: androidx.compose.ui.text.input.TextFieldValue,
+    ): androidx.compose.ui.text.input.TextFieldValue {
+        val helped = if (_assist.value) {
+            CodeAssist.keepIndent(before, CodeAssist.assist(before, after, language))
+        } else {
+            after
+        }
+        if (helped.text != _code.value) onCodeChange(helped.text)
+        return helped
     }
 
     fun onCodeChange(text: String) {
@@ -143,8 +204,42 @@ class CodeViewModel(
         viewModelScope.launch { save() }
     }
 
+    // --- Asystent KajetAI ---
+
+    /** Kod sprzed zmiany asystenta - jedyne, na czym stoi cofanie. */
+    private var beforeAi: String? = null
+
+    override suspend fun prepareForAi() {
+        beforeAi = _code.value
+        saveJob?.cancel()
+        save()
+    }
+
+    override suspend fun reloadAfterAi() {
+        runCatching { repo.readText(path) }.onSuccess {
+            _code.value = it
+            _saved.value = true
+        }
+    }
+
+    /**
+     * Powrot do kodu sprzed zmiany. Zwykly zapis, nie osobna droga: stara
+     * tresc wraca jako kolejna wersja pliku i jedzie na serwer tak samo jak
+     * kazda inna poprawka, wiec cofniecie dociera tez na reszte urzadzen.
+     */
+    override suspend fun undoAi(): Boolean {
+        val previous = beforeAi ?: return false
+        _code.value = previous
+        _saved.value = false
+        save()
+        beforeAi = null
+        return _saved.value
+    }
+
     private suspend fun save() {
         if (_saved.value) return
+        // Pliku już nie ma — los kodu rozstrzyga okno wyboru, nie autozapis.
+        if (_remotelyDeleted.value) return
         pendingSince = 0L
         try {
             // Raz zaczęty zapis ma dojść do końca, nawet gdy kolejna zmiana
@@ -154,14 +249,43 @@ class CodeViewModel(
             }
             _saved.value = true
         } catch (e: Exception) {
-            _error.value = e.message ?: "Nie udało się zapisać pliku."
+            _error.value = e.message ?: words.codeSaveFailed
+            // Droga zapasowa obok nasłuchu: zapis mógł paść dlatego, że plik
+            // przed chwilą skasowano gdzie indziej.
+            if (runCatching { repo.entryVanished(path) }.getOrDefault(false)) {
+                _remotelyDeleted.value = true
+            }
         }
+    }
+
+    /**
+     * Kod z ekranu zapisuje się jako świeży plik — wybór „Zapisz jako nowy
+     * plik" po kasowaniu na innym urządzeniu. Świeża tożsamość w chmurze
+     * pilnuje, żeby nie wskrzesić skasowanego wpisu na serwerze.
+     */
+    suspend fun saveAsNewFile(): Boolean {
+        val parent = path.substringBeforeLast('/', "")
+        val saved = runCatching {
+            repo.saveAsNewCodeFile(parent, fileName, _code.value)
+        }.getOrNull()
+        if (saved == null) {
+            _error.value = words.saveAsNewFailed
+            return false
+        }
+        discarded = true
+        _saved.value = true
+        return true
+    }
+
+    /** Wybór „Odrzuć zmiany": kod z pamięci przepada świadomie, nie po cichu. */
+    fun discardChanges() {
+        discarded = true
     }
 
     fun run() {
         val codeRunner = runner
         if (codeRunner == null) {
-            _error.value = "Kajet nie umie uruchomić języka ${language.labelPl}. Plik możesz nadal pisać i zapisywać."
+            _error.value = words.cannotRunLanguage(language.label(words))
             return
         }
         runJob?.cancel()
@@ -181,7 +305,7 @@ class CodeViewModel(
             } catch (e: RunException) {
                 _error.value = e.userMessage
             } catch (e: Exception) {
-                _error.value = e.message ?: "Uruchomienie się nie udało."
+                _error.value = e.message ?: words.codeRunFailed
             } finally {
                 _running.value = false
             }
@@ -198,7 +322,11 @@ class CodeViewModel(
     }
 
     override fun onCleared() {
-        if (!_saved.value) repo.writeTextInBackground(path, _code.value)
+        // Plik skasowany zdalnie i treść odrzucona świadomie zostają w spokoju
+        // — zapis pod martwą ścieżką i tak by padł.
+        if (!discarded && !_remotelyDeleted.value && !_saved.value) {
+            repo.writeTextInBackground(path, _code.value)
+        }
         super.onCleared()
     }
 

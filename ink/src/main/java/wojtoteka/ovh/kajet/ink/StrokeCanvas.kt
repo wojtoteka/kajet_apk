@@ -7,16 +7,25 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.util.Log
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
-import androidx.ink.authoring.InProgressStrokeId
-import androidx.ink.authoring.InProgressStrokesFinishedListener
-import androidx.ink.authoring.InProgressStrokesView
+import androidx.ink.brush.InputToolType
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import androidx.ink.strokes.ImmutableStrokeInputBatch
+import androidx.ink.strokes.InProgressStroke
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import androidx.ink.strokes.StrokeInput
+import android.graphics.Bitmap
+import android.graphics.RectF
+import wojtoteka.ovh.kajet.core.model.ImageElement
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.PageBackground
+import wojtoteka.ovh.kajet.core.model.ShapeElement
+import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -27,6 +36,9 @@ class OnScreenPage(
     val height: Float,
     val background: PageBackground,
     var strokes: List<InkStroke>,
+    var images: List<ImageElement> = emptyList(),
+    var shapes: List<ShapeElement> = emptyList(),
+    var texts: List<TextBoxElement> = emptyList(),
 )
 
 interface CanvasListener {
@@ -37,17 +49,28 @@ interface CanvasListener {
     fun lassoFinished(page: Int, polygon: List<Float>)
     fun selectionMoved(dx: Float, dy: Float, finished: Boolean)
     fun viewChanged(offsetX: Float, offsetY: Float, zoom: Float)
+
+    /** Palec stuknął w zdjęcie — bez ruchu i bez rysowania. */
+    fun imageTapped(page: Int, id: String)
+
+    /** Stuknięcie w pole tekstowe (także CODE). Domyślnie puste — okno rysunku pól nie ma. */
+    fun textTapped(page: Int, id: String) = Unit
     fun emptyAreaTapped()
+
+    /*
+      Kształty. Domyślne ciała są puste, bo z kartki korzysta też okno rysunku
+      w notatce tekstowej, a tam kształtów nie ma.
+    */
+
+    /** Przeciągnięcie skończone: gotowy kształt bez nazwy — nazwę nadaje model. */
+    fun shapeDrawn(page: Int, shape: ShapeElement) = Unit
+
+    /** Stuknięcie w kształt albo w puste miejsce ([id] równe null). */
+    fun shapeTapped(page: Int, id: String?) = Unit
 }
 
 @SuppressLint("ViewConstructor")
-class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFinishedListener {
-
-    private val inProgressView = InProgressStrokesView(context).also {
-        it.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        it.eagerInit()
-        it.addFinishedStrokesListener(this)
-    }
+class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private val renderer: CanvasStrokeRenderer = CanvasStrokeRenderer.create()
 
@@ -57,9 +80,6 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         set(value) {
             field = value
             rebuildStrokes()
-            // The model returned the page with the freshly written stroke, so our layer
-            // already has it and it may leave the authoring layer.
-            releaseFinished()
             // Pages arrive from the model after the view has been sized, so fitting the
             // width has to work from here too.
             if (!fitted && value.isNotEmpty() && width > 0) fitWidth()
@@ -73,6 +93,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         penColor = Color.BLACK,
         highlighterColor = Color.YELLOW,
     )
+
+    var shapeSettings: ShapeSettings = ShapeSettings(color = Color.BLACK)
+
+    /** Blokada proporcji 1:1 włączona na stałe w panelu kształtu. */
+    var shapeSquareLocked: Boolean = false
 
     var fingerDraws: Boolean = false
 
@@ -88,6 +113,13 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         }
     var selectionPage: Int = -1
 
+    /** Bitmapy załączników. Kartka rysuje zdjęcia POD atramentem. */
+    var imageBitmaps: Map<String, Bitmap> = emptyMap()
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     var offsetX: Float = 0f
         private set
     var offsetY: Float = 0f
@@ -100,10 +132,6 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
     private val fallbackStrokes = HashMap<Int, MutableList<InkStroke>>()
 
     private val cache = HashMap<String, Stroke>()
-
-    private val toRelease = HashSet<InProgressStrokeId>()
-
-    private val releaseFallback = Runnable { releaseFinished() }
 
     private val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -125,12 +153,42 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
     private val pageMatrix = Matrix()
     private val buffer = FloatArray(2)
 
+    private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val imageDst = RectF()
+
+    private val shapePainter = ShapePainter()
+
+    // Kształt rysowany właśnie rysikiem: żyje tylko tutaj, do dokumentu wchodzi
+    // dopiero po oderwaniu ręki.
+    private var draft: ShapeElement? = null
+    private var draftTemplate: ShapeElement? = null
+    private var draftPage = -1
+    private var shapeDragging = false
+    private var shapeStartX = 0f
+    private var shapeStartY = 0f
+    private var shapeLastX = 0f
+    private var shapeLastY = 0f
+    private var squareFinger = -1
+
+    // Stuknięcie palcem: wybiera zdjęcie albo odznacza, co było wybrane.
+    private var tapPointerId = -1
+    private var tapDownX = 0f
+    private var tapDownY = 0f
+    private var tapDownTime = 0L
+    private var tapCandidate = false
+
     // Touch state
 
     private var drawingPointerId = -1
-    private var activeStroke: InProgressStrokeId? = null
 
-    private val strokePage = HashMap<InProgressStrokeId, Int>()
+    // Mokra kreska żyje na tym samym canvasie co suche. InProgressStrokesView
+    // z warstwą frontowego bufora zakrywał na części urządzeń pasek edytora
+    // i świeżo dopisane kreski, więc rysujemy ją sami.
+    private var wet: InProgressStroke? = null
+    private var wetPage = -1
+    private var wetTool: EditorTool = EditorTool.PEN
+    private var wetStartTime = 0L
+    private val wetBuffer = MutableStrokeInputBatch()
 
     private var lastStylusTime = 0L
     private var stylusDown = false
@@ -152,7 +210,6 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
 
     init {
         setWillNotDraw(false)
-        addView(inProgressView)
     }
 
     // View placement
@@ -174,6 +231,18 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         listener?.viewChanged(offsetX, offsetY, zoom)
     }
 
+    /**
+     * Przywraca położenie i przybliżenie kartki zapamiętane przez ekran —
+     * po obrocie tabletu albo po tym, jak system zabił proces w tle.
+     *
+     * Ustawia [fitted], żeby dopasowanie do szerokości nie nadpisało tego przy
+     * pierwszym nadaniu rozmiaru.
+     */
+    fun restoreView(x: Float, y: Float, scale: Float) {
+        fitted = true
+        setView(x, y, scale)
+    }
+
     private fun refreshMatrices() {
         docToView.reset()
         docToView.postTranslate(-offsetX, -offsetY)
@@ -192,9 +261,19 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
 
     // Page layout in one coordinate system
 
+    /*
+      Górna krawędź strony [index] w układzie dokumentu.
+
+      Indeks jest przycinany do tego, co naprawdę jest na ekranie. Zaznaczenie
+      lassem zapamiętuje numer strony, a strony potrafią zniknąć spod niego —
+      przy kasowaniu strony albo przy scaleniu wszystkich w jedną (tryb
+      przewijania). Gołe `pages[i]` leciało wtedy poza zakres WEWNĄTRZ onDraw,
+      czyli przy każdym przerysowaniu kartki.
+    */
     private fun topEdge(index: Int): Float {
         var y = 0f
-        for (i in 0 until index) {
+        val last = index.coerceAtMost(pages.size)
+        for (i in 0 until last) {
             y += pages[i].height + PAGE_GAP
         }
         return y
@@ -254,15 +333,30 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         }
     }
 
-    private fun releaseFinished() {
-        if (toRelease.isEmpty()) return
-        val copy = HashSet(toRelease)
-        toRelease.clear()
-        inProgressView.removeFinishedStrokes(copy)
-    }
-
+    /*
+      Wyjątek z rysowania leci prosto na wątek główny i ubija aplikację —
+      z tego nie ma ekranu błędu, bo to samo rysowanie jest zepsute. Kartka bez
+      jednej klatki jest lepsza niż zamknięty Kajet, więc awaria rysowania
+      zostaje w dzienniku, a canvas wraca do stanu sprzed próby: `restoreToCount`
+      domyka wszystkie `save` porzucone w połowie.
+    */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val checkpoint = canvas.save()
+        try {
+            drawEverything(canvas)
+        } catch (failure: Throwable) {
+            Log.e("Kajet", "Kartka się nie narysowała", failure)
+        } finally {
+            canvas.restoreToCount(checkpoint)
+        }
+    }
+
+    private fun drawEverything(canvas: Canvas) {
+        // Compose trzyma widoki z clipChildren=false, więc canvas nie jest
+        // przycięty do naszych granic. Bez własnego przycięcia drawColor
+        // zalewa całe okno i zamalowuje pasek edytora nad kartką.
+        canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
         canvas.drawColor(deskColor)
         if (pages.isEmpty()) return
 
@@ -296,11 +390,45 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         canvas.clipRect(left, topY, right, bottom)
         drawBackground(canvas, page, left, topY)
 
+        // Zdjęcia leżą pod atramentem: po wklejonym obrazku da się pisać.
+        for (image in page.images) {
+            val bitmap = imageBitmaps[image.asset] ?: continue
+            imageDst.set(
+                left + image.x * zoom,
+                topY + image.y * zoom,
+                left + (image.x + image.width) * zoom,
+                topY + (image.y + image.height) * zoom,
+            )
+            canvas.drawBitmap(bitmap, null, imageDst, imagePaint)
+        }
+
         pageMatrix.set(docToView)
         pageMatrix.preTranslate(0f, top)
+
+        // Kształty leżą nad zdjęciami, ale pod atramentem: po wstawionym
+        // kształcie da się pisać, a wypełnienie nie zakrywa notatek.
+        val drafted = if (draftPage == page.index) draft else null
+        if (page.shapes.isNotEmpty() || drafted != null) {
+            canvas.save()
+            canvas.concat(pageMatrix)
+            shapePainter.draw(canvas, page.shapes)
+            drafted?.let { shapePainter.draw(canvas, it) }
+            canvas.restore()
+        }
+
+        // CanvasStrokeRenderer nie nakłada podanej macierzy na canvas — dostaje
+        // ją tylko do jakości teselacji. Transformację trzeba nałożyć samemu,
+        // inaczej kreski lądują w surowych współrzędnych strony: obok miejsca
+        // pisania, w innej skali i znikają, gdy kartka odjedzie spod nich.
+        canvas.save()
+        canvas.concat(pageMatrix)
         for (stroke in engineStrokes[page.index].orEmpty()) {
             renderer.draw(canvas, stroke, pageMatrix)
         }
+        if (wetPage == page.index) {
+            wet?.let { renderer.draw(canvas, it, pageMatrix) }
+        }
+        canvas.restore()
         fallbackStrokes[page.index]?.let { drawFallback(canvas, it) }
         canvas.restore()
 
@@ -425,6 +553,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
 
     private fun drawSelectionFrame(canvas: Canvas) {
         val box = Strokes.bounds(selected) ?: return
+        // Zaznaczenie ze strony, której już nie ma, nie ma czego obrysować.
+        if (selectionPage !in pages.indices) return
         val top = topEdge(selectionPage.coerceAtLeast(0))
         val viewLeft = (box.left - offsetX) * zoom
         val viewTop = (box.top + top - offsetY) * zoom
@@ -494,6 +624,23 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
             PenHaptics.refresh(context)
         }
 
+        /*
+          Drugi palec w trakcie rysowania kształtu prosi o proporcje 1:1, a nie
+          o przesuwanie kartki.
+
+          Dłoń oparta obok rysika też przychodzi jako palec, więc liczy się
+          tylko dotknięcie wielkości opuszka. Kto woli pewność zamiast gestu,
+          włącza blokadę w panelu kształtu albo trzyma Shift.
+        */
+        if (shapeDragging && finger && id != drawingPointerId && squareFinger < 0 &&
+            event.getTouchMajor(index) <= fingertipReach()
+        ) {
+            squareFinger = id
+            updateDraft(event)
+            invalidate()
+            return true
+        }
+
         // Drugi palec na ekranie zawsze znaczy „przesuwam kartkę", nawet kiedy
         // palec rysuje. Kreska zaczęta pierwszym palcem znika, bo i tak brała się
         // z tego, że ktoś chciał chwycić stronę, a nie pisać.
@@ -526,6 +673,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         val drawing = stylus || fingerDraws || type == MotionEvent.TOOL_TYPE_MOUSE
 
         if (!drawing) {
+            if (fingerIds[0] < 0) {
+                tapPointerId = id
+                tapDownX = event.getX(index)
+                tapDownY = event.getY(index)
+                tapDownTime = event.eventTime
+                tapCandidate = true
+            } else {
+                // Drugi palec to już chwyt kartki, nie stuknięcie.
+                tapCandidate = false
+            }
             rememberFinger(id, event.getX(index), event.getY(index), event)
             return true
         }
@@ -537,6 +694,33 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
                 eraserY = docY
                 erase(docX, docY, tool == EditorTool.ERASER_STROKE && !stylusEraser)
                 invalidate()
+            }
+
+            tool == EditorTool.SHAPES -> {
+                val page = nearestPage(docY)
+                if (page < 0) return true
+                drawingPointerId = id
+                draftPage = page
+                shapeDragging = true
+                shapeStartX = docX
+                shapeStartY = docY - topEdge(page)
+                shapeLastX = shapeStartX
+                shapeLastY = shapeStartY
+                draftTemplate = ShapeElement(
+                    id = "",
+                    kind = shapeSettings.kind,
+                    x = shapeStartX,
+                    y = shapeStartY,
+                    width = 0f,
+                    height = 0f,
+                    color = shapeSettings.color,
+                    strokeWidth = shapeSettings.strokeWidth,
+                    fill = shapeSettings.fill,
+                    opacity = shapeSettings.opacity,
+                )
+                draft = null
+                // Bez tego system pakuje zdarzenia rysika i podgląd skacze.
+                requestUnbufferedDispatch(event)
             }
 
             tool == EditorTool.LASSO -> {
@@ -571,21 +755,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
                     )
                 }
 
-                // The engine takes two matrices. The first maps touch points into document
-                // coordinates. The second says which coordinate system to record the stroke
-                // in: page coordinates, shifted by the top edge, so the stroke comes back
-                // ready to save.
-                val toPageSpace = Matrix().apply { setTranslate(0f, topEdge(page)) }
-                activeStroke = inProgressView.startStroke(
-                    event,
-                    id,
-                    brush,
-                    Matrix(viewToDoc),
-                    toPageSpace,
-                )
-                activeStroke?.let { strokePage[it] = page }
+                val stroke = InProgressStroke()
+                stroke.start(brush)
+                wet = stroke
+                wetPage = page
+                wetTool = tool
+                wetStartTime = event.eventTime
+                enqueueWetPoints(event, index, page)
                 // Without this the system batches stylus events and the stroke loses points.
                 requestUnbufferedDispatch(event)
+                invalidate()
             }
         }
         parent?.requestDisallowInterceptTouchEvent(true)
@@ -596,12 +775,23 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         if (drawingPointerId >= 0) {
             val index = event.findPointerIndex(drawingPointerId)
             if (index < 0) return true
+
             val docPoint = toDoc(event.getX(index), event.getY(index))
             val docX = docPoint[0]
             val docY = docPoint[1]
 
             when {
-                activeStroke != null -> inProgressView.addToStroke(event, drawingPointerId, activeStroke!!, null)
+                wet != null -> {
+                    enqueueWetPoints(event, index, wetPage)
+                    invalidate()
+                }
+
+                shapeDragging -> {
+                    shapeLastX = docX
+                    shapeLastY = docY - topEdge(draftPage)
+                    updateDraft(event)
+                    invalidate()
+                }
 
                 movingSelection -> {
                     listener?.selectionMoved(docX - lastX, docY - lastY, finished = false)
@@ -645,14 +835,26 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
     }
 
     private fun onUp(event: MotionEvent, index: Int, id: Int): Boolean {
+        // Palec od proporcji 1:1 puszczony przed rysikiem: kształt wraca do
+        // swobodnych boków, ale rysowanie trwa dalej.
+        if (id == squareFinger) {
+            squareFinger = -1
+            if (shapeDragging) {
+                updateDraft(event)
+                invalidate()
+            }
+        }
+
         if (id == drawingPointerId) {
-            val stroke = activeStroke
-            if (stroke != null) {
-                inProgressView.finishStroke(event, id, stroke)
+            if (wet != null) {
+                enqueueWetPoints(event, index, wetPage)
+                finishWetStroke()
+            } else if (shapeDragging) {
+                finishShape()
             } else if (movingSelection) {
                 listener?.selectionMoved(0f, 0f, finished = true)
                 movingSelection = false
-            } else if (tool == EditorTool.LASSO && lasso.size >= 6) {
+            } else if (tool == EditorTool.LASSO && lasso.size >= 6 && !lassoIsTap()) {
                 val page = nearestPage(lasso[1])
                 if (page >= 0) {
                     val top = topEdge(page)
@@ -664,6 +866,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
                 }
                 lasso.clear()
                 invalidate()
+            } else if (tool == EditorTool.LASSO) {
+                // Stuknięcie zamiast obrysu: bierze kształt spod rysika.
+                if (lasso.size >= 2) selectShapeAt(lasso[0], lasso[1])
+                lasso.clear()
+                invalidate()
             } else if (tool.isEraser) {
                 eraserX = Float.NaN
                 eraserY = Float.NaN
@@ -671,7 +878,19 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
                 invalidate()
             }
             drawingPointerId = -1
-            activeStroke = null
+        }
+
+        if (tapPointerId == id) {
+            val upIndex = event.findPointerIndex(id).let { if (it < 0) index else it }
+            val moved = hypot(event.getX(upIndex) - tapDownX, event.getY(upIndex) - tapDownY)
+            if (tapCandidate && moved <= touchSlop &&
+                event.eventTime - tapDownTime < TAP_TIMEOUT_MS
+            ) {
+                val doc = toDoc(event.getX(upIndex), event.getY(upIndex))
+                dispatchTap(doc[0], doc[1])
+            }
+            tapCandidate = false
+            tapPointerId = -1
         }
 
         forgetFinger(id)
@@ -683,12 +902,136 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         return true
     }
 
-    private fun cancel() {
-        activeStroke?.let {
-            inProgressView.cancelStroke(it, null)
-            strokePage.remove(it)
+    // Kształty
+
+    private fun updateDraft(event: MotionEvent) {
+        val template = draftTemplate ?: return
+        draft = ShapeGeometry.fitTo(
+            shape = template,
+            startX = shapeStartX,
+            startY = shapeStartY,
+            endX = shapeLastX,
+            endY = shapeLastY,
+            square = squareWanted(event),
+        )
+    }
+
+    private fun squareWanted(event: MotionEvent): Boolean =
+        shapeSquareLocked ||
+            squareFinger >= 0 ||
+            (event.metaState and KeyEvent.META_SHIFT_ON) != 0
+
+    /** Największe dotknięcie, które jeszcze uchodzi za opuszek, a nie za dłoń. */
+    private fun fingertipReach(): Float = resources.displayMetrics.density * FINGERTIP_DP
+
+    private fun finishShape() {
+        val page = draftPage
+        val shape = draft
+        val startX = shapeStartX
+        val startY = shapeStartY
+        dropDraft()
+        invalidate()
+        if (page < 0) return
+
+        if (shape != null && ShapeGeometry.bigEnough(shape)) {
+            listener?.shapeDrawn(page, shape)
+            return
         }
-        activeStroke = null
+        // Przeciągnięcie krótsze niż stuknięcie: zamiast stawiać kropkę,
+        // bierzemy kształt leżący pod rysikiem.
+        listener?.shapeTapped(page, shapeAt(page, startX, startY)?.id)
+    }
+
+    private fun dropDraft() {
+        draft = null
+        draftTemplate = null
+        draftPage = -1
+        shapeDragging = false
+        squareFinger = -1
+    }
+
+    /** Stuknięcie w kartkę: bierze kształt pod ręką albo odkłada zaznaczony. */
+    private fun selectShapeAt(docX: Float, docY: Float) {
+        val page = nearestPage(docY)
+        if (page < 0) return
+        val localY = docY - topEdge(page)
+        // Pole tekstowe leży nad kształtami, więc łapie stuknięcie pierwsze.
+        // To także jedyna droga do edycji pola, gdy palec rysuje.
+        val text = textAt(page, docX, localY)
+        if (text != null) {
+            listener?.textTapped(page, text.id)
+            return
+        }
+        listener?.shapeTapped(page, shapeAt(page, docX, localY)?.id)
+    }
+
+    private fun textAt(page: Int, localX: Float, localY: Float): TextBoxElement? {
+        val onScreen = pages.firstOrNull { it.index == page } ?: return null
+        // Ostatnie na spisie leży na wierzchu — tak jak przy rysowaniu.
+        return onScreen.texts.lastOrNull {
+            localX >= it.x && localX <= it.x + it.width &&
+                localY >= it.y && localY <= it.y + it.height
+        }
+    }
+
+    private fun shapeAt(page: Int, localX: Float, localY: Float): ShapeElement? {
+        val onScreen = pages.firstOrNull { it.index == page } ?: return null
+        // Ostatni na spisie leży na wierzchu — tak jak przy rysowaniu.
+        return onScreen.shapes.lastOrNull {
+            ShapeGeometry.hits(it, localX, localY, TAP_REACH / zoom)
+        }
+    }
+
+    /** Obrys lassa krótszy niż drgnięcie ręki to stuknięcie, nie zaznaczanie. */
+    private fun lassoIsTap(): Boolean {
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        var i = 0
+        while (i < lasso.size) {
+            minX = kotlin.math.min(minX, lasso[i])
+            maxX = max(maxX, lasso[i])
+            minY = kotlin.math.min(minY, lasso[i + 1])
+            maxY = max(maxY, lasso[i + 1])
+            i += 2
+        }
+        return hypot(maxX - minX, maxY - minY) * zoom <= touchSlop
+    }
+
+    private fun dispatchTap(docX: Float, docY: Float) {
+        val page = pageAt(docX, docY)
+        if (page >= 0) {
+            val localY = docY - topEdge(page)
+            // Pole tekstowe rysuje się nad kartką, więc łapie stuknięcie pierwsze.
+            val text = textAt(page, docX, localY)
+            if (text != null) {
+                listener?.textTapped(page, text.id)
+                return
+            }
+            // Kształt leży nad zdjęciem, więc pierwszy łapie stuknięcie.
+            val shape = shapeAt(page, docX, localY)
+            if (shape != null) {
+                listener?.shapeTapped(page, shape.id)
+                return
+            }
+            val onScreen = pages.firstOrNull { it.index == page }
+            // Ostatnie na spisie leży na wierzchu — tak jak przy rysowaniu.
+            val image = onScreen?.images?.lastOrNull { image ->
+                docX >= image.x && docX <= image.x + image.width &&
+                    localY >= image.y && localY <= image.y + image.height
+            }
+            if (image != null) {
+                listener?.imageTapped(page, image.id)
+                return
+            }
+        }
+        listener?.emptyAreaTapped()
+    }
+
+    private fun cancel() {
+        dropWetStroke()
+        dropDraft()
         drawingPointerId = -1
         movingSelection = false
         lasso.clear()
@@ -700,11 +1043,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
 
     /** Porzuca to, co właśnie rysował palec, i zostawia ekran gotowy na przesuwanie. */
     private fun abandonStroke() {
-        activeStroke?.let {
-            inProgressView.cancelStroke(it, null)
-            strokePage.remove(it)
-        }
-        activeStroke = null
+        dropWetStroke()
+        dropDraft()
         drawingPointerId = -1
         if (movingSelection) {
             listener?.selectionMoved(0f, 0f, finished = true)
@@ -824,34 +1164,115 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         listener?.eraserPassed(page, docX, docY - top, settings.eraserRadius, wholeStroke)
     }
 
-    // Finished strokes coming back from the engine
+    // Wet stroke: points go straight into the engine in page coordinates
 
-    override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
-        for ((strokeId, stroke) in strokes) {
-            val page = strokePage.remove(strokeId)
-            if (page == null) {
-                toRelease += strokeId
-                continue
-            }
-            var model = Strokes.toModel(stroke, settings.toInkTool(tool))
-            if (tool == EditorTool.RULER) model = Strokes.straighten(model)
-            // The stroke already arrives in page coordinates, per the matrix given to the engine.
-            listener?.strokeFinished(page, model)
-            toRelease += strokeId
+    private fun enqueueWetPoints(event: MotionEvent, pointerIndex: Int, page: Int) {
+        val stroke = wet ?: return
+        if (page < 0) return
+        val top = topEdge(page)
+        val toolType = event.getToolType(pointerIndex)
+        val type = when (toolType) {
+            MotionEvent.TOOL_TYPE_MOUSE -> InputToolType.MOUSE
+            MotionEvent.TOOL_TYPE_STYLUS, MotionEvent.TOOL_TYPE_ERASER -> InputToolType.STYLUS
+            else -> InputToolType.TOUCH
         }
-        // Normally the pages setter drops them once the model hands the stroke back.
-        // This is the way out in case it never does.
-        removeCallbacks(releaseFallback)
-        postDelayed(releaseFallback, RELEASE_FALLBACK_MS)
+        val stylus = toolType == MotionEvent.TOOL_TYPE_STYLUS
+
+        wetBuffer.clear()
+        // Zdarzenia przychodzą spakowane: najpierw punkty historyczne, na końcu bieżący.
+        for (i in 0..event.historySize) {
+            val current = i == event.historySize
+            val rawX = if (current) event.getX(pointerIndex) else event.getHistoricalX(pointerIndex, i)
+            val rawY = if (current) event.getY(pointerIndex) else event.getHistoricalY(pointerIndex, i)
+            val time = if (current) event.eventTime else event.getHistoricalEventTime(i)
+            val point = toDoc(rawX, rawY)
+            // Punkt, którego silnik nie przyjmie (czas stoi, duplikat), kosztuje
+            // tylko ten punkt, nie całą kreskę.
+            runCatching {
+                wetBuffer.add(
+                    type = type,
+                    x = point[0],
+                    y = point[1] - top,
+                    elapsedTimeMillis = (time - wetStartTime).coerceAtLeast(0L),
+                    pressure = if (stylus) {
+                        val raw = if (current) {
+                            event.getPressure(pointerIndex)
+                        } else {
+                            event.getHistoricalPressure(pointerIndex, i)
+                        }
+                        raw.coerceIn(0f, 1f)
+                    } else {
+                        StrokeInput.NO_PRESSURE
+                    },
+                    tiltRadians = if (stylus) {
+                        val raw = if (current) {
+                            event.getAxisValue(MotionEvent.AXIS_TILT, pointerIndex)
+                        } else {
+                            event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, pointerIndex, i)
+                        }
+                        raw.coerceIn(0f, (Math.PI / 2).toFloat())
+                    } else {
+                        StrokeInput.NO_TILT
+                    },
+                    orientationRadians = if (stylus) {
+                        val raw = if (current) {
+                            event.getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex)
+                        } else {
+                            event.getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex, i)
+                        }
+                        // MotionEvent liczy od „góry" w [-PI, PI], silnik od „lewej" w [0, 2PI).
+                        (raw + 2.5f * Math.PI.toFloat()).mod(2f * Math.PI.toFloat())
+                    } else {
+                        StrokeInput.NO_ORIENTATION
+                    },
+                )
+            }
+        }
+        runCatching {
+            stroke.enqueueInputs(wetBuffer, ImmutableStrokeInputBatch.EMPTY)
+            stroke.updateShape((event.eventTime - wetStartTime).coerceAtLeast(0L))
+        }
+    }
+
+    private fun finishWetStroke() {
+        val stroke = wet ?: return
+        wet = null
+        val page = wetPage
+        wetPage = -1
+        invalidate()
+
+        val engineStroke = runCatching {
+            stroke.finishInput()
+            stroke.updateShape()
+            stroke.toImmutable()
+        }.getOrNull() ?: return
+        if (engineStroke.inputs.size == 0) return
+
+        var model = Strokes.toModel(engineStroke, settings.toInkTool(wetTool))
+        // Linijka i kształty: otwarta kreska prostuje się, zamknięta staje się
+        // kołem, trójkątem albo prostokątem.
+        if (wetTool == EditorTool.RULER) model = Shapes.snap(model)
+        listener?.strokeFinished(page, model)
+    }
+
+    private fun dropWetStroke() {
+        wet = null
+        wetPage = -1
     }
 
     override fun onDetachedFromWindow() {
-        removeCallbacks(releaseFallback)
-        inProgressView.removeFinishedStrokesListener(this)
         super.onDetachedFromWindow()
     }
 
     companion object {
+        const val TAP_TIMEOUT_MS = 400L
+
+        /** Zapas wokół kształtu przy stukaniu, w punktach ekranu. */
+        const val TAP_REACH = 12f
+
+        /** Dotknięcie szersze niż tyle to dłoń, nie opuszek. */
+        const val FINGERTIP_DP = 45f
+
         const val PAGE_GAP = 24f
         const val DESK_MARGIN = 24f
         const val LINE_SPACING = 28f
@@ -864,7 +1285,5 @@ class StrokeCanvas(context: Context) : FrameLayout(context), InProgressStrokesFi
         const val MAX_ZOOM = 8f
 
         const val PALM_REJECT_MS = 400L
-
-        const val RELEASE_FALLBACK_MS = 700L
     }
 }

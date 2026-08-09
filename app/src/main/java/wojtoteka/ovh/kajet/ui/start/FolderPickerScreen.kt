@@ -32,11 +32,13 @@ import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
 import wojtoteka.ovh.kajet.core.design.component.KajetMark
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.text.LocalStrings
 
 @Composable
 fun FolderPickerScreen(
     onPicked: (Uri) -> Unit,
 ) {
+    val words = LocalStrings.current
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri -> if (uri != null) onPicked(uri) }
@@ -69,28 +71,24 @@ fun FolderPickerScreen(
                 .padding(start = 40.dp, end = 32.dp, top = 56.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            SectionLabel("Pierwsze uruchomienie")
+            SectionLabel(words.firstRun)
 
             Text(
-                text = "Gdzie mam trzymać Twoje notatki?",
+                text = words.whereToKeepNotes,
                 style = Kajet.type.display,
                 color = Kajet.colors.text,
                 modifier = Modifier.widthIn(max = 560.dp),
             )
 
             Text(
-                text = "Wskaż folder na urządzeniu. Kajet będzie w nim zapisywał wszystko, " +
-                    "co napiszesz. Każdy folder z aplikacji to zwykły katalog na dysku, " +
-                    "a każda notatka to katalog z plikiem w środku.",
+                text = words.whereToKeepNotesAbout,
                 style = Kajet.type.bodyLarge,
                 color = Kajet.colors.text,
                 modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
             )
 
             Text(
-                text = "Dzięki temu notatki zostaną na urządzeniu nawet wtedy, gdy odinstalujesz " +
-                    "Kajet. Możesz je też skopiować na komputer albo otworzyć w innej aplikacji. " +
-                    "Najlepszym miejscem jest folder Dokumenty.",
+                text = words.whereToKeepNotesWhy,
                 style = Kajet.type.body,
                 color = Kajet.colors.muted,
                 modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
@@ -99,14 +97,13 @@ fun FolderPickerScreen(
             Box(Modifier.height(8.dp))
 
             PrimaryButton(
-                text = "Wskaż folder na notatki",
+                text = words.pickNotesFolder,
                 onClick = { picker.launch(documentsHint()) },
                 icon = KajetIcons.Folder,
             )
 
             Text(
-                text = "Otworzy się okno systemu Android. Wybierz folder i naciśnij " +
-                    "przycisk potwierdzenia. Możesz zmienić to później w ustawieniach.",
+                text = words.pickNotesFolderAbout,
                 style = Kajet.type.meta,
                 color = Kajet.colors.muted,
                 modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),

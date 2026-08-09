@@ -63,6 +63,38 @@ class ServerContractTest {
         assertThat(page.hasMore).isFalse()
     }
 
+    // --- GET /api/v1/sync/deleted ---
+    //
+    // Nagrobki po notatkach skasowanych na zawsze. Zwykłe pobranie zmian tego
+    // nie powie: wiersza skasowanej notatki nie ma, więc „co się zmieniło od…"
+    // nigdy jej nie wymieni.
+
+    @Test
+    fun `parses a page of tombstones`() {
+        val body = """
+            {"ids":["n1","n2","n3"],"upTo":1722700000005,"upToId":"n3","hasMore":true}
+        """.trimIndent()
+
+        val page = json.decodeFromString<DeletedResponse>(body)
+
+        assertThat(page.ids).containsExactly("n1", "n2", "n3").inOrder()
+        assertThat(page.upTo).isEqualTo(1722700000005L)
+        assertThat(page.upToId).isEqualTo("n3")
+        assertThat(page.hasMore).isTrue()
+    }
+
+    @Test
+    fun `parses an empty page of tombstones`() {
+        val page = json.decodeFromString<DeletedResponse>(
+            """{"ids":[],"upTo":0,"upToId":null,"hasMore":false}""",
+        )
+
+        assertThat(page.ids).isEmpty()
+        assertThat(page.upTo).isEqualTo(0L)
+        assertThat(page.upToId).isNull()
+        assertThat(page.hasMore).isFalse()
+    }
+
     // --- PUT /api/v1/notes ---
 
     @Test
@@ -182,6 +214,41 @@ class ServerContractTest {
         assertThat(result.interrupted).isFalse()
     }
 
+    @Test
+    fun `parses a conflict with a note lying in the server bin`() {
+        // note-write.ts adds deletedAt to onServer; Sync uses it to restore the
+        // note instead of saving a copy of the bin alongside.
+        val body = """
+            {"status":"conflict",
+            "message":"Ta notatka zmieniła się także gdzie indziej.",
+            "onServer":{"id":"n1","title":"Fizyka","kind":"TEXT","favorite":false,
+            "tags":"","content":"{}","version":9,"updatedAt":1722700000000,
+            "deletedAt":1722700000001}}
+        """.trimIndent()
+
+        val response = json.decodeFromString<SaveResponse>(body)
+
+        assertThat(response.onServer!!.deletedAt).isEqualTo(1722700000001L)
+    }
+
+    @Test
+    fun `parses a CODE note from the changes feed`() {
+        // GET /api/v1/notes?kinds=all returns code files as CODE notes.
+        val body = """
+            {"notes":[{"id":"c1","title":"program.py","kind":"CODE","favorite":false,
+            "tags":"","version":2,"hash":"h","sizeBytes":64,"updatedAt":1722700000000,
+            "deletedAt":null,"folderId":null,
+            "content":"{\"format\":1,\"kind\":\"code\",\"code\":{\"language\":\"python\",\"source\":\"print(1)\"}}",
+            "attachments":[]}],
+            "upTo":1722700000000,"upToId":"c1","hasMore":false}
+        """.trimIndent()
+
+        val note = json.decodeFromString<ChangesResponse>(body).notes.single()
+
+        assertThat(note.kind).isEqualTo("CODE")
+        assertThat(note.content).contains("print(1)")
+    }
+
     // --- What the tablet sends: PUT /api/v1/notes body ---
 
     @Test
@@ -200,11 +267,161 @@ class ServerContractTest {
         val fields = json.parseToJsonElement(encoded).jsonObject
 
         // outgoingNoteSchema in note-write.ts: id/title/kind/content/baseVersion
-        // required, tags as an array, folderId absent (not null!) so the server
-        // leaves the web folder alone (point 9 in donaprawy.md).
+        // required, tags as an array. folderId ABSENT when null — „zostaw
+        // notatkę tam, gdzie jest" (np. serwer bez obsługi folderów).
         assertThat(fields.keys).containsAtLeast("id", "title", "kind", "content", "baseVersion")
         assertThat(fields.keys).doesNotContain("folderId")
         assertThat(fields["tags"].toString()).isEqualTo("""["szkola","fizyka"]""")
         assertThat(fields["kind"].toString()).isEqualTo("\"HANDWRITTEN\"")
     }
+
+    @Test
+    fun `encodes the folder field the way folder sync expects`() {
+        // Od synchronizacji folderów: notatka w folderze niesie jego
+        // identyfikator, notatka w korzeniu pusty tekst (serializator gubi
+        // null, a jawny korzeń musi jakoś jechać — serwer mapuje "" na null).
+        val inFolder = OutgoingNote(
+            id = "n1", title = "Fizyka", kind = "TEXT",
+            folderId = "f-123", content = "{}", baseVersion = 1,
+        )
+        val atRoot = inFolder.copy(folderId = "")
+
+        val folderFields = json.parseToJsonElement(
+            json.encodeToString(OutgoingNote.serializer(), inFolder),
+        ).jsonObject
+        val rootFields = json.parseToJsonElement(
+            json.encodeToString(OutgoingNote.serializer(), atRoot),
+        ).jsonObject
+
+        assertThat(folderFields["folderId"].toString()).isEqualTo("\"f-123\"")
+        assertThat(rootFields["folderId"].toString()).isEqualTo("\"\"")
+    }
+
+    @Test
+    fun `decodes the folder listing the server returns`() {
+        // GET /api/v1/folders — kształt z src/app/api/v1/folders/route.ts.
+        val response = json.decodeFromString(
+            FoldersResponse.serializer(),
+            """{"folders":[
+                {"id":"f1","parentId":null,"name":"Szkoła","colorId":"morski",
+                 "iconId":"folder","updatedAt":1722700000000},
+                {"id":"f2","parentId":"f1","name":"Fizyka","colorId":"grafit",
+                 "iconId":"folder","updatedAt":1722700000001}
+            ]}""",
+        )
+
+        assertThat(response.folders).hasSize(2)
+        assertThat(response.folders[0].parentId).isNull()
+        assertThat(response.folders[1].parentId).isEqualTo("f1")
+        assertThat(response.folders[1].name).isEqualTo("Fizyka")
+    }
+
+    @Test
+    fun `encodes a tombstone the way the server schema expects`() {
+        // Sync sends this when a note lands in the bin: empty content, the
+        // deleted flag on. outgoingNoteSchema makes content optional only for
+        // tombstones, so the empty string keeps old servers happy too.
+        val tombstone = OutgoingNote(
+            id = "n1",
+            title = "",
+            kind = "TEXT",
+            content = "",
+            baseVersion = 3,
+            deleted = true,
+        )
+
+        val fields = json.parseToJsonElement(
+            json.encodeToString(OutgoingNote.serializer(), tombstone),
+        ).jsonObject
+
+        assertThat(fields["deleted"].toString()).isEqualTo("true")
+        assertThat(fields["content"].toString()).isEqualTo("\"\"")
+        assertThat(fields.keys).doesNotContain("folderId")
+    }
+
+    // --- POST /api/v1/crash ---
+
+    @Test
+    fun `encodes a crash report the way crashBody expects`() {
+        val body = CrashReporter.bodyOf(
+            report = "Kajet 1.0 (2)\nWątek: main\n\njava.lang.IllegalStateException: pękło",
+            appVersion = "1.0",
+            versionCode = 2,
+            device = "LENOVO TB520FU",
+            android = "16",
+            thread = "main",
+        )
+
+        val fields = json.parseToJsonElement(body).jsonObject
+
+        assertThat(fields.keys).containsExactly(
+            "report", "appVersion", "versionCode", "device", "android", "thread",
+        )
+        assertThat(fields["versionCode"].toString()).isEqualTo("2")
+        assertThat(fields["device"].toString()).isEqualTo("\"LENOVO TB520FU\"")
+    }
+
+    @Test
+    fun `leaves out fields it could not read from the header`() {
+        // Raport bez czytelnego nagłówka. Serwer ma wszystkie pola poza
+        // `report` jako nieobowiązkowe, więc puste po prostu wypadają — nie
+        // idą jako null, bo explicitNulls jest wyłączone.
+        val body = CrashReporter.bodyOf(report = "java.lang.OutOfMemoryError")
+
+        val fields = json.parseToJsonElement(body).jsonObject
+
+        assertThat(fields.keys).containsExactly("report")
+    }
+
+    // --- GET /api/v1/app/latest ---
+
+    @Test
+    fun `parses the newest release`() {
+        // Dokładnie to, co składa src/app/api/v1/app/latest/route.ts.
+        val body = """
+            {"release":{"version":"26.08.02","versionCode":5,"notes":"Poprawki synchronizacji.",
+            "fileName":"app-release.apk","sizeBytes":34371499,"hash":"7bb54fc6",
+            "url":"https://kajet.wojtoteka.ovh/download/file",
+            "pageUrl":"https://kajet.wojtoteka.ovh/download",
+            "publishedAt":1786128038965,"releaseDate":"2026-08-02","minSupportedRelease":0}}
+        """.trimIndent()
+
+        val release = json.decodeFromString<Answer>(body).release
+
+        assertThat(release).isNotNull()
+        assertThat(release!!.version).isEqualTo("26.08.02")
+        assertThat(release.versionCode).isEqualTo(5)
+        assertThat(release.pageUrl).isEqualTo("https://kajet.wojtoteka.ovh/download")
+        assertThat(release.releaseDate).isEqualTo("2026-08-02")
+        assertThat(release.minSupportedRelease).isEqualTo(0)
+    }
+
+    @Test
+    fun `takes a server with no release put up yet`() {
+        val release = json.decodeFromString<Answer>("""{"release":null}""").release
+
+        assertThat(release).isNull()
+    }
+
+    @Test
+    fun `takes a release without notes and without the new fields`() {
+        // Starszy serwer: bez releaseDate i bez minSupportedRelease. Aplikacja
+        // ma go zrozumieć, bo wdrożenie idzie serwer-najpierw, ale kolejność
+        // da się odwrócić przez pomyłkę.
+        val body = """
+            {"release":{"version":"26.08.01","versionCode":4,"notes":null,
+            "pageUrl":"https://kajet.wojtoteka.ovh/download"}}
+        """.trimIndent()
+
+        val release = json.decodeFromString<Answer>(body).release
+
+        assertThat(release).isNotNull()
+        assertThat(release!!.notes).isNull()
+        assertThat(release.releaseDate).isNull()
+        assertThat(release.minSupportedRelease).isEqualTo(0)
+    }
+
+    /** Kształt odpowiedzi z `app/latest`. Prywatny w [UpdateCheck], więc powtórzony. */
+    @kotlinx.serialization.Serializable
+    private data class Answer(val release: UpdateCheck.Release? = null)
 }

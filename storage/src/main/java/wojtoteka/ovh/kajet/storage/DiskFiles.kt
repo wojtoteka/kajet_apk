@@ -6,6 +6,14 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import wojtoteka.ovh.kajet.core.text.cannotCreateFile
+import wojtoteka.ovh.kajet.core.text.cannotCreateFolder
+import wojtoteka.ovh.kajet.core.text.cannotOpenFile
+import wojtoteka.ovh.kajet.core.text.cannotReadFile
+import wojtoteka.ovh.kajet.core.text.cannotSaveFile
+import wojtoteka.ovh.kajet.core.text.diskRenamedFile
+import wojtoteka.ovh.kajet.core.text.fileVanishedWhileCopying
+import wojtoteka.ovh.kajet.core.text.words
 
 internal object DiskFiles {
 
@@ -20,7 +28,7 @@ internal object DiskFiles {
     fun readBytes(resolver: ContentResolver, file: DocumentFile): ByteArray {
         plainFile(file)?.let { return it.readBytes() }
         val stream = resolver.openInputStream(file.uri)
-            ?: throw IOException("Nie można otworzyć pliku ${file.name}.")
+            ?: throw IOException(words.cannotOpenFile(file.name))
         stream.use { input ->
             val buffer = ByteArrayOutputStream(maxOf(file.length().toInt(), 1024))
             input.copyTo(buffer)
@@ -37,7 +45,7 @@ internal object DiskFiles {
             return
         }
         val stream = resolver.openOutputStream(file.uri, "rwt")
-            ?: throw IOException("Nie można zapisać pliku ${file.name}.")
+            ?: throw IOException(words.cannotSaveFile(file.name))
         stream.use { output ->
             output.write(data)
             output.flush()
@@ -55,11 +63,11 @@ internal object DiskFiles {
 
     fun createFile(folder: DocumentFile, name: String, mime: String): DocumentFile {
         val file = folder.createFile(mime, name)
-            ?: throw IOException("Nie można utworzyć pliku $name w katalogu ${folder.name}.")
+            ?: throw IOException(words.cannotCreateFile(name, folder.name))
         if (file.name != name) {
             if (!file.renameTo(name)) {
                 throw IOException(
-                    "Dysk zapisał plik pod nazwą ${file.name} zamiast $name. Wybierz inny katalog na notatki.",
+                    words.diskRenamedFile(file.name, name),
                 )
             }
         }
@@ -69,7 +77,7 @@ internal object DiskFiles {
     fun folderForWrite(parent: DocumentFile, name: String): DocumentFile {
         parent.findFile(name)?.let { if (it.isDirectory) return it }
         return parent.createDirectory(name)
-            ?: throw IOException("Nie można utworzyć katalogu $name.")
+            ?: throw IOException(words.cannotCreateFolder(name))
     }
 
     fun copyRecursively(
@@ -90,15 +98,15 @@ internal object DiskFiles {
         val target = createFile(targetFolder, newName, mime)
         try {
             resolver.openInputStream(source.uri).use { input ->
-                if (input == null) throw IOException("Nie można odczytać pliku ${source.name}.")
+                if (input == null) throw IOException(words.cannotReadFile(source.name))
                 resolver.openOutputStream(target.uri, "rwt").use { output ->
-                    if (output == null) throw IOException("Nie można zapisać pliku $newName.")
+                    if (output == null) throw IOException(words.cannotSaveFile(newName))
                     input.copyTo(output, DEFAULT_BUFFER_SIZE)
                     output.flush()
                 }
             }
         } catch (e: FileNotFoundException) {
-            throw IOException("Plik ${source.name} zniknął w trakcie kopiowania.", e)
+            throw IOException(words.fileVanishedWhileCopying(source.name), e)
         }
         return target
     }

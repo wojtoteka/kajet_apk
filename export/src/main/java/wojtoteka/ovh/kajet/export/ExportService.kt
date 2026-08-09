@@ -1,8 +1,10 @@
 package wojtoteka.ovh.kajet.export
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.util.Log
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
@@ -16,6 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.text.Strings
+import wojtoteka.ovh.kajet.core.text.nothingOpensFile
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.storage.FileNames
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import java.io.File
@@ -53,6 +58,21 @@ enum class ExportFormat(
         extension = "png",
         mime = "image/png",
     ),
+    ;
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        PDF -> "PDF"
+        DOCX -> "Word document"
+        MARKDOWN -> "Markdown"
+        PNG -> "PNG image"
+    }
+
+    fun description(words: Strings): String = if (!words.english) descriptionPl else when (this) {
+        PDF -> "Looks exactly as it does on screen. Good for printing and sending."
+        DOCX -> "Text to keep working on. No pictures, no handwriting."
+        MARKDOWN -> "Plain text with markers. Opens in any editor."
+        PNG -> "The first page as a picture. Good for pasting into a message."
+    }
 }
 
 class ExportService(
@@ -107,7 +127,7 @@ class ExportService(
         progress: ((done: Int, total: Int) -> Unit)? = null,
     ): File = withContext(Dispatchers.IO) {
         val store = repo.store()
-            ?: throw java.io.IOException("Nie wybrano katalogu na notatki.")
+            ?: throw java.io.IOException(words.noNotesFolderPicked)
 
         val notes = mutableListOf<String>()
         fun walk(path: String) {
@@ -121,7 +141,7 @@ class ExportService(
         }
         walk(folderPath)
 
-        val folderName = folderPath.substringAfterLast('/').ifEmpty { "Biblioteka" }
+        val folderName = folderPath.substringAfterLast('/').ifEmpty { words.libraryFolderName }
         val file = File(exportDir(), FileNames.safe(folderName) + ".zip")
 
         ZipOutputStream(file.outputStream()).use { zip ->
@@ -163,37 +183,71 @@ class ExportService(
 
     fun fileUri(file: File) = FileProvider.getUriForFile(context, "${context.packageName}.pliki", file)
 
-    /** Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie. */
-    fun share(file: File, mime: String, title: String): String? {
+    /*
+     * Udostępnianie i otwieranie ruszają z kontekstu EKRANU, nie aplikacji.
+     * Start z kontekstu aplikacji wymaga osobnego zadania, a nowsze Androidy
+     * potrafią taki start po cichu zdusić — okno „Udostępnij" po prostu się
+     * nie pokazuje, bez żadnego wyjątku. Druk przeszedł tę samą drogę.
+     */
+
+    /**
+     * Podaje dalej sam tekst — u nas odnośnik do notatki w chmurze. Ta sama
+     * droga co przy pliku (systemowe „Udostępnij"), tylko bez załącznika:
+     * odnośnik wkleja się wprost w wiadomość.
+     * Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie.
+     */
+    fun shareText(activityContext: Context, text: String, title: String): String? {
         val outcome = runCatching {
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = mime
-                putExtra(Intent.EXTRA_STREAM, fileUri(file))
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
                 putExtra(Intent.EXTRA_SUBJECT, title)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            val chooser = Intent.createChooser(intent, "Wyślij: $title").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooser)
+            activityContext.startActivity(Intent.createChooser(intent, "${words.sendLink}: $title"))
         }
         return outcome.exceptionOrNull()?.let {
-            "Nie udało się otworzyć okna udostępniania. Plik leży w pamięci aplikacji."
+            Log.w("Kajet", "Udostępnianie odnośnika nie wyszło", it)
+            "${words.shareWindowFailed} $text"
         }
     }
 
     /** Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie. */
-    fun open(file: File, mime: String): String? {
+    fun share(activityContext: Context, file: File, mime: String, title: String): String? {
+        val outcome = runCatching {
+            val uri = fileUri(file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            // Chooser nie przepisuje grantu z intencji wewnętrznej, a panel
+            // udostępniania czyta plik we własnym procesie, żeby pokazać
+            // podgląd. ClipData niesie grant także dla niego.
+            val chooser = Intent.createChooser(intent, "${words.sendFile}: $title").apply {
+                clipData = ClipData.newRawUri(title, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            activityContext.startActivity(chooser)
+        }
+        return outcome.exceptionOrNull()?.let {
+            Log.w("Kajet", "Udostępnianie pliku nie wyszło", it)
+            words.shareWindowFailedFile
+        }
+    }
+
+    /** Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie. */
+    fun open(activityContext: Context, file: File, mime: String): String? {
         val outcome = runCatching {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(fileUri(file), mime)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(intent)
+            activityContext.startActivity(intent)
         }
         return outcome.exceptionOrNull()?.let {
-            "Żadna aplikacja na tym urządzeniu nie umie otworzyć pliku ${file.name}. " +
-                "Użyj „Wyślij” i wybierz program samodzielnie."
+            Log.w("Kajet", "Otwieranie pliku nie wyszło", it)
+            words.nothingOpensFile(file.name)
         }
     }
 
@@ -203,7 +257,7 @@ class ExportService(
      */
     fun print(activityContext: Context, document: NoteDocument, notePath: String): String? {
         val manager = activityContext.getSystemService(Context.PRINT_SERVICE) as? PrintManager
-            ?: return "To urządzenie nie udostępnia systemowego drukowania."
+            ?: return words.noSystemPrinting
         val name = FileNames.safe(document.title)
         val outcome = runCatching {
             manager.print(
@@ -222,7 +276,7 @@ class ExportService(
             )
         }
         return outcome.exceptionOrNull()?.let {
-            "Nie udało się uruchomić drukowania: ${it.message ?: "nieznany błąd"}."
+            "${words.printFailed} ${it.message ?: words.unknownError}."
         }
     }
 }
@@ -256,14 +310,14 @@ private class PrintAdapter(
         callback: WriteResultCallback,
     ) {
         if (destination == null) {
-            callback.onWriteFailed("Nie udało się otworzyć pliku do wydruku.")
+            callback.onWriteFailed(words.printOpenFailed)
             return
         }
         try {
             java.io.FileOutputStream(destination.fileDescriptor).use { output -> write(output) }
             callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
         } catch (e: Exception) {
-            callback.onWriteFailed(e.message ?: "Wydruk się nie udał.")
+            callback.onWriteFailed(e.message ?: words.printGaveUp)
         }
     }
 }

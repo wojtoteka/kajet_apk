@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.export
 
 import wojtoteka.ovh.kajet.core.model.MindMapContent
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 
 object MarkdownExport {
@@ -32,7 +33,7 @@ object MarkdownExport {
             val node = byId[id] ?: return
             append("  ".repeat(depth))
             append("- ")
-            append(node.text.ifBlank { "Bez podpisu" })
+            append(node.text.ifBlank { words.noCaption })
             append('\n')
             children[id].orEmpty().forEach { walk(it, depth + 1) }
         }
@@ -54,8 +55,7 @@ object MarkdownExport {
         }
         if (!anything) {
             append(
-                "Ta notatka jest pisana odręcznie i nie ma w niej jeszcze tekstu. " +
-                    "Zaznacz pismo lassem i wybierz zamianę na tekst, a potem wyeksportuj ponownie.\n",
+                words.handwrittenNoTextYet + "\n",
             )
         }
     }

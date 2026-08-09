@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,14 +30,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
@@ -44,7 +48,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -71,8 +74,17 @@ import wojtoteka.ovh.kajet.core.model.InkTool
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.core.model.ShapeElement
+import wojtoteka.ovh.kajet.core.model.ShapeKind
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.storage.FingerBehavior
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.eraserSizeOf
+import wojtoteka.ovh.kajet.core.text.pagesCount
+import wojtoteka.ovh.kajet.core.text.pagesShort
+import wojtoteka.ovh.kajet.core.text.selectedStrokes
+import wojtoteka.ovh.kajet.core.text.strokeWidthOf
 import wojtoteka.ovh.kajet.editor.SaveState
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.ink.EditorTool
@@ -82,7 +94,7 @@ import wojtoteka.ovh.kajet.ink.CanvasListener
 import wojtoteka.ovh.kajet.ink.OnScreenPage
 import wojtoteka.ovh.kajet.ink.PenHaptics
 import wojtoteka.ovh.kajet.ink.PenSettings
-import wojtoteka.ovh.kajet.ink.RecognitionState
+import wojtoteka.ovh.kajet.ink.ShapeSettings
 import kotlin.math.roundToInt
 
 @Composable
@@ -90,7 +102,10 @@ fun HandwritingEditor(
     model: HandwritingViewModel,
     onBack: () -> Unit,
     onExport: () -> Unit,
+    onPhotoFromGallery: () -> Unit,
+    onPhotoFromCamera: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val document by model.document.collectAsStateWithLifecycle()
     val fingerDraws by model.fingerDraws.collectAsStateWithLifecycle()
     val tool by model.tool.collectAsStateWithLifecycle()
@@ -102,10 +117,14 @@ fun HandwritingEditor(
     val canRedo by model.canRedo.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val editedBox by model.editedBox.collectAsStateWithLifecycle()
-    val recognitionState by model.recognitionState.collectAsStateWithLifecycle()
-    val suggestions by model.textSuggestions.collectAsStateWithLifecycle()
+    val editedImage by model.editedImage.collectAsStateWithLifecycle()
+    val imageBitmaps by model.imageBitmaps.collectAsStateWithLifecycle()
+    val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
     val lastSave by model.lastSave.collectAsStateWithLifecycle()
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
+    val shapes by model.shapeSettings.collectAsStateWithLifecycle()
+    val selectedShape by model.selectedShape.collectAsStateWithLifecycle()
+    val squareShapes by model.squareShapes.collectAsStateWithLifecycle()
 
     val colors = Kajet.colors
 
@@ -125,12 +144,26 @@ fun HandwritingEditor(
         PenHaptics.use(context, PenHaptics.profileFor(tool, pens.penKind))
     }
 
-    var penPanel by remember { mutableStateOf(false) }
-    var settingsPanel by remember { mutableStateOf(false) }
+    /*
+      Zapamiętane na wypadek śmierci procesu.
 
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    var zoom by remember { mutableFloatStateOf(1f) }
+      System ubija Kajet zwinięty do tła, kiedy pamięć jest potrzebna czemu
+      innemu. Po powrocie kartka skakała na samą górę i do dopasowania do
+      szerokości — a przy dłuższej notatce znaczyło to szukanie od nowa
+      miejsca, w którym się pisało. To samo z otwartym panelem pisaka.
+    */
+    var penPanel by rememberSaveable { mutableStateOf(false) }
+    var settingsPanel by rememberSaveable { mutableStateOf(false) }
+
+    var offsetX by rememberSaveable { mutableFloatStateOf(0f) }
+    var offsetY by rememberSaveable { mutableFloatStateOf(0f) }
+    var zoom by rememberSaveable { mutableFloatStateOf(1f) }
+
+    // Czy powyższe trójka to naprawdę zapamiętane położenie, czy jeszcze
+    // wartości startowe. Bez tego nie da się odróżnić kartki wracającej z
+    // zapisanego stanu od świeżo otwartej, której należy się dopasowanie do
+    // szerokości ekranu.
+    var viewRemembered by rememberSaveable { mutableStateOf(false) }
 
     val canvas = remember { mutableStateOf<StrokeCanvas?>(null) }
 
@@ -159,7 +192,9 @@ fun HandwritingEditor(
             }
 
             selected.isNotEmpty() -> model.deselect()
+            selectedShape != null -> model.selectShape(null)
             editedBox != null -> model.editTextBox(null)
+            editedImage != null -> model.editImage(null)
             else -> goBack()
         }
     }
@@ -171,17 +206,69 @@ fun HandwritingEditor(
     // na całą szerokość. Wnętrze kartki jest wspólne dla obu układów.
     val narrow = LocalConfiguration.current.screenWidthDp < 600
 
-    val onTextBox = {
-        model.addTextBox(
-            page = 0,
-            x = offsetX + 80f,
-            y = offsetY + 80f,
-            argb = colors.text.toArgb(),
+    /*
+     * Miejsce na nową rzecz: kartka i punkt w JEJ współrzędnych, tam gdzie
+     * człowiek właśnie patrzy. Wcześniej wszystko szło na stronę 0 ze
+     * współrzędną całego dokumentu — na ekranie wyglądało dobrze, ale w
+     * pliku (i w PDF) pole lądowało kilometr pod pierwszą kartką.
+     */
+    val visibleSpot: () -> Triple<Int, Float, Float> = spot@{
+        val pages = handwriting?.pages ?: return@spot Triple(0, 60f, 60f)
+        val docY = offsetY + 100f
+        var top = 0f
+        pages.forEachIndexed { index, sheet ->
+            val bottom = top + sheet.height
+            if (docY < bottom + StrokeCanvas.PAGE_GAP / 2f) {
+                return@spot Triple(
+                    index,
+                    (offsetX + 80f).coerceIn(0f, (sheet.width - 240f).coerceAtLeast(0f)),
+                    (docY - top).coerceIn(0f, (sheet.height - 80f).coerceAtLeast(0f)),
+                )
+            }
+            top += sheet.height + StrokeCanvas.PAGE_GAP
+        }
+        val last = pages.last()
+        val lastTop = top - (last.height + StrokeCanvas.PAGE_GAP)
+        Triple(
+            pages.lastIndex,
+            60f,
+            (docY - lastTop).coerceIn(0f, (last.height - 80f).coerceAtLeast(0f)),
         )
+    }
+
+    val onTextBox = {
+        val (page, x, y) = visibleSpot()
+        model.addTextBox(page = page, x = x, y = y, argb = colors.text.toArgb())
+    }
+    val onCodeBox = {
+        val (page, x, y) = visibleSpot()
+        model.addCodeBox(
+            page = page,
+            x = x,
+            y = y,
+            argb = colors.text.toArgb(),
+            background = colors.desk.toArgb(),
+        )
+    }
+    val onPhotoGallery = {
+        val (page, x, y) = visibleSpot()
+        model.rememberPhotoTarget(page, x, y)
+        onPhotoFromGallery()
+    }
+    val onPhotoCamera = {
+        val (page, x, y) = visibleSpot()
+        model.rememberPhotoTarget(page, x, y)
+        onPhotoFromCamera()
     }
     val onColorPanel = { penPanel = !penPanel; settingsPanel = false }
     val onSettingsPanel = { settingsPanel = !settingsPanel; penPanel = false }
-    val penColor = Color(if (tool == EditorTool.HIGHLIGHTER) pens.highlighterColor else pens.penColor)
+    val penColor = Color(
+        when (tool) {
+            EditorTool.HIGHLIGHTER -> pens.highlighterColor
+            EditorTool.SHAPES -> shapes.color
+            else -> pens.penColor
+        },
+    )
 
     val canvasArea: @Composable BoxScope.() -> Unit = {
         val panelModifier = if (narrow) {
@@ -233,12 +320,37 @@ fun HandwritingEditor(
                                     offsetX = x
                                     offsetY = y
                                     zoom = scale
+                                    viewRemembered = true
+                                }
+
+                                override fun imageTapped(page: Int, id: String) {
+                                    model.editImage(id)
+                                }
+
+                                override fun textTapped(page: Int, id: String) {
+                                    model.editTextBox(id)
                                 }
 
                                 override fun emptyAreaTapped() {
                                     model.editTextBox(null)
+                                    model.editImage(null)
+                                    model.selectShape(null)
+                                }
+
+                                override fun shapeDrawn(page: Int, shape: ShapeElement) {
+                                    model.addShape(page, shape)
+                                }
+
+                                override fun shapeTapped(page: Int, id: String?) {
+                                    model.selectShape(id)
                                 }
                             }
+
+                            // Kartka wraca tam, gdzie była. Musi to być tutaj,
+                            // a nie w `update`: dopasowanie do szerokości robi
+                            // się przy pierwszym nadaniu rozmiaru i bez tego
+                            // zdążyłoby nadpisać zapamiętane położenie.
+                            if (viewRemembered) view.restoreView(offsetX, offsetY, zoom)
                         }
                     },
                     update = { view ->
@@ -249,10 +361,16 @@ fun HandwritingEditor(
                                 height = sheet.height,
                                 background = sheet.background ?: handwriting.background,
                                 strokes = sheet.strokes,
+                                images = sheet.images,
+                                shapes = sheet.shapes,
+                                texts = sheet.texts,
                             )
                         }
+                        view.imageBitmaps = imageBitmaps
                         view.tool = tool
                         view.settings = pens
+                        view.shapeSettings = shapes
+                        view.shapeSquareLocked = squareShapes
                         view.fingerDraws = fingerDraws
                         view.selected = selected
                         view.selectionPage = selectionPage
@@ -271,7 +389,31 @@ fun HandwritingEditor(
                     edited = editedBox,
                     onEdit = model::editTextBox,
                     onChange = { page, box, toHistory -> model.updateTextBox(page, box, toHistory) },
+                    onCommit = { page, before, after -> model.commitTextBox(page, before, after) },
                     onDelete = { page, id -> model.removeTextBox(page, id) },
+                )
+
+                ImageFrameOnPage(
+                    pages = handwriting.pages,
+                    offsetX = offsetX,
+                    offsetY = offsetY,
+                    zoom = zoom,
+                    edited = editedImage,
+                    onChange = { page, image, toHistory -> model.updateImage(page, image, toHistory) },
+                    onCommit = { page, before, after -> model.commitImage(page, before, after) },
+                    onDelete = { page, id -> model.removeImage(page, id) },
+                )
+
+                ShapeFrameOnPage(
+                    pages = handwriting.pages,
+                    offsetX = offsetX,
+                    offsetY = offsetY,
+                    zoom = zoom,
+                    selected = selectedShape,
+                    square = squareShapes,
+                    onChange = { page, shape, toHistory -> model.updateShape(page, shape, toHistory) },
+                    onCommit = { page, before, after -> model.commitShape(page, before, after) },
+                    onDelete = { page, id -> model.removeShape(page, id) },
                 )
             }
 
@@ -288,7 +430,7 @@ fun HandwritingEditor(
                 ) {
                     Icon(KajetIcons.ErrorMark, null, tint = colors.danger, modifier = Modifier.size(18.dp))
                     Text(error.orEmpty(), style = Kajet.type.body, color = colors.text)
-                    SecondaryButton("Rozumiem", model::dismissError)
+                    SecondaryButton(words.understood, model::dismissError)
                 }
             }
 
@@ -299,32 +441,26 @@ fun HandwritingEditor(
                         .align(Alignment.BottomStart)
                         .padding(16.dp),
                     onDelete = model::deleteSelection,
-                    onRecognise = model::recognizeSelection,
                     onDeselect = model::deselect,
                 )
             }
 
-            when (val state = recognitionState) {
-                is RecognitionState.Downloading -> NoticeBar(
-                    icon = KajetIcons.RecogniseText,
-                    text = state.message,
-                    color = colors.accent,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+            if (penPanel && tool == EditorTool.SHAPES) {
+                ShapePanel(
+                    shapes = shapes,
+                    square = squareShapes,
+                    recentColors = recentColors,
+                    onKind = model::setShapeKind,
+                    onColor = model::setShapeColor,
+                    onWidth = model::setShapeWidth,
+                    onFill = model::setShapeFill,
+                    onOpacity = model::setShapeOpacity,
+                    onSquare = model::toggleSquareShapes,
+                    onRememberColor = model::rememberColor,
+                    onClose = { penPanel = false },
+                    modifier = panelModifier,
                 )
-
-                is RecognitionState.Failed -> NoticeBar(
-                    icon = KajetIcons.ErrorMark,
-                    text = state.message,
-                    color = colors.danger,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                ) {
-                    SecondaryButton("Rozumiem", model::dismissRecognitionState)
-                }
-
-                else -> Unit
-            }
-
-            if (penPanel) {
+            } else if (penPanel) {
                 PenPanel(
                     tool = tool,
                     pens = pens,
@@ -337,6 +473,7 @@ fun HandwritingEditor(
                     onHighlighterWidth = model::setHighlighterWidth,
                     onHighlighterOpacity = model::setHighlighterOpacity,
                     onEraserRadius = model::setEraserRadius,
+                    onRememberColor = model::rememberColor,
                     onClose = { penPanel = false },
                     modifier = panelModifier,
                 )
@@ -384,11 +521,14 @@ fun HandwritingEditor(
                 pageCount = handwriting?.pages?.size ?: 0,
                 tool = tool,
                 pens = pens,
+                shapes = shapes,
                 onTitle = model::setTitle,
                 onPenColor = model::setPenColor,
                 onPenWidth = model::setPenWidth,
                 onHighlighterColor = model::setHighlighterColor,
                 onHighlighterWidth = model::setHighlighterWidth,
+                onShapeColor = model::setShapeColor,
+                onShapeWidth = model::setShapeWidth,
                 onEraserRadius = model::setEraserRadius,
                 onMore = onColorPanel,
                 moreOpen = penPanel,
@@ -396,7 +536,9 @@ fun HandwritingEditor(
                 onBack = goBack,
             )
             HorizontalRule()
-            Box(Modifier.fillMaxWidth().weight(1f), content = canvasArea)
+            // Przycięcie: pola TEXT/CODE to composable pozycjonowane offsetem
+            // i przy przewijaniu wyjeżdżały na pasek narzędzi.
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds(), content = canvasArea)
             HorizontalRule()
             NarrowToolRow(
                 tool = tool,
@@ -412,32 +554,43 @@ fun HandwritingEditor(
                 onSettings = onSettingsPanel,
                 onFinger = model::toggleFinger,
                 onTextBox = onTextBox,
+                onCodeBox = onCodeBox,
+                onPhotoGallery = onPhotoGallery,
+                onPhotoCamera = onPhotoCamera,
                 onFavorite = model::toggleFavorite,
                 onExport = onExport,
             )
         }
     } else {
         Row(Modifier.fillMaxSize().background(colors.desk)) {
-            DrawingRail(
-                tool = tool,
-                canUndo = canUndo,
-                canRedo = canRedo,
-                favorite = document?.favorite == true,
-                fingerDraws = fingerDraws,
-                penColor = penColor,
-                onTool = model::selectTool,
-                onUndo = model::undo,
-                onRedo = model::redo,
-                onColor = onColorPanel,
-                onSettings = onSettingsPanel,
-                onFinger = model::toggleFinger,
-                onTextBox = onTextBox,
-                onFavorite = model::toggleFavorite,
-                onExport = onExport,
-                onBack = goBack,
-            )
+            // Szyna narzędzi; leworęczni przestawiają ją w ustawieniach na prawo.
+            val rail: @Composable () -> Unit = {
+                DrawingRail(
+                    tool = tool,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    favorite = document?.favorite == true,
+                    fingerDraws = fingerDraws,
+                    penColor = penColor,
+                    onTool = model::selectTool,
+                    onUndo = model::undo,
+                    onRedo = model::redo,
+                    onColor = onColorPanel,
+                    onSettings = onSettingsPanel,
+                    onFinger = model::toggleFinger,
+                    onTextBox = onTextBox,
+                    onCodeBox = onCodeBox,
+                    onPhotoGallery = onPhotoGallery,
+                    onPhotoCamera = onPhotoCamera,
+                    onFavorite = model::toggleFavorite,
+                    onExport = onExport,
+                    onBack = goBack,
+                    onRight = toolbarOnRight,
+                )
+            }
+            if (!toolbarOnRight) rail()
 
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).fillMaxHeight()) {
                 // Pasek na górze. Kolor i grubość leżą na wierzchu, bo to jest
                 // to, co zmienia się w czasie pisania najczęściej.
                 TopBar(
@@ -447,27 +600,24 @@ fun HandwritingEditor(
                     pageCount = handwriting?.pages?.size ?: 0,
                     tool = tool,
                     pens = pens,
+                    shapes = shapes,
                     onTitle = model::setTitle,
                     onPenColor = model::setPenColor,
                     onPenWidth = model::setPenWidth,
                     onHighlighterColor = model::setHighlighterColor,
                     onHighlighterWidth = model::setHighlighterWidth,
+                    onShapeColor = model::setShapeColor,
+                    onShapeWidth = model::setShapeWidth,
                     onEraserRadius = model::setEraserRadius,
                     onMore = onColorPanel,
                     moreOpen = penPanel,
                 )
                 HorizontalRule()
-                Box(Modifier.fillMaxSize(), content = canvasArea)
+                Box(Modifier.fillMaxSize().clipToBounds(), content = canvasArea)
             }
-        }
-    }
 
-    if (suggestions.isNotEmpty()) {
-        SuggestionsDialog(
-            suggestions = suggestions,
-            onPick = model::acceptRecognition,
-            onClose = model::dismissSuggestions,
-        )
+            if (toolbarOnRight) rail()
+        }
     }
 }
 
@@ -486,35 +636,42 @@ private fun DrawingRail(
     onSettings: () -> Unit,
     onFinger: () -> Unit,
     onTextBox: () -> Unit,
+    onCodeBox: () -> Unit,
+    onPhotoGallery: () -> Unit,
+    onPhotoCamera: () -> Unit,
     onFavorite: () -> Unit,
     onExport: () -> Unit,
     onBack: () -> Unit,
+    /** Szyna stoi po prawej — linia brzegowa idzie wtedy przy lewej krawędzi. */
+    onRight: Boolean = false,
 ) {
+    val words = LocalStrings.current
     Column(
         Modifier
             .width(Kajet.dimens.railWidth)
             .fillMaxSize()
             .background(Kajet.colors.desk)
-            .marginRule(Kajet.colors.line)
+            .marginRule(Kajet.colors.line, atEnd = !onRight)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", onBack)
+        IconAction(KajetIcons.BackArrow, words.backToLibrary, onBack)
         HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-        IconAction(KajetIcons.Pen, EditorTool.PEN.labelPl, { onTool(EditorTool.PEN) }, selected = tool == EditorTool.PEN)
-        IconAction(KajetIcons.Highlighter, EditorTool.HIGHLIGHTER.labelPl, { onTool(EditorTool.HIGHLIGHTER) }, selected = tool == EditorTool.HIGHLIGHTER)
-        IconAction(KajetIcons.Eraser, EditorTool.ERASER_PARTIAL.labelPl, { onTool(EditorTool.ERASER_PARTIAL) }, selected = tool == EditorTool.ERASER_PARTIAL)
-        IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.labelPl, { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
-        IconAction(KajetIcons.Lasso, EditorTool.LASSO.labelPl, { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
-        IconAction(KajetIcons.Ruler, EditorTool.RULER.labelPl, { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
+        IconAction(KajetIcons.Pen, EditorTool.PEN.label(words), { onTool(EditorTool.PEN) }, selected = tool == EditorTool.PEN)
+        IconAction(KajetIcons.Highlighter, EditorTool.HIGHLIGHTER.label(words), { onTool(EditorTool.HIGHLIGHTER) }, selected = tool == EditorTool.HIGHLIGHTER)
+        IconAction(KajetIcons.Eraser, EditorTool.ERASER_PARTIAL.label(words), { onTool(EditorTool.ERASER_PARTIAL) }, selected = tool == EditorTool.ERASER_PARTIAL)
+        IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.label(words), { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
+        IconAction(KajetIcons.Lasso, EditorTool.LASSO.label(words), { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
+        IconAction(KajetIcons.Ruler, EditorTool.RULER.label(words), { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
+        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
 
         HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
         Box(
             Modifier
                 .size(48.dp)
-                .clickable(onClickLabel = "Ustawienia pisaka", onClick = onColor),
+                .clickable(onClickLabel = words.penSettings, onClick = onColor),
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -524,31 +681,34 @@ private fun DrawingRail(
                     .border(1.dp, Kajet.colors.line, CircleShape),
             )
         }
-        IconAction(KajetIcons.TextBox, "Wstaw pole tekstowe", onTextBox)
+        IconAction(KajetIcons.TextBox, words.insertTextBox, onTextBox)
+        IconAction(KajetIcons.CodeFile, words.codeBlock, onCodeBox)
+        IconAction(KajetIcons.PhotoFrame, words.insertPhotoFromGallery, onPhotoGallery)
+        IconAction(KajetIcons.CameraBody, words.takePhoto, onPhotoCamera)
 
         // Przełącznik palca stoi w pasku, a nie tylko w ustawieniach, bo rysik
         // znika z biurka częściej, niż komukolwiek chce się chodzić po menu.
         IconAction(
             icon = if (fingerDraws) KajetIcons.FingerDraws else KajetIcons.FingerScrolls,
             description = if (fingerDraws) {
-                "Palec rysuje. Dotknij, żeby palcem przewijać stronę"
+                words.fingerDrawsSwitch
             } else {
-                "Palec przewija stronę. Dotknij, żeby palcem rysować"
+                words.fingerScrollsSwitch
             },
             onClick = onFinger,
             selected = fingerDraws,
         )
-        IconAction(KajetIcons.SettingsCog, "Ustawienia notatki: tło, strony, palec", onSettings)
+        IconAction(KajetIcons.SettingsCog, words.noteSettingsIcon, onSettings)
 
         HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-        IconAction(KajetIcons.Undo, "Cofnij", onUndo, enabled = canUndo)
-        IconAction(KajetIcons.Redo, "Ponów", onRedo, enabled = canRedo)
+        IconAction(KajetIcons.Undo, words.undo, onUndo, enabled = canUndo)
+        IconAction(KajetIcons.Redo, words.redo, onRedo, enabled = canRedo)
 
         HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-        IconAction(KajetIcons.Favourites, if (favorite) "Usuń z ulubionych" else "Dodaj do ulubionych", onFavorite, selected = favorite)
-        IconAction(KajetIcons.Export, "Eksportuj notatkę", onExport)
+        IconAction(KajetIcons.Favourites, if (favorite) words.removeFromFavorites else words.addToFavorites, onFavorite, selected = favorite)
+        IconAction(KajetIcons.Export, words.exportNote, onExport)
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -572,9 +732,13 @@ private fun NarrowToolRow(
     onSettings: () -> Unit,
     onFinger: () -> Unit,
     onTextBox: () -> Unit,
+    onCodeBox: () -> Unit,
+    onPhotoGallery: () -> Unit,
+    onPhotoCamera: () -> Unit,
     onFavorite: () -> Unit,
     onExport: () -> Unit,
 ) {
+    val words = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -584,19 +748,20 @@ private fun NarrowToolRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        IconAction(KajetIcons.Pen, EditorTool.PEN.labelPl, { onTool(EditorTool.PEN) }, selected = tool == EditorTool.PEN)
-        IconAction(KajetIcons.Highlighter, EditorTool.HIGHLIGHTER.labelPl, { onTool(EditorTool.HIGHLIGHTER) }, selected = tool == EditorTool.HIGHLIGHTER)
-        IconAction(KajetIcons.Eraser, EditorTool.ERASER_PARTIAL.labelPl, { onTool(EditorTool.ERASER_PARTIAL) }, selected = tool == EditorTool.ERASER_PARTIAL)
-        IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.labelPl, { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
-        IconAction(KajetIcons.Lasso, EditorTool.LASSO.labelPl, { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
-        IconAction(KajetIcons.Ruler, EditorTool.RULER.labelPl, { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
+        IconAction(KajetIcons.Pen, EditorTool.PEN.label(words), { onTool(EditorTool.PEN) }, selected = tool == EditorTool.PEN)
+        IconAction(KajetIcons.Highlighter, EditorTool.HIGHLIGHTER.label(words), { onTool(EditorTool.HIGHLIGHTER) }, selected = tool == EditorTool.HIGHLIGHTER)
+        IconAction(KajetIcons.Eraser, EditorTool.ERASER_PARTIAL.label(words), { onTool(EditorTool.ERASER_PARTIAL) }, selected = tool == EditorTool.ERASER_PARTIAL)
+        IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.label(words), { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
+        IconAction(KajetIcons.Lasso, EditorTool.LASSO.label(words), { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
+        IconAction(KajetIcons.Ruler, EditorTool.RULER.label(words), { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
+        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
 
         VerticalDivider()
 
         Box(
             Modifier
                 .size(48.dp)
-                .clickable(onClickLabel = "Ustawienia pisaka", onClick = onColor),
+                .clickable(onClickLabel = words.penSettings, onClick = onColor),
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -606,28 +771,31 @@ private fun NarrowToolRow(
                     .border(1.dp, Kajet.colors.line, CircleShape),
             )
         }
-        IconAction(KajetIcons.TextBox, "Wstaw pole tekstowe", onTextBox)
+        IconAction(KajetIcons.TextBox, words.insertTextBox, onTextBox)
+        IconAction(KajetIcons.CodeFile, words.codeBlock, onCodeBox)
+        IconAction(KajetIcons.PhotoFrame, words.insertPhotoFromGallery, onPhotoGallery)
+        IconAction(KajetIcons.CameraBody, words.takePhoto, onPhotoCamera)
         IconAction(
             icon = if (fingerDraws) KajetIcons.FingerDraws else KajetIcons.FingerScrolls,
             description = if (fingerDraws) {
-                "Palec rysuje. Dotknij, żeby palcem przewijać stronę"
+                words.fingerDrawsSwitch
             } else {
-                "Palec przewija stronę. Dotknij, żeby palcem rysować"
+                words.fingerScrollsSwitch
             },
             onClick = onFinger,
             selected = fingerDraws,
         )
-        IconAction(KajetIcons.SettingsCog, "Ustawienia notatki: tło, strony, palec", onSettings)
+        IconAction(KajetIcons.SettingsCog, words.noteSettingsIcon, onSettings)
 
         VerticalDivider()
 
-        IconAction(KajetIcons.Undo, "Cofnij", onUndo, enabled = canUndo)
-        IconAction(KajetIcons.Redo, "Ponów", onRedo, enabled = canRedo)
+        IconAction(KajetIcons.Undo, words.undo, onUndo, enabled = canUndo)
+        IconAction(KajetIcons.Redo, words.redo, onRedo, enabled = canRedo)
 
         VerticalDivider()
 
-        IconAction(KajetIcons.Favourites, if (favorite) "Usuń z ulubionych" else "Dodaj do ulubionych", onFavorite, selected = favorite)
-        IconAction(KajetIcons.Export, "Eksportuj notatkę", onExport)
+        IconAction(KajetIcons.Favourites, if (favorite) words.removeFromFavorites else words.addToFavorites, onFavorite, selected = favorite)
+        IconAction(KajetIcons.Export, words.exportNote, onExport)
     }
 }
 
@@ -639,11 +807,14 @@ private fun TopBar(
     pageCount: Int,
     tool: EditorTool,
     pens: PenSettings,
+    shapes: ShapeSettings,
     onTitle: (String) -> Unit,
     onPenColor: (Int) -> Unit,
     onPenWidth: (Float) -> Unit,
     onHighlighterColor: (Int) -> Unit,
     onHighlighterWidth: (Float) -> Unit,
+    onShapeColor: (Int) -> Unit,
+    onShapeWidth: (Float) -> Unit,
     onEraserRadius: (Float) -> Unit,
     onMore: () -> Unit,
     moreOpen: Boolean,
@@ -651,6 +822,7 @@ private fun TopBar(
     narrow: Boolean = false,
     onBack: (() -> Unit)? = null,
 ) {
+    val words = LocalStrings.current
     Row(
         modifier
             .fillMaxWidth()
@@ -660,7 +832,7 @@ private fun TopBar(
         horizontalArrangement = Arrangement.spacedBy(if (narrow) 4.dp else 10.dp),
     ) {
         if (onBack != null) {
-            IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", onBack)
+            IconAction(KajetIcons.BackArrow, words.backToLibrary, onBack)
         }
         BasicTextField(
             value = title,
@@ -672,14 +844,14 @@ private fun TopBar(
             modifier = Modifier.widthIn(min = 72.dp, max = if (narrow) 120.dp else 220.dp),
             decorationBox = { field ->
                 if (title.isEmpty()) {
-                    Text("Bez nazwy", style = Kajet.type.titleSmall, color = Kajet.colors.muted)
+                    Text(words.unnamed, style = Kajet.type.titleSmall, color = Kajet.colors.muted)
                 }
                 field()
             },
         )
         SaveIndicator(state = state, lastSave = lastSave)
         if (pageCount > 1 && !narrow) {
-            Text("$pageCount stron", style = Kajet.type.meta, color = Kajet.colors.muted)
+            Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
         }
 
         VerticalDivider()
@@ -694,28 +866,40 @@ private fun TopBar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (tool.isEraser) {
-                Text("Gumka", style = Kajet.type.label, color = Kajet.colors.muted)
+                Text(words.eraser, style = Kajet.type.label, color = Kajet.colors.muted)
                 Spacer(Modifier.width(6.dp))
                 listOf(6f to 8.dp, 12f to 12.dp, 24f to 16.dp, 48f to 20.dp).forEach { (size, dot) ->
                     SizeDot(
                         dot = dot,
                         color = Kajet.colors.muted.toArgb(),
                         picked = pens.eraserRadius == size,
-                        description = "Wielkość gumki ${size.roundToInt()}",
+                        description = words.eraserSizeOf(size.roundToInt()),
                         onClick = { onEraserRadius(size) },
                     )
                 }
             } else {
                 val highlighting = tool == EditorTool.HIGHLIGHTER
-                val palette = if (highlighting) InkPalette.highlighters else InkPalette.pens
-                val picked = if (highlighting) pens.highlighterColor else pens.penColor
+                val shaping = tool == EditorTool.SHAPES
+                // Pierwszy pisak to atrament tej kartki: na ciemnej jasny, na jasnej ciemny.
+                val palette =
+                    if (highlighting) InkPalette.highlighters(words)
+                    else InkPalette.pens(Kajet.colors.isDark, words)
+                val picked = when {
+                    shaping -> shapes.color
+                    highlighting -> pens.highlighterColor
+                    else -> pens.penColor
+                }
 
                 palette.forEach { (name, color) ->
                     ColourDot(
                         color = color.toArgb(),
                         description = name,
                         onClick = {
-                            if (highlighting) onHighlighterColor(color.toArgb()) else onPenColor(color.toArgb())
+                            when {
+                                shaping -> onShapeColor(color.toArgb())
+                                highlighting -> onHighlighterColor(color.toArgb())
+                                else -> onPenColor(color.toArgb())
+                            }
                         },
                         selected = picked == color.toArgb(),
                         diameter = 22.dp,
@@ -729,21 +913,31 @@ private fun TopBar(
                 } else {
                     listOf(1f to 6.dp, 2f to 9.dp, 4f to 13.dp, 8f to 18.dp)
                 }
-                val currentWidth = if (highlighting) pens.highlighterWidth else pens.penWidth
+                val currentWidth = when {
+                    shaping -> shapes.strokeWidth
+                    highlighting -> pens.highlighterWidth
+                    else -> pens.penWidth
+                }
                 widths.forEach { (size, dot) ->
                     SizeDot(
                         dot = dot,
                         color = picked,
                         picked = currentWidth == size,
-                        description = "Grubość ${"%.1f".format(size)}",
-                        onClick = { if (highlighting) onHighlighterWidth(size) else onPenWidth(size) },
+                        description = words.strokeWidthOf("%.1f".format(size)),
+                        onClick = {
+                            when {
+                                shaping -> onShapeWidth(size)
+                                highlighting -> onHighlighterWidth(size)
+                                else -> onPenWidth(size)
+                            }
+                        },
                     )
                 }
             }
 
             IconAction(
                 icon = KajetIcons.ColorSwatch,
-                description = "Więcej ustawień pisaka",
+                description = words.morePenSettings,
                 onClick = onMore,
                 selected = moreOpen,
                 touchTarget = 44.dp,
@@ -784,9 +978,9 @@ private fun SelectionPanel(
     count: Int,
     modifier: Modifier,
     onDelete: () -> Unit,
-    onRecognise: () -> Unit,
     onDeselect: () -> Unit,
 ) {
+    val words = LocalStrings.current
     Row(
         modifier
             .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
@@ -797,10 +991,9 @@ private fun SelectionPanel(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Zaznaczono $count kresek", style = Kajet.type.label, color = Kajet.colors.text)
-        SecondaryButton("Zamień na tekst", onRecognise, icon = KajetIcons.RecogniseText)
-        SecondaryButton("Skasuj", onDelete, icon = KajetIcons.Bin, color = Kajet.colors.danger)
-        IconAction(KajetIcons.Close, "Odznacz", onDeselect)
+        Text(words.selectedStrokes(count), style = Kajet.type.label, color = Kajet.colors.text)
+        SecondaryButton(words.delete, onDelete, icon = KajetIcons.Bin, color = Kajet.colors.danger)
+        IconAction(KajetIcons.Close, words.deselect, onDeselect)
     }
 }
 
@@ -817,16 +1010,19 @@ private fun PenPanel(
     onHighlighterWidth: (Float) -> Unit,
     onHighlighterOpacity: (Float) -> Unit,
     onEraserRadius: (Float) -> Unit,
+    /** Dokłada barwę do spisu „twoich kolorów" - po zamknięciu okna z tęczą. */
+    onRememberColor: (Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
+    val words = LocalStrings.current
     var fullPicker by remember { mutableStateOf(false) }
 
     ToolPanel(
         title = when {
-            tool.isEraser -> "Gumka"
-            tool == EditorTool.HIGHLIGHTER -> "Zakreślacz"
-            else -> "Pisak"
+            tool.isEraser -> words.eraser
+            tool == EditorTool.HIGHLIGHTER -> words.highlighterTool
+            else -> words.penTool
         },
         onClose = onClose,
         // Szerokość i wysokość nadaje wywołujący: na telefonie panel zajmuje
@@ -836,7 +1032,7 @@ private fun PenPanel(
         when {
             tool.isEraser -> {
                 SettingSlider(
-                    name = "Wielkość gumki",
+                    name = words.eraserSize,
                     value = pens.eraserRadius,
                     range = 2f..80f,
                     onChange = onEraserRadius,
@@ -852,21 +1048,21 @@ private fun PenPanel(
 
             tool == EditorTool.HIGHLIGHTER -> {
                 ColourRow(
-                    palette = InkPalette.highlighters,
+                    palette = InkPalette.highlighters(words),
                     picked = pens.highlighterColor,
                     recent = recentColors,
                     onPick = onHighlighterColor,
                     onCustom = { fullPicker = true },
                 )
                 SettingSlider(
-                    name = "Szerokość",
+                    name = words.widthLabel,
                     value = pens.highlighterWidth,
                     range = 4f..40f,
                     onChange = onHighlighterWidth,
                     readout = { "%.0f pkt".format(it) },
                 )
                 SettingSlider(
-                    name = "Krycie",
+                    name = words.opacity,
                     value = pens.highlighterOpacity,
                     range = 0.1f..1f,
                     onChange = onHighlighterOpacity,
@@ -879,24 +1075,24 @@ private fun PenPanel(
                 )
                 if (fullPicker) {
                     ColourPickerDialog(
-                        title = "Kolor zakreślacza",
+                        title = words.highlighterColourTitle,
                         color = pens.highlighterColor,
                         onChange = onHighlighterColor,
-                        onClose = { fullPicker = false },
+                        onClose = { fullPicker = false; onRememberColor(pens.highlighterColor) },
                         withAlpha = false,
-                        presetColors = InkPalette.highlighters,
+                        presetColors = InkPalette.highlighters(words),
                         recentColors = recentColors,
                     )
                 }
             }
 
             else -> {
-                SectionLabel("Czym piszesz")
+                SectionLabel(words.whatYouWriteWith)
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Brushes.penKinds.forEach { kind ->
                         IconAction(
                             icon = penIcon(kind),
-                            description = kind.labelPl,
+                            description = kind.label(words),
                             onClick = { onPenKind(kind) },
                             selected = pens.penKind == kind,
                         )
@@ -904,7 +1100,7 @@ private fun PenPanel(
                 }
 
                 ColourRow(
-                    palette = InkPalette.pens,
+                    palette = InkPalette.pens(Kajet.colors.isDark, words),
                     picked = pens.penColor,
                     recent = recentColors,
                     onPick = onPenColor,
@@ -912,14 +1108,14 @@ private fun PenPanel(
                 )
 
                 SettingSlider(
-                    name = "Grubość",
+                    name = words.thickness,
                     value = pens.penWidth,
                     range = 0.4f..20f,
                     onChange = onPenWidth,
                     readout = { "%.1f pkt".format(it) },
                 )
                 SettingSlider(
-                    name = "Krycie",
+                    name = words.opacity,
                     value = pens.penOpacity,
                     range = 0.1f..1f,
                     onChange = onPenOpacity,
@@ -934,10 +1130,10 @@ private fun PenPanel(
 
                 Text(
                     text = when (pens.penKind) {
-                        InkTool.PEN -> "Kreska grubieje tam, gdzie mocniej naciskasz rysikiem."
-                        InkTool.FINELINER -> "Równa kreska o stałej szerokości."
-                        InkTool.PENCIL -> "Kreska z ziarnem, jak ołówek na papierze."
-                        InkTool.DASHED -> "Linia przerywana, do podziałów i szkiców."
+                        InkTool.PEN -> words.penAboutPen
+                        InkTool.FINELINER -> words.penAboutFineliner
+                        InkTool.PENCIL -> words.penAboutPencil
+                        InkTool.DASHED -> words.penAboutDashed
                         InkTool.HIGHLIGHTER -> ""
                     },
                     style = Kajet.type.meta,
@@ -946,18 +1142,166 @@ private fun PenPanel(
 
                 if (fullPicker) {
                     ColourPickerDialog(
-                        title = "Kolor atramentu",
+                        title = words.inkColourTitle,
                         color = pens.penColor,
                         onChange = onPenColor,
-                        onClose = { fullPicker = false },
+                        // Do „twoich kolorów" wpada dopiero barwa, na której
+                        // człowiek się zatrzymał - jedna, nie cała droga po tęczy.
+                        onClose = { fullPicker = false; onRememberColor(pens.penColor) },
                         withAlpha = false,
-                        presetColors = InkPalette.pens,
+                        presetColors = InkPalette.pens(Kajet.colors.isDark, words),
                         recentColors = recentColors,
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Panel kształtu: co się rysuje i czym.
+ *
+ * Zmiany idą i do ustawień narzędzia, i do kształtu wziętego właśnie do
+ * poprawek — poprawienie koloru nie może znaczyć „skasuj figurę i narysuj ją
+ * od nowa".
+ */
+@Composable
+private fun ShapePanel(
+    shapes: ShapeSettings,
+    square: Boolean,
+    recentColors: List<Int>,
+    onKind: (ShapeKind) -> Unit,
+    onColor: (Int) -> Unit,
+    onWidth: (Float) -> Unit,
+    onFill: (Int) -> Unit,
+    onOpacity: (Float) -> Unit,
+    onSquare: () -> Unit,
+    onRememberColor: (Int) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier,
+) {
+    val words = LocalStrings.current
+    var outlinePicker by remember { mutableStateOf(false) }
+    var fillPicker by remember { mutableStateOf(false) }
+
+    ToolPanel(
+        title = EditorTool.SHAPES.label(words),
+        onClose = onClose,
+        modifier = modifier.verticalScroll(rememberScrollState()),
+    ) {
+        SectionLabel(words.shapeKindLabel)
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            ShapeKind.entries.forEach { kind ->
+                IconAction(
+                    icon = shapeIcon(kind),
+                    description = kind.label(words),
+                    onClick = { onKind(kind) },
+                    selected = shapes.kind == kind,
+                )
+            }
+        }
+
+        ColourRow(
+            palette = InkPalette.pens(Kajet.colors.isDark, words),
+            picked = shapes.color,
+            recent = recentColors,
+            onPick = onColor,
+            onCustom = { outlinePicker = true },
+        )
+
+        SettingSlider(
+            name = words.thickness,
+            value = shapes.strokeWidth,
+            range = 0.4f..20f,
+            onChange = onWidth,
+            readout = { "%.1f pkt".format(it) },
+        )
+        SettingSlider(
+            name = words.opacity,
+            value = shapes.opacity,
+            range = 0.1f..1f,
+            onChange = onOpacity,
+            readout = { "${(it * 100).roundToInt()} %" },
+        )
+
+        // Wypełnienie tylko dla figur zamkniętych — linii i strzałki nie ma czym wypełnić.
+        if (!shapes.kind.open) {
+            SectionLabel(words.shapeFillLabel)
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconAction(
+                    icon = KajetIcons.Close,
+                    description = words.shapeNoFill,
+                    onClick = { onFill(0) },
+                    selected = shapes.fill == 0,
+                )
+                InkPalette.highlighters(words).forEach { (name, color) ->
+                    ColourDot(
+                        color = color.toArgb(),
+                        description = name,
+                        onClick = { onFill(color.toArgb()) },
+                        selected = shapes.fill == color.toArgb(),
+                        diameter = 22.dp,
+                    )
+                }
+                IconAction(
+                    icon = KajetIcons.ShapeFill,
+                    description = words.shapeFillColourTitle,
+                    onClick = { fillPicker = true },
+                    touchTarget = 44.dp,
+                )
+            }
+        }
+
+        HorizontalRule()
+
+        ChoiceRow(label = words.shapeSquareLock, picked = square, onClick = onSquare)
+        Text(words.shapeSquareAbout, style = Kajet.type.meta, color = Kajet.colors.muted)
+        Text(
+            text = EditorTool.SHAPES.description(words),
+            style = Kajet.type.meta,
+            color = Kajet.colors.muted,
+        )
+    }
+
+    if (outlinePicker) {
+        ColourPickerDialog(
+            title = words.shapeOutlineColourTitle,
+            color = shapes.color,
+            onChange = onColor,
+            onClose = { outlinePicker = false; onRememberColor(shapes.color) },
+            withAlpha = false,
+            presetColors = InkPalette.pens(Kajet.colors.isDark, words),
+            recentColors = recentColors,
+        )
+    }
+
+    if (fillPicker) {
+        ColourPickerDialog(
+            title = words.shapeFillColourTitle,
+            color = if (shapes.fill == 0) 0x33FFFFFF else shapes.fill,
+            onChange = onFill,
+            onClose = { fillPicker = false; onRememberColor(shapes.fill) },
+            presetColors = InkPalette.highlighters(words),
+            recentColors = recentColors,
+        )
+    }
+}
+
+private fun shapeIcon(kind: ShapeKind) = when (kind) {
+    ShapeKind.LINE -> KajetIcons.ShapeLine
+    ShapeKind.ARROW -> KajetIcons.ShapeArrow
+    ShapeKind.RECTANGLE -> KajetIcons.ShapeRectangle
+    ShapeKind.ROUNDED_RECTANGLE -> KajetIcons.ShapeRoundedRectangle
+    ShapeKind.ELLIPSE -> KajetIcons.ShapeEllipse
+    ShapeKind.TRIANGLE -> KajetIcons.ShapeTriangle
+    ShapeKind.DIAMOND -> KajetIcons.ShapeDiamond
+    ShapeKind.STAR -> KajetIcons.ShapeStar
 }
 
 @Composable
@@ -968,6 +1312,7 @@ private fun TextBoxFormatBar(
     onColor: (Int) -> Unit,
     modifier: Modifier,
 ) {
+    val words = LocalStrings.current
     var textColourPicker by remember { mutableStateOf(false) }
     var backgroundPicker by remember { mutableStateOf(false) }
     var fontPicker by remember { mutableStateOf(false) }
@@ -985,12 +1330,12 @@ private fun TextBoxFormatBar(
         ) {
             IconAction(
                 icon = KajetIcons.Letters,
-                description = "Krój pisma: ${box.font.labelPl}",
+                description = "${words.fontFamily}: ${box.font.label(words)}",
                 onClick = { fontPicker = !fontPicker },
                 selected = fontPicker,
             )
 
-            IconAction(KajetIcons.MoreDots, "Mniejsze pismo", {
+            IconAction(KajetIcons.Minus, words.smallerText, {
                 onChange { it.copy(fontSize = (it.fontSize - 2f).coerceAtLeast(6f)) }
             })
             Text(
@@ -999,7 +1344,7 @@ private fun TextBoxFormatBar(
                 color = Kajet.colors.text,
                 modifier = Modifier.width(28.dp),
             )
-            IconAction(KajetIcons.Plus, "Większe pismo", {
+            IconAction(KajetIcons.Plus, words.largerText, {
                 onChange { it.copy(fontSize = (it.fontSize + 2f).coerceAtMost(96f)) }
             })
 
@@ -1007,19 +1352,19 @@ private fun TextBoxFormatBar(
 
             IconToggle(
                 icon = KajetIcons.Bold,
-                description = "Pogrubienie",
+                description = words.bold,
                 checked = box.bold,
                 onCheckedChange = { on -> onChange { it.copy(bold = on) } },
             )
             IconToggle(
                 icon = KajetIcons.Italic,
-                description = "Kursywa",
+                description = words.italic,
                 checked = box.italic,
                 onCheckedChange = { on -> onChange { it.copy(italic = on) } },
             )
             IconToggle(
                 icon = KajetIcons.Underline,
-                description = "Podkreślenie",
+                description = words.underline,
                 checked = box.underline,
                 onCheckedChange = { on -> onChange { it.copy(underline = on) } },
             )
@@ -1033,7 +1378,7 @@ private fun TextBoxFormatBar(
                         NoteAlign.CENTER -> KajetIcons.AlignCentre
                         NoteAlign.RIGHT -> KajetIcons.AlignRight
                     },
-                    description = align.labelPl,
+                    description = align.label(words),
                     onClick = { onChange { it.copy(align = align) } },
                     selected = box.align == align,
                 )
@@ -1043,12 +1388,12 @@ private fun TextBoxFormatBar(
 
             ColourDot(
                 color = box.color,
-                description = "Kolor pisma",
+                description = words.textColourTitle,
                 onClick = { textColourPicker = true },
             )
             IconAction(
                 icon = KajetIcons.PageRuling,
-                description = if (box.background == 0) "Dodaj tło pola" else "Zmień tło pola",
+                description = if (box.background == 0) words.addBoxBackground else words.changeBoxBackground,
                 onClick = { backgroundPicker = true },
                 selected = box.background != 0,
             )
@@ -1058,39 +1403,34 @@ private fun TextBoxFormatBar(
             SegmentedChoice(
                 options = NoteFont.entries,
                 selected = box.font,
-                name = { it.labelPl },
-                onSelect = { font ->
-                    onChange { it.copy(font = font) }
-                    fontPicker = false
-                },
+                name = { it.label(words) },
+                // Menu zostaje otwarte: krój porównuje się na żywo,
+                // zamyka się je samemu tym samym przyciskiem „abc".
+                onSelect = { font -> onChange { it.copy(font = font) } },
             )
         }
     }
 
     if (textColourPicker) {
         ColourPickerDialog(
-            title = "Kolor pisma",
+            title = words.textColourTitle,
             color = box.color,
-            onChange = { argb ->
-                onChange { it.copy(color = argb) }
-                onColor(argb)
-            },
-            onClose = { textColourPicker = false },
-            presetColors = InkPalette.pens,
+            onChange = { argb -> onChange { it.copy(color = argb) } },
+            // Zapamiętujemy na wyjściu, nie po drodze - inaczej jedno dobranie
+            // barwy zapycha spis „twoich kolorów" odcieniami mijanymi po tęczy.
+            onClose = { textColourPicker = false; onColor(box.color) },
+            presetColors = InkPalette.pens(words),
             recentColors = recentColors,
         )
     }
 
     if (backgroundPicker) {
         ColourPickerDialog(
-            title = "Tło pola tekstowego",
+            title = words.boxBackgroundTitle,
             color = if (box.background == 0) 0x33FFFFFF else box.background,
-            onChange = { argb ->
-                onChange { it.copy(background = argb) }
-                onColor(argb)
-            },
-            onClose = { backgroundPicker = false },
-            presetColors = InkPalette.highlighters,
+            onChange = { argb -> onChange { it.copy(background = argb) } },
+            onClose = { backgroundPicker = false; onColor(box.background) },
+            presetColors = InkPalette.highlighters(words),
             recentColors = recentColors,
         )
     }
@@ -1122,7 +1462,8 @@ private fun ColourRow(
     onPick: (Int) -> Unit,
     onCustom: () -> Unit,
 ) {
-    SectionLabel("Kolor")
+    val words = LocalStrings.current
+    SectionLabel(words.colour)
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,
@@ -1141,13 +1482,13 @@ private fun ColourRow(
             .forEach { own ->
                 ColourDot(
                     color = own,
-                    description = "Twój kolor",
+                    description = words.yourColour,
                     onClick = { onPick(own) },
                     selected = picked == own,
                     diameter = 22.dp,
                 )
             }
-        IconAction(KajetIcons.ColorSwatch, "Dobierz własny kolor", onCustom, touchTarget = 44.dp)
+        IconAction(KajetIcons.ColorSwatch, words.pickOwnColour, onCustom, touchTarget = 44.dp)
     }
 }
 
@@ -1191,15 +1532,16 @@ private fun NoteSettingsPanel(
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
+    val words = LocalStrings.current
     ToolPanel(
-        title = "Ustawienia notatki",
+        title = words.noteSettings,
         onClose = onClose,
         modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
-        SectionLabel("Tło strony")
+        SectionLabel(words.pageBackgroundLabel)
         PageBackground.entries.forEach { variant ->
             ChoiceRow(
-                label = variant.labelPl,
+                label = variant.label(words),
                 picked = variant == background,
                 onClick = { onBackground(variant) },
             )
@@ -1207,19 +1549,19 @@ private fun NoteSettingsPanel(
 
         HorizontalRule()
 
-        SectionLabel("Rodzaj strony")
+        SectionLabel(words.pageKind)
         PageMode.entries.forEach { variant ->
             ChoiceRow(
-                label = variant.labelPl,
+                label = variant.label(words),
                 picked = variant == mode,
                 onClick = { onMode(variant) },
             )
         }
         Text(
             text = if (mode == PageMode.A4) {
-                "Osobne kartki A4. Tak samo wyjdzie na drukarce."
+                words.pageA4Long
             } else {
-                "Jedna strona, która rośnie w dół, kiedy dopiszesz przy dolnej krawędzi."
+                words.pageScrollLong
             },
             style = Kajet.type.meta,
             color = Kajet.colors.muted,
@@ -1227,17 +1569,17 @@ private fun NoteSettingsPanel(
 
         HorizontalRule()
 
-        SectionLabel("Strony")
+        SectionLabel(words.pagesLabel)
         Text(
-            text = if (pageCount == 1) "Notatka ma jedną stronę." else "Notatka ma $pageCount stron.",
+            text = if (pageCount == 1) words.onePage else words.pagesCount(pageCount),
             style = Kajet.type.meta,
             color = Kajet.colors.muted,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecondaryButton("Dołóż", onAddPage, icon = KajetIcons.AddPage)
+            SecondaryButton(words.addPage, onAddPage, icon = KajetIcons.AddPage)
             if (pageCount > 1) {
                 SecondaryButton(
-                    text = "Skasuj ostatnią",
+                    text = words.removeLastPage,
                     onClick = onRemovePage,
                     icon = KajetIcons.Bin,
                     color = Kajet.colors.danger,
@@ -1247,25 +1589,25 @@ private fun NoteSettingsPanel(
 
         HorizontalRule()
 
-        SectionLabel("Palec")
+        SectionLabel(words.fingerLabel)
         ChoiceRow(
-            label = "Palec też rysuje",
+            label = FingerBehavior.DRAW.label(words),
             picked = fingerDraws,
             onClick = { if (!fingerDraws) onFinger() },
         )
         ChoiceRow(
-            label = "Palec przewija stronę",
+            label = FingerBehavior.SCROLL.label(words),
             picked = !fingerDraws,
             onClick = { if (fingerDraws) onFinger() },
         )
         Text(
-            text = "Kiedy rysik dotyka ekranu, dłoń nie rysuje nigdy. To działa zawsze.",
+            text = words.palmRejectionAbout,
             style = Kajet.type.meta,
             color = Kajet.colors.muted,
         )
 
         HorizontalRule()
-        SecondaryButton("Dopasuj szerokość", onFitWidth, icon = KajetIcons.FitToView)
+        SecondaryButton(words.fitWidth, onFitWidth, icon = KajetIcons.FitToView)
     }
 }
 
@@ -1288,43 +1630,5 @@ private fun ChoiceRow(label: String, picked: Boolean, onClick: () -> Unit) {
             style = Kajet.type.body,
             color = if (picked) Kajet.colors.accent else Kajet.colors.text,
         )
-    }
-}
-
-@Composable
-private fun SuggestionsDialog(
-    suggestions: List<String>,
-    onPick: (String) -> Unit,
-    onClose: () -> Unit,
-) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
-        Column(
-            Modifier
-                .width(460.dp)
-                .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
-                .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Odczytane pismo", style = Kajet.type.title, color = Kajet.colors.text)
-            Text(
-                text = "Wybierz zapis, który pasuje. Pismo zostanie na kartce, a tekst posłuży do wyszukiwania.",
-                style = Kajet.type.meta,
-                color = Kajet.colors.muted,
-            )
-            suggestions.forEach { suggestion ->
-                Text(
-                    text = suggestion,
-                    style = Kajet.type.bodyLarge,
-                    color = Kajet.colors.text,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Kajet.colors.desk, RoundedCornerShape(Kajet.dimens.corner))
-                        .clickable { onPick(suggestion) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                )
-            }
-            SecondaryButton("Anuluj", onClose)
-        }
     }
 }

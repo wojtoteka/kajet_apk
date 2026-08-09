@@ -4,9 +4,19 @@ object TextMarkers {
 
     val colorPattern = Regex("""<span style="color:[^"]*">([^<]*)</span>""")
 
+    val sizePattern = Regex("""<span style="font-size:(\d+(?:\.\d+)?)px">([^<]*)</span>""")
+
     val underline = Regex("""<u>([^<]*)</u>""")
 
     val highlightMarker = Regex("""==([^=]+)==""")
+
+    /*
+      Otwarcie i domknięcie zdejmowane OSOBNO, nie parą: stare notatki miewają
+      znaczniki zagnieżdżone jeden w drugim albo osierocone domknięcia, a para
+      regexowa zostawiała je wtedy w treści — goły HTML w spisie i w indeksie.
+    */
+    private val spanOpening = Regex("""<span style="(?:color|font-size):[^"]*">""")
+    private val spanClosing = Regex("""</span>""")
 
     private val bold = Regex("""\*\*([^*]+)\*\*""")
     private val boldUnderscore = Regex("""__([^_]+)__""")
@@ -16,7 +26,8 @@ object TextMarkers {
     private val link = Regex("""\[([^\]]+)]\(([^)]+)\)""")
 
     fun plain(line: String): String = line
-        .replace(colorPattern, "$1")
+        .replace(spanOpening, "")
+        .replace(spanClosing, "")
         .replace(underline, "$1")
         .replace(bold, "$1")
         .replace(boldUnderscore, "$1")

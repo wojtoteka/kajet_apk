@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.core.design
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import wojtoteka.ovh.kajet.core.text.Strings
 
 @Immutable
 data class KajetColors(
@@ -51,19 +52,26 @@ val LocalKajetColors = staticCompositionLocalOf { KajetLightColors }
 enum class FolderColor(
     val id: String,
     val labelPl: String,
+    val labelEn: String,
     private val light: Color,
     private val dark: Color,
 ) {
-    Graphite("grafit", "Grafit", Color(0xFF5B584F), Color(0xFF8E8A7E)),
-    GreenInk("zielen", "Zieleń", Color(0xFF0F6B5C), Color(0xFF4FB39C)),
-    Teal("morski", "Morski", Color(0xFF1C5C74), Color(0xFF5AA8C4)),
-    Brick("ceglany", "Ceglany", Color(0xFFA6392E), Color(0xFFE2857A)),
-    Mustard("musztarda", "Musztardowy", Color(0xFF8A6212), Color(0xFFD6A648)),
-    Olive("oliwka", "Oliwkowy", Color(0xFF56662A), Color(0xFF9EB367)),
-    Rust("rdza", "Rdzawy", Color(0xFF8F4A1C), Color(0xFFD08A55)),
-    Neutral("bez", "Bezbarwny", Color(0xFF8C877C), Color(0xFF6E6A61));
+    Graphite("grafit", "Grafit", "Graphite", Color(0xFF5B584F), Color(0xFF8E8A7E)),
+    GreenInk("zielen", "Zieleń", "Green ink", Color(0xFF0F6B5C), Color(0xFF4FB39C)),
+    Teal("morski", "Morski", "Teal", Color(0xFF1C5C74), Color(0xFF5AA8C4)),
+    Brick("ceglany", "Ceglany", "Brick", Color(0xFFA6392E), Color(0xFFE2857A)),
+    Mustard("musztarda", "Musztardowy", "Mustard", Color(0xFF8A6212), Color(0xFFD6A648)),
+    Olive("oliwka", "Oliwkowy", "Olive", Color(0xFF56662A), Color(0xFF9EB367)),
+    Rust("rdza", "Rdzawy", "Rust", Color(0xFF8F4A1C), Color(0xFFD08A55)),
+    Navy("granat", "Granatowy", "Navy", Color(0xFF2C3E6B), Color(0xFF7C90C0)),
+    Violet("fiolet", "Fioletowy", "Violet", Color(0xFF5B3E8C), Color(0xFF9E86C9)),
+    Rose("roz", "Różowy", "Rose", Color(0xFF9C3A63), Color(0xFFD887A8)),
+    Chocolate("braz", "Brązowy", "Chocolate", Color(0xFF5F4630), Color(0xFFA98A66)),
+    Neutral("bez", "Bezbarwny", "Plain", Color(0xFF8C877C), Color(0xFF6E6A61));
 
     fun color(isDark: Boolean): Color = if (isDark) dark else light
+
+    fun label(words: Strings): String = if (words.english) labelEn else labelPl
 
     companion object {
         fun fromId(id: String?): FolderColor = entries.firstOrNull { it.id == id } ?: Graphite
@@ -72,7 +80,10 @@ enum class FolderColor(
 
 object InkPalette {
     val Black = Color(0xFF23211D)
-    val White = Color(0xFFF0EDE4)
+
+    // Dawny „Biały" (0xFFF0EDE4) zlewał się z papierem: jedno przypadkowe
+    // dotknięcie kropki w pasku i pisanie „znikało". Zamiast niego jest szary.
+    val Gray = Color(0xFF6F6A5E)
     val Blue = Color(0xFF1B4F8C)
     val Red = Color(0xFFB0322A)
     val Green = Color(0xFF1F6B3A)
@@ -83,19 +94,45 @@ object InkPalette {
     val HighlighterPink = Color(0xFFF29BAE)
     val HighlighterBlue = Color(0xFF87BEE8)
 
-    val pens = listOf(
-        "Czarny" to Black,
-        "Biały" to White,
-        "Niebieski" to Blue,
-        "Czerwony" to Red,
-        "Zielony" to Green,
-        "Brązowy" to Brown,
+    fun pens(words: Strings): List<Pair<String, Color>> = listOf(
+        words.penBlack to Black,
+        words.penGrey to Gray,
+        words.penBlue to Blue,
+        words.penRed to Red,
+        words.penGreen to Green,
+        words.penBrown to Brown,
     )
 
-    val highlighters = listOf(
-        "Żółty" to HighlighterYellow,
-        "Zielony" to HighlighterGreen,
-        "Różowy" to HighlighterPink,
-        "Niebieski" to HighlighterBlue,
+    /*
+      Atrament domyślny zależy od kartki: ciemny na jasnej, jasny na ciemnej -
+      to ta sama para co KajetColors.defaultInk.
+
+      Bez tego rozróżnienia pisak zapamiętany na jasnej kartce wracał na ciemną
+      jako czarny i pisało się czernią po czerni: kreska była, tylko nie było
+      jej widać.
+    */
+    val DEFAULT_INK_LIGHT_ARGB: Int = 0xFF23211D.toInt()
+    val DEFAULT_INK_DARK_ARGB: Int = 0xFFE8E4DA.toInt()
+
+    /** Czy to „zwykły atrament" - którejkolwiek kartki. */
+    fun isDefaultInk(argb: Int): Boolean =
+        argb == DEFAULT_INK_LIGHT_ARGB || argb == DEFAULT_INK_DARK_ARGB
+
+    /**
+     * Pisaki do paska. Pierwszy to atrament tej kartki, na której się właśnie
+     * pisze - żeby na ciemnej stronie pierwsza kropka nie była czarna.
+     */
+    fun pens(isDark: Boolean, words: Strings): List<Pair<String, Color>> = listOf(
+        words.penInk to Color(if (isDark) DEFAULT_INK_DARK_ARGB else DEFAULT_INK_LIGHT_ARGB),
+    ) + pens(words).drop(1)
+
+    /** Kolor dawnego „Białego" pisaka. Zapamiętany w ustawieniach ma wrócić do domyślnego. */
+    val LEGACY_WHITE_ARGB: Int = 0xFFF0EDE4.toInt()
+
+    fun highlighters(words: Strings): List<Pair<String, Color>> = listOf(
+        words.penYellow to HighlighterYellow,
+        words.penGreen to HighlighterGreen,
+        words.penPink to HighlighterPink,
+        words.penBlue to HighlighterBlue,
     )
 }

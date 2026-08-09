@@ -1,10 +1,10 @@
 package wojtoteka.ovh.kajet.editor.text
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,8 +44,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.PlexMono
+import wojtoteka.ovh.kajet.core.image.Bitmaps
+import androidx.compose.ui.text.font.FontWeight
+import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
@@ -53,19 +59,35 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.design.fontFamilyFor
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.photoNotFound
 
 @Composable
 fun BlockEditor(
     blocks: List<Block>,
     attachment: suspend (String) -> ByteArray?,
     onBlocksChange: (List<Block>) -> Unit,
+    /**
+     * Stuknięcie w pustą kartkę pod tekstem. Notatka ma wtedy wejść w pisanie
+     * w ostatnim akapicie, a nie zostawić klawiaturę przy tytule.
+     */
+    onTapBelow: () -> Unit,
     keyToFocus: String?,
     onFocusTaken: () -> Unit,
     onBlockFocused: (key: String, setField: (TextFieldValue) -> Unit) -> Unit,
+    /** Kursor ma stanąć w tym bloku — na przykład w świeżej pozycji listy. */
+    onFocusBlock: (key: String) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
+    /**
+     * Dopisany tekst przechodzi tędy, zanim trafi do pola. Dzięki temu format
+     * zapamiętany na pasku narzędzi obejmuje właśnie to, co człowiek napisał.
+     * Null znaczy „zostaw tak, jak przyszło z klawiatury".
+     */
+    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
     appearance: TextContent,
     modifier: Modifier = Modifier,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     val style = noteStyle(appearance)
     val inlineStyle = remember(colors, appearance.font) {
@@ -84,7 +106,6 @@ fun BlockEditor(
             start = 28.dp,
             end = 24.dp,
             top = 20.dp,
-            bottom = 160.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -96,7 +117,7 @@ fun BlockEditor(
                     style = style,
                     inlineStyle = inlineStyle,
                     hint = if (blocks.firstOrNull()?.key == block.key) {
-                        "Zacznij pisać. Formatowanie widać od razu w treści."
+                        words.writeHere
                     } else {
                         null
                     },
@@ -105,6 +126,7 @@ fun BlockEditor(
                     onContent = { onBlocksChange(Blocks.setText(blocks, block.key, it)) },
                     onBlockFocused = onBlockFocused,
                     onSelection = onSelection,
+                    onTyped = onTyped,
                 )
 
                 is Block.Task -> TaskBlock(
@@ -117,16 +139,37 @@ fun BlockEditor(
                     onContent = { content ->
                         // Klawisz nowej linii w zadaniu zaczyna następne zadanie,
                         // a nie zwykły akapit. Tak działa każda lista zakupów.
-                        onBlocksChange(
-                            if (content.contains('\n')) {
-                                Blocks.splitTask(blocks, block.key, content)
-                            } else {
-                                Blocks.setText(blocks, block.key, content)
-                            },
-                        )
+                        // Kursor musi przy tym przejść do NOWEJ pozycji — inaczej
+                        // dalsze pisanie doklejało się do poprzedniej.
+                        if (content.contains('\n')) {
+                            val split = Blocks.splitTask(blocks, block.key, content)
+                            onBlocksChange(split.blocks)
+                            onFocusBlock(split.focusKey)
+                        } else {
+                            onBlocksChange(Blocks.setText(blocks, block.key, content))
+                        }
                     },
                     onBlockFocused = onBlockFocused,
                     onSelection = onSelection,
+                    onTyped = onTyped,
+                )
+
+                is Block.Table -> TableBlock(
+                    block = block,
+                    style = style,
+                    inlineStyle = inlineStyle,
+                    onCell = { row, column, text ->
+                        onBlocksChange(Blocks.setCell(blocks, block.key, row, column, text))
+                    },
+                    onAddRow = { onBlocksChange(Blocks.addRow(blocks, block.key, block.rows.size - 1)) },
+                    onAddColumn = {
+                        onBlocksChange(Blocks.addColumn(blocks, block.key, block.columns - 1))
+                    },
+                    onRemoveRow = { row -> onBlocksChange(Blocks.removeRow(blocks, block.key, row)) },
+                    onRemoveColumn = { column ->
+                        onBlocksChange(Blocks.removeColumn(blocks, block.key, column))
+                    },
+                    onDelete = { onBlocksChange(Blocks.remove(blocks, block.key)) },
                 )
 
                 is Block.Image -> ImageBlock(
@@ -141,6 +184,29 @@ fun BlockEditor(
                     onDelete = { onBlocksChange(Blocks.remove(blocks, block.key)) },
                 )
             }
+        }
+
+        /*
+          Reszta kartki pod tekstem. Dawniej był to sam odstęp, więc stuknięcie
+          w puste miejsce pod ostatnim akapitem nie robiło nic — a w świeżej
+          notatce skupienie zostawało przy tytule i pisany tekst szedł do
+          tytułu. Teraz puste miejsce jest częścią kartki: dotknięcie stawia
+          kursor w ostatnim akapicie, tak jak w każdym zeszycie.
+        */
+        item(key = "kartka-ponizej") {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .clickable(
+                        // Bez podświetlenia i bez skupienia: to kartka, a nie
+                        // przycisk. Skupienie ma wziąć pole tekstu, nie tło.
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = words.writeHere,
+                        onClick = onTapBelow,
+                    ),
+            )
         }
     }
 }
@@ -170,6 +236,7 @@ private fun TextBlock(
     onContent: (String) -> Unit,
     onBlockFocused: (String, (TextFieldValue) -> Unit) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
+    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
     modifier: Modifier = Modifier,
 ) {
     val focus = remember { FocusRequester() }
@@ -191,14 +258,19 @@ private fun TextBlock(
     Box(modifier.fillMaxWidth()) {
         BasicTextField(
             value = field,
-            onValueChange = { next ->
+            onValueChange = { typed ->
+                // Zapamiętany format nakłada się TU, na dopiero co wpisany
+                // kawałek. Pole zostaje to samo — nie ma mowy o ustawianiu
+                // treści od nowa, bo wtedy kursor skakałby na początek.
+                val next = onTyped(field.text, typed) ?: typed
                 field = next
                 onSelection(next)
                 if (next.text != content) onContent(next.text)
             },
             textStyle = style,
             // To jest cała rzecz, dzięki której nie ma osobnego podglądu:
-            // pogrubienie widać pogrubione tam, gdzie się je pisze.
+            // pogrubienie widać pogrubione tam, gdzie się je pisze, a surowych
+            // znaczników nie widać nigdy — także pod kursorem.
             visualTransformation = inlineStyle,
             cursorBrush = SolidColor(Kajet.colors.accent),
             modifier = Modifier
@@ -241,7 +313,9 @@ private fun TaskBlock(
     onContent: (String) -> Unit,
     onBlockFocused: (String, (TextFieldValue) -> Unit) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
+    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
 ) {
+    val words = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -253,7 +327,7 @@ private fun TaskBlock(
                 .size(40.dp)
                 .clickable(
                     role = Role.Checkbox,
-                    onClickLabel = if (block.done) "Odznacz zadanie" else "Odhacz zadanie",
+                    onClickLabel = if (block.done) words.untickTask else words.tickTask,
                     onClick = onToggle,
                 ),
             contentAlignment = Alignment.Center,
@@ -283,16 +357,24 @@ private fun TaskBlock(
             }
         }
 
+        /*
+          Zadanie czyta się zawsze od lewej, obok swojego kwadracika.
+          Wyśrodkowanie notatki dotyczy akapitów, nie listy: inaczej kwadracik
+          zostawał przy krawędzi, a jego treść uciekała na środek i wyglądały
+          jak dwie niezwiązane rzeczy.
+        */
+        val taskStyle = style.copy(textAlign = TextAlign.Start)
+
         TextBlock(
             key = block.key,
             content = block.content,
             style = if (block.done) {
-                style.copy(
+                taskStyle.copy(
                     color = Kajet.colors.muted,
                     textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
                 )
             } else {
-                style
+                taskStyle
             },
             inlineStyle = inlineStyle,
             hint = null,
@@ -301,9 +383,154 @@ private fun TaskBlock(
             onContent = onContent,
             onBlockFocused = onBlockFocused,
             onSelection = onSelection,
+            onTyped = onTyped,
             modifier = Modifier.padding(top = 6.dp),
         )
     }
+}
+
+/**
+ * Tabelka jako tabelka, a nie jako wiersze pełne kresek.
+ *
+ * W pliku notatki nadal leży zwykły markdown (`| Kolumna | Kolumna |`), więc
+ * ani serwer, ani eksport nic o tej zmianie nie muszą wiedzieć. Zmienia się
+ * tylko to, co widać: siatka z komórkami do pisania.
+ *
+ * Pasek formatowania działa na akapity, nie na komórki — pogrubienie
+ * w komórce wpisuje się na razie znacznikami, tak jak w surowym Markdownie.
+ */
+@Composable
+private fun TableBlock(
+    block: Block.Table,
+    style: TextStyle,
+    inlineStyle: InlineStyle,
+    onCell: (row: Int, column: Int, text: String) -> Unit,
+    onAddRow: () -> Unit,
+    onAddColumn: () -> Unit,
+    onRemoveRow: (Int) -> Unit,
+    onRemoveColumn: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val words = LocalStrings.current
+    val colors = Kajet.colors
+    val columns = block.columns.coerceAtLeast(1)
+    var chosenRow by remember(block.key) { mutableStateOf(0) }
+    var chosenColumn by remember(block.key) { mutableStateOf(0) }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .widthIn(max = Kajet.dimens.readingWidth)
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner)),
+        ) {
+            block.rows.indices.forEach { row ->
+                if (row > 0) HorizontalRule()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    for (column in 0 until columns) {
+                        if (column > 0) {
+                            Box(
+                                Modifier
+                                    .width(1.dp)
+                                    .height(44.dp)
+                                    .background(colors.line),
+                            )
+                        }
+                        TableCell(
+                            text = block.cell(row, column),
+                            style = if (row == 0) {
+                                style.copy(fontWeight = FontWeight.SemiBold)
+                            } else {
+                                style
+                            },
+                            inlineStyle = inlineStyle,
+                            onText = { onCell(row, column, it) },
+                            onFocused = {
+                                chosenRow = row
+                                chosenColumn = column
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = words.tableSize(block.rows.size, columns),
+                style = Kajet.type.meta,
+                color = colors.muted,
+                modifier = Modifier.weight(1f),
+            )
+            SecondaryButton(words.tableAddRow, onAddRow)
+            SecondaryButton(words.tableAddColumn, onAddColumn)
+            IconAction(
+                icon = KajetIcons.Bin,
+                description = words.tableRemoveRow,
+                onClick = { onRemoveRow(chosenRow) },
+                enabled = block.rows.size > 1,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+            IconAction(
+                icon = KajetIcons.Bin,
+                description = words.tableRemoveColumn,
+                onClick = { onRemoveColumn(chosenColumn) },
+                enabled = columns > 1,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+            IconAction(
+                icon = KajetIcons.Bin,
+                description = words.tableRemove,
+                onClick = onDelete,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TableCell(
+    text: String,
+    style: TextStyle,
+    inlineStyle: InlineStyle,
+    onText: (String) -> Unit,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var field by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
+    if (field.text != text) {
+        field = field.copy(
+            text = text,
+            selection = TextRange(field.selection.start.coerceAtMost(text.length)),
+        )
+    }
+
+    BasicTextField(
+        value = field,
+        onValueChange = { next ->
+            field = next
+            if (next.text != text) onText(next.text)
+        },
+        textStyle = style,
+        visualTransformation = inlineStyle,
+        cursorBrush = SolidColor(Kajet.colors.accent),
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 10.dp, vertical = 12.dp)
+            .onFocusChanged { if (it.isFocused) onFocused() },
+    )
 }
 
 @Composable
@@ -318,6 +545,7 @@ private fun ImageBlock(
     onMoveDown: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     var image by remember(block.url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var failed by remember(block.url) { mutableStateOf(false) }
@@ -334,9 +562,10 @@ private fun ImageBlock(
         if (data == null) {
             failed = true
         } else {
-            image = runCatching {
-                BitmapFactory.decodeByteArray(data, 0, data.size)?.asImageBitmap()
-            }.getOrNull()
+            // Poza wątkiem głównym i w rozmiarze na ekran, nie w pełnej
+            // rozdzielczości aparatu — inaczej wstawione zdjęcie zamrażało
+            // przewijanie notatki, a przy kilku kończyło się brakiem pamięci.
+            image = withContext(Dispatchers.IO) { Bitmaps.decode(data)?.asImageBitmap() }
             failed = image == null
         }
     }
@@ -358,7 +587,7 @@ private fun ImageBlock(
             when {
                 image != null -> Image(
                     bitmap = image!!,
-                    contentDescription = block.alt.ifBlank { "Zdjęcie w notatce" },
+                    contentDescription = block.alt.ifBlank { words.photoInNote },
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -375,7 +604,7 @@ private fun ImageBlock(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "Nie znalazłem pliku ${block.url}. Zdjęcie mogło zostać skasowane z katalogu notatki.",
+                        text = words.photoNotFound(block.url),
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
@@ -390,7 +619,7 @@ private fun ImageBlock(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = block.alt.ifBlank { "Bez podpisu" },
+                text = block.alt.ifBlank { words.noCaption },
                 style = Kajet.type.meta,
                 color = colors.muted,
                 modifier = Modifier.weight(1f),
@@ -402,7 +631,7 @@ private fun ImageBlock(
             )
             IconAction(
                 icon = KajetIcons.FitToView,
-                description = "Zmień wielkość zdjęcia",
+                description = words.photoSize,
                 onClick = { showSize = !showSize },
                 selected = showSize,
                 iconSize = 16.dp,
@@ -410,7 +639,7 @@ private fun ImageBlock(
             )
             IconAction(
                 icon = KajetIcons.Letters,
-                description = "Zmień podpis zdjęcia",
+                description = words.photoCaption,
                 onClick = { showAlt = !showAlt },
                 selected = showAlt,
                 iconSize = 16.dp,
@@ -418,7 +647,7 @@ private fun ImageBlock(
             )
             IconAction(
                 icon = KajetIcons.ArrowDown,
-                description = "Przesuń zdjęcie wyżej",
+                description = words.photoUp,
                 onClick = onMoveUp,
                 enabled = canMoveUp,
                 iconSize = 16.dp,
@@ -426,7 +655,7 @@ private fun ImageBlock(
             )
             IconAction(
                 icon = KajetIcons.ArrowDown,
-                description = "Przesuń zdjęcie niżej",
+                description = words.photoDown,
                 onClick = onMoveDown,
                 enabled = canMoveDown,
                 iconSize = 16.dp,
@@ -434,7 +663,7 @@ private fun ImageBlock(
             )
             IconAction(
                 icon = KajetIcons.Bin,
-                description = "Usuń zdjęcie z notatki",
+                description = words.photoRemove,
                 onClick = onDelete,
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
@@ -444,7 +673,7 @@ private fun ImageBlock(
         if (showSize) {
             Column {
                 SettingSlider(
-                    name = "Wielkość zdjęcia",
+                    name = words.photoSize,
                     value = block.width.coerceIn(Block.SMALLEST_WIDTH, Block.FULL_WIDTH),
                     range = Block.SMALLEST_WIDTH..Block.FULL_WIDTH,
                     onChange = onWidth,
@@ -463,7 +692,7 @@ private fun ImageBlock(
 
         if (showAlt) {
             Column {
-                SectionLabel("Podpis zdjęcia")
+                SectionLabel(words.photoCaption)
                 BasicTextField(
                     value = block.alt,
                     onValueChange = onAlt,
@@ -477,7 +706,7 @@ private fun ImageBlock(
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                 )
                 Text(
-                    text = "Podpis czyta czytnik ekranu i trafia do wydruku.",
+                    text = words.photoCaptionAbout,
                     style = Kajet.type.meta,
                     color = colors.muted,
                     modifier = Modifier.padding(top = 4.dp),

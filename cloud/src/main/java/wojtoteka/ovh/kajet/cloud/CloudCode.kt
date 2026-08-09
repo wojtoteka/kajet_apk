@@ -1,5 +1,7 @@
 package wojtoteka.ovh.kajet.cloud
 
+import wojtoteka.ovh.kajet.core.text.words
+
 class CloudCode(
     private val account: AccountStore,
     private val client: CloudClient,
@@ -9,11 +11,9 @@ class CloudCode(
 
     fun refusalReason(): String? = when {
         !account.isSignedIn() ->
-            "Uruchamianie na serwerze wymaga konta. Zaloguj się w ustawieniach, " +
-                "w sekcji „Konto w chmurze”."
+            words.runOnServerNeedsAccount
         !client.hasNetwork() ->
-            "Nie ma internetu, a ten język liczy się na serwerze. " +
-                "Kod jest zapisany i uruchomisz go po połączeniu z siecią."
+            words.runOnServerNeedsInternet
         else -> null
     }
 

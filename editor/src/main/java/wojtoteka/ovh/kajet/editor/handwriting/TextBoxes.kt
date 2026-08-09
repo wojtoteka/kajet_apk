@@ -14,11 +14,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -37,6 +40,7 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.editor.penWritingSurface
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import kotlin.math.roundToInt
@@ -50,6 +54,7 @@ fun TextBoxesOnPage(
     edited: String?,
     onEdit: (String?) -> Unit,
     onChange: (page: Int, box: TextBoxElement, toHistory: Boolean) -> Unit,
+    onCommit: (page: Int, before: TextBoxElement, after: TextBoxElement) -> Unit,
     onDelete: (page: Int, id: String) -> Unit,
 ) {
     var top = 0f
@@ -65,6 +70,7 @@ fun TextBoxesOnPage(
                 edited = edited == box.id,
                 onEdit = { onEdit(if (edited == box.id) null else box.id) },
                 onChange = { next, toHistory -> onChange(index, next, toHistory) },
+                onCommit = { before, after -> onCommit(index, before, after) },
                 onDelete = { onDelete(index, box.id) },
             )
         }
@@ -82,8 +88,10 @@ private fun TextBoxOnSheet(
     edited: Boolean,
     onEdit: () -> Unit,
     onChange: (TextBoxElement, Boolean) -> Unit,
+    onCommit: (before: TextBoxElement, after: TextBoxElement) -> Unit,
     onDelete: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val density = LocalDensity.current
     val context = LocalContext.current
     val left = (box.x - offsetX) * zoom
@@ -91,6 +99,15 @@ private fun TextBoxOnSheet(
     val width = box.width * zoom
     val height = box.height * zoom
     val focus = remember { FocusRequester() }
+
+    /*
+      Gesty czytają pole przez rememberUpdatedState. Lambda w pointerInput
+      rusza raz i żyje dalej ze starym `box` w garści — liczenie od niego
+      dawało pole drgające o jeden krok, a zapis do historii na końcu gestu
+      wpisywał położenie SPRZED przeciągnięcia i cofał cały ruch.
+    */
+    val current by rememberUpdatedState(box)
+    val currentZoom by rememberUpdatedState(zoom)
 
     Box(
         Modifier
@@ -103,12 +120,25 @@ private fun TextBoxOnSheet(
                 if (box.background != 0) Modifier.background(Color(box.background)) else Modifier,
             )
             .then(if (edited) Modifier.border(1.dp, Kajet.colors.accent) else Modifier)
-            // Edytowane pole to powierzchnia pisania: pisze się w nim
-            // rysikiem tak samo jak po kartce, więc rysik ma nad nim drgać.
-            .then(if (edited) Modifier.penWritingSurface(context) else Modifier)
-            .pointerInput(box.id) {
-                detectTapGestures(onTap = { onEdit() })
-            },
+            .then(
+                /*
+                  Nieedytowane pole nie może łapać dotyku: composable nad kanwą
+                  zabiera cały gest i nie dało się zacząć kreski na tekście ani
+                  na bloku CODE. Rysowanie po polu idzie do kartki, a stuknięcie
+                  w pole zgłasza kartka przez textTapped.
+                */
+                if (edited) {
+                    // Edytowane pole zabiera najechanie kartce, a pisze się
+                    // w nim rysikiem tak samo — więc też jest powierzchnią.
+                    Modifier
+                        .penWritingSurface(context)
+                        .pointerInput(box.id) {
+                            detectTapGestures(onTap = { onEdit() })
+                        }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
             val style = TextStyle(
                 fontFamily = fontFamilyFor(box.font),
@@ -139,7 +169,7 @@ private fun TextBoxOnSheet(
                 Text(text = box.text, style = style, modifier = Modifier.padding(4.dp))
             } else {
                 Text(
-                    text = "Pole tekstowe",
+                    text = words.textBox,
                     style = style.copy(color = Kajet.colors.muted),
                     modifier = Modifier.padding(4.dp),
                 )
@@ -157,24 +187,41 @@ private fun TextBoxOnSheet(
                         Modifier
                             .size(28.dp)
                             .pointerInput(box.id) {
+                                var base: TextBoxElement? = null
+                                var acc = Offset.Zero
+                                var latest: TextBoxElement? = null
+                                fun finish() {
+                                    val from = base
+                                    val to = latest
+                                    if (from != null && to != null) onCommit(from, to)
+                                    base = null
+                                    latest = null
+                                }
                                 detectDragGestures(
-                                    onDragEnd = { onChange(box, true) },
+                                    onDragStart = {
+                                        base = current
+                                        acc = Offset.Zero
+                                        latest = null
+                                    },
+                                    onDragEnd = { finish() },
+                                    onDragCancel = { finish() },
                                 ) { change, drag ->
                                     change.consume()
-                                    onChange(
-                                        box.copy(
-                                            x = box.x + drag.x / zoom,
-                                            y = box.y + drag.y / zoom,
-                                        ),
-                                        false,
+                                    acc += drag
+                                    val from = base ?: return@detectDragGestures
+                                    val moved = from.copy(
+                                        x = from.x + acc.x / currentZoom,
+                                        y = from.y + acc.y / currentZoom,
                                     )
+                                    latest = moved
+                                    onChange(moved, false)
                                 }
                             },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             KajetIcons.Move,
-                            contentDescription = "Przesuń pole tekstowe",
+                            contentDescription = words.moveTextBox,
                             tint = Kajet.colors.onAccent,
                             modifier = Modifier.size(16.dp),
                         )
@@ -189,7 +236,7 @@ private fun TextBoxOnSheet(
                     ) {
                         Icon(
                             KajetIcons.Bin,
-                            contentDescription = "Skasuj pole tekstowe",
+                            contentDescription = words.deleteTextBox,
                             tint = Kajet.colors.onAccent,
                             modifier = Modifier.size(16.dp),
                         )
@@ -203,24 +250,41 @@ private fun TextBoxOnSheet(
                         .size(28.dp)
                         .background(Kajet.colors.accent)
                         .pointerInput(box.id) {
+                            var base: TextBoxElement? = null
+                            var acc = Offset.Zero
+                            var latest: TextBoxElement? = null
+                            fun finish() {
+                                val from = base
+                                val to = latest
+                                if (from != null && to != null) onCommit(from, to)
+                                base = null
+                                latest = null
+                            }
                             detectDragGestures(
-                                onDragEnd = { onChange(box, true) },
+                                onDragStart = {
+                                    base = current
+                                    acc = Offset.Zero
+                                    latest = null
+                                },
+                                onDragEnd = { finish() },
+                                onDragCancel = { finish() },
                             ) { change, drag ->
                                 change.consume()
-                                onChange(
-                                    box.copy(
-                                        width = (box.width + drag.x / zoom).coerceAtLeast(60f),
-                                        height = (box.height + drag.y / zoom).coerceAtLeast(28f),
-                                    ),
-                                    false,
+                                acc += drag
+                                val from = base ?: return@detectDragGestures
+                                val resized = from.copy(
+                                    width = (from.width + acc.x / currentZoom).coerceAtLeast(60f),
+                                    height = (from.height + acc.y / currentZoom).coerceAtLeast(28f),
                                 )
+                                latest = resized
+                                onChange(resized, false)
                             }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         KajetIcons.FitToView,
-                        contentDescription = "Zmień wielkość pola",
+                        contentDescription = words.resizeTextBox,
                         tint = Kajet.colors.onAccent,
                         modifier = Modifier.size(14.dp),
                     )

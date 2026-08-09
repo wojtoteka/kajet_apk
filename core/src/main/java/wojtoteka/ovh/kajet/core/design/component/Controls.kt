@@ -127,6 +127,7 @@ fun ToolPanel(
     onClose: (() -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
+    val closeLabel = wojtoteka.ovh.kajet.core.text.LocalStrings.current.closePanel
     Column(
         modifier
             .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
@@ -140,12 +141,12 @@ fun ToolPanel(
                 Box(
                     Modifier
                         .size(28.dp)
-                        .clickable(onClickLabel = "Zamknij panel", onClick = onClose),
+                        .clickable(onClickLabel = closeLabel, onClick = onClose),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         wojtoteka.ovh.kajet.core.design.icon.KajetIcons.Close,
-                        contentDescription = "Zamknij panel",
+                        contentDescription = closeLabel,
                         tint = Kajet.colors.muted,
                         modifier = Modifier.size(16.dp),
                     )

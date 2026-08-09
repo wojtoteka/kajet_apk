@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -50,6 +51,8 @@ import androidx.compose.ui.window.Dialog
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.colourNamedHex
 
 data class HsvColour(
     val hue: Float = 0f,
@@ -108,6 +111,7 @@ fun ColourPicker(
     presetColors: List<Pair<String, Color>> = emptyList(),
     recentColors: List<Int> = emptyList(),
 ) {
+    val words = LocalStrings.current
     // Odcień pamiętamy osobno, żeby nie gubił się przy czerni i bieli.
     var state by remember(color) { mutableStateOf(HsvColour.fromArgb(color)) }
     var typedHex by remember(color) { mutableStateOf<String?>(null) }
@@ -134,7 +138,7 @@ fun ColourPicker(
             value = state.hue / 360f,
             gradient = Brush.horizontalGradient(hueStops),
             thumb = Color(android.graphics.Color.HSVToColor(floatArrayOf(state.hue, 1f, 1f))),
-            description = "Odcień",
+            description = words.hue,
             onChange = { emit(state.copy(hue = it * 360f)) },
         )
 
@@ -144,7 +148,7 @@ fun ColourPicker(
                 value = state.alpha,
                 gradient = Brush.horizontalGradient(listOf(opaque.copy(alpha = 0f), opaque)),
                 thumb = state.toComposeColor(),
-                description = "Krycie",
+                description = words.opacity,
                 checkered = true,
                 onChange = { emit(state.copy(alpha = it)) },
             )
@@ -179,7 +183,7 @@ fun ColourPicker(
         }
 
         if (presetColors.isNotEmpty()) {
-            SectionLabel("Gotowe")
+            SectionLabel(words.presetColours)
             ColourGrid(
                 colors = presetColors.map { it.second.toArgb() },
                 descriptions = presetColors.map { it.first },
@@ -189,10 +193,10 @@ fun ColourPicker(
         }
 
         if (recentColors.isNotEmpty()) {
-            SectionLabel("Ostatnio używane")
+            SectionLabel(words.recentColours)
             ColourGrid(
                 colors = recentColors,
-                descriptions = recentColors.map { "Kolor " + HsvColour.fromArgb(it).toHex() },
+                descriptions = recentColors.map { words.colourNamedHex(HsvColour.fromArgb(it).toHex()) },
                 selected = state.toArgbInt(),
                 onSelect = { emit(HsvColour.fromArgb(it)) },
             )
@@ -210,6 +214,7 @@ fun ColourPickerDialog(
     presetColors: List<Pair<String, Color>> = emptyList(),
     recentColors: List<Int> = emptyList(),
 ) {
+    val words = LocalStrings.current
     Dialog(onDismissRequest = onClose) {
         Column(
             Modifier
@@ -221,7 +226,7 @@ fun ColourPickerDialog(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = Kajet.type.title, color = Kajet.colors.text, modifier = Modifier.weight(1f))
-                IconAction(KajetIcons.Close, "Zamknij", onClose)
+                IconAction(KajetIcons.Close, words.close, onClose)
             }
             ColourPicker(
                 color = color,
@@ -230,7 +235,7 @@ fun ColourPickerDialog(
                 presetColors = presetColors,
                 recentColors = recentColors,
             )
-            PrimaryButton("Gotowe", onClose, icon = KajetIcons.Confirm)
+            PrimaryButton(words.done, onClose, icon = KajetIcons.Confirm)
         }
     }
 }
@@ -247,6 +252,9 @@ fun ColourDot(
     Box(
         modifier
             .size(44.dp)
+            // Kropka koloru nie przejmuje skupienia — patrz IconAction:
+            // inaczej zwijałaby zaznaczenie w polu tekstu.
+            .focusProperties { canFocus = false }
             .clickable(onClickLabel = description, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -272,6 +280,7 @@ private fun ColourGrid(
     selected: Int,
     onSelect: (Int) -> Unit,
 ) {
+    val words = LocalStrings.current
     // Osiem w rzędzie mieści się w panelu i nie wymaga przewijania w bok.
     colors.chunked(8).forEachIndexed { row, chunk ->
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -279,7 +288,7 @@ private fun ColourGrid(
                 val index = row * 8 + i
                 ColourDot(
                     color = color,
-                    description = descriptions.getOrElse(index) { "Kolor" },
+                    description = descriptions.getOrElse(index) { words.colourNamed },
                     onClick = { onSelect(color) },
                     selected = color == selected,
                     diameter = 22.dp,

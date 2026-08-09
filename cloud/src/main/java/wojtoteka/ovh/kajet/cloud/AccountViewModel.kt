@@ -39,6 +39,25 @@ class AccountViewModel(
         sync.retryStuck()
     }
 
+    /**
+     * Wycofanie zgody na wysyłanie treści notatek do Google.
+     *
+     * Serwer przy okazji kasuje rozmowy z asystentem - nie ma w nich treści
+     * notatek, ale są polecenia, które człowiek pisał, a skoro wycofuje zgodę
+     * na całą funkcję, zostawianie po niej zapisków byłoby dziwne.
+     */
+    fun withdrawAiConsent() {
+        viewModelScope.launch {
+            val done = runCatching { client.aiSetConsent(false) }.getOrNull()
+            if (done is CloudClient.Result.Ok) {
+                account.rememberAiConsent(false)
+                _message.value = words.aiConsentWithdrawn
+            } else {
+                _message.value = words.serverUnreachable
+            }
+        }
+    }
+
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 

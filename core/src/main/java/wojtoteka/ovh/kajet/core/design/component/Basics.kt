@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,16 +51,19 @@ fun HorizontalRule(
     )
 }
 
-fun Modifier.marginRule(color: Color, width: Dp = 1.dp): Modifier = drawWithContent {
-    drawContent()
-    val x = size.width - width.toPx() / 2f
-    drawLine(
-        color = color,
-        start = Offset(x, 0f),
-        end = Offset(x, size.height),
-        strokeWidth = width.toPx(),
-    )
-}
+/** Pionowa linia na krawędzi paska. [atEnd] = prawa krawędź; pasek stojący
+ *  po prawej stronie ekranu rysuje ją przy lewej. */
+fun Modifier.marginRule(color: Color, width: Dp = 1.dp, atEnd: Boolean = true): Modifier =
+    drawWithContent {
+        drawContent()
+        val x = if (atEnd) size.width - width.toPx() / 2f else width.toPx() / 2f
+        drawLine(
+            color = color,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = width.toPx(),
+        )
+    }
 
 @Composable
 fun MarginRail(
@@ -108,6 +112,10 @@ fun IconAction(
                     Modifier
                 },
             )
+            // Przycisk nie może przejmować skupienia: kliknięcie w pasek
+            // narzędzi zwijało zaznaczenie w polu tekstu i formatowanie
+            // nie miało już czego objąć.
+            .focusProperties { canFocus = false }
             .clickable(
                 enabled = enabled,
                 onClick = onClick,

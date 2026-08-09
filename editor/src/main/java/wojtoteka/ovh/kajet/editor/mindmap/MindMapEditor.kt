@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,6 +81,10 @@ import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NodeShape
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.disconnectFrom
+import wojtoteka.ovh.kajet.core.text.mapTally
+import wojtoteka.ovh.kajet.core.text.thisNode
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.editor.text.DrawingDialog
 import kotlin.math.roundToInt
@@ -89,7 +94,10 @@ fun MindMapEditor(
     model: MindMapViewModel,
     onBack: () -> Unit,
     onExport: () -> Unit,
+    /* Puste, gdy konto nie ma asystenta - wtedy nie ma po nim ani śladu. */
+    onAi: (() -> Unit)? = null,
 ) {
+    val words = LocalStrings.current
     val document by model.document.collectAsStateWithLifecycle()
     val selected by model.selected.collectAsStateWithLifecycle()
     val edited by model.edited.collectAsStateWithLifecycle()
@@ -141,57 +149,65 @@ fun MindMapEditor(
 
     val visible = remember(map) { map?.let { MindMapLayout.visible(it) } ?: emptySet() }
 
+    val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
+
     Row(Modifier.fillMaxSize().background(colors.desk)) {
 
+        // Pasek narzędzi; leworęczni przestawiają go w ustawieniach na prawo.
+        val rail: @Composable () -> Unit = {
         Column(
             Modifier
                 .width(Kajet.dimens.railWidth)
-                .fillMaxSize()
+                .fillMaxHeight()
                 .background(colors.desk)
-                .marginRule(colors.line)
+                .marginRule(colors.line, atEnd = !toolbarOnRight)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconAction(KajetIcons.BackArrow, "Wróć do biblioteki", { model.saveNow(); onBack() })
+            IconAction(KajetIcons.BackArrow, words.backToLibrary, { model.saveNow(); onBack() })
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
             IconAction(
                 icon = KajetIcons.NodeDot,
-                description = "Nowy węzeł",
+                description = words.newNode,
                 onClick = { model.addNode(offsetX + 120f, offsetY + 120f) },
             )
             IconAction(
                 icon = KajetIcons.Plus,
-                description = "Dodaj gałąź do wybranego węzła",
+                description = words.addBranch,
                 onClick = { selected?.let { model.addChild(it) } },
                 enabled = selected != null,
             )
             IconAction(
                 icon = KajetIcons.AddPage,
-                description = "Dodaj węzeł obok wybranego",
+                description = words.addSibling,
                 onClick = { selected?.let { model.addSibling(it) } },
                 enabled = selected != null,
             )
             IconAction(
                 icon = KajetIcons.ShareArrow,
-                description = if (connecting) "Przerwij łączenie" else "Połącz dwa węzły",
+                description = if (connecting) {
+                    words.finishConnecting
+                } else {
+                    words.connectToOthers
+                },
                 onClick = model::toggleConnecting,
                 selected = connecting,
                 enabled = selected != null || connecting,
             )
             IconAction(
                 icon = KajetIcons.Pen,
-                description = "Podpis rysikiem",
+                description = words.inkLabel,
                 onClick = { selected?.let { model.openInkLabel(it) } },
                 enabled = selected != null,
             )
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-            IconAction(KajetIcons.MindMapIcon, "Rozłóż gałęzie automatycznie", model::arrangeBranches)
+            IconAction(KajetIcons.MindMapIcon, words.arrangeBranches, model::arrangeBranches)
             IconAction(
                 icon = KajetIcons.FitToView,
-                description = "Zmieść całą mapę w oknie",
+                description = words.fitWholeMap,
                 onClick = {
                     // Obwiednia widocznych węzłów; zwinięte gałęzie zostają poza rachunkiem.
                     val shown = map?.nodes?.filter { it.id in visible }.orEmpty()
@@ -214,22 +230,26 @@ fun MindMapEditor(
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-            IconAction(KajetIcons.Undo, "Cofnij", model::undo, enabled = canUndo)
-            IconAction(KajetIcons.Redo, "Ponów", model::redo, enabled = canRedo)
+            IconAction(KajetIcons.Undo, words.undo, model::undo, enabled = canUndo)
+            IconAction(KajetIcons.Redo, words.redo, model::redo, enabled = canRedo)
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
             IconAction(
                 icon = KajetIcons.Favourites,
-                description = if (document?.favorite == true) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                description = if (document?.favorite == true) words.removeFromFavorites else words.addToFavorites,
                 onClick = model::toggleFavorite,
                 selected = document?.favorite == true,
             )
-            IconAction(KajetIcons.Export, "Eksportuj mapę", onExport)
+            IconAction(KajetIcons.Export, words.exportMap, onExport)
+            if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi)
             Spacer(Modifier.height(12.dp))
         }
+        }
 
-        Box(Modifier.fillMaxSize().onSizeChanged { boardSize = it }) {
+        if (!toolbarOnRight) rail()
+
+        Box(Modifier.weight(1f).fillMaxHeight().onSizeChanged { boardSize = it }) {
             if (map != null) {
                 // Plansza. Dwa palce przesuwają i skalują, jeden palec w pustym
                 // miejscu odznacza węzeł.
@@ -392,11 +412,11 @@ fun MindMapEditor(
                 if (connecting || dragged != null) {
                     Text(
                         text = if (dragged?.targetId != null) {
-                            "Puść, żeby połączyć."
+                            words.releaseToConnect
                         } else if (dragged != null) {
-                            "Puść na pustym miejscu, żeby dołożyć tam nowy węzeł."
+                            words.releaseOnEmpty
                         } else {
-                            "Dotknij drugiego węzła, żeby połączyć go linią."
+                            words.tapNodesToConnect
                         },
                         style = Kajet.type.label,
                         color = colors.onAccent,
@@ -415,7 +435,7 @@ fun MindMapEditor(
                     if (edge != null) {
                         val byId = map.nodes.associateBy { it.id }
                         val names = listOfNotNull(byId[edge.fromId], byId[edge.toId])
-                            .joinToString(" — ") { it.text.ifBlank { "węzeł bez nazwy" } }
+                            .joinToString(" — ") { it.text.ifBlank { words.nodeWithoutName } }
                         Row(
                             Modifier
                                 .align(Alignment.BottomCenter)
@@ -428,19 +448,19 @@ fun MindMapEditor(
                         ) {
                             Text(names, style = Kajet.type.label, color = colors.text)
                             SecondaryButton(
-                                text = "Rozłącz",
+                                text = words.disconnect,
                                 onClick = { model.disconnect(edgeId) },
                                 icon = KajetIcons.Bin,
                                 color = colors.danger,
                             )
-                            IconAction(KajetIcons.Close, "Zostaw połączenie", { model.selectEdge(null) })
+                            IconAction(KajetIcons.Close, words.keepConnection, { model.selectEdge(null) })
                         }
                     }
                 }
 
                 // Dyskretny rachunek mapy w rogu planszy.
                 Text(
-                    text = "${map.nodes.size} węzłów · ${map.edges.size} połączeń",
+                    text = words.mapTally(map.nodes.size, map.edges.size),
                     style = Kajet.type.meta,
                     color = colors.muted,
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -459,7 +479,7 @@ fun MindMapEditor(
                 ) {
                     IconAction(
                         icon = KajetIcons.DividerLine,
-                        description = "Oddal",
+                        description = words.zoomOut,
                         onClick = { zoomBy(0.9f) },
                         iconSize = 18.dp,
                         touchTarget = 40.dp,
@@ -473,7 +493,7 @@ fun MindMapEditor(
                     )
                     IconAction(
                         icon = KajetIcons.Plus,
-                        description = "Przybliż",
+                        description = words.zoomIn,
                         onClick = { zoomBy(1.1f) },
                         iconSize = 18.dp,
                         touchTarget = 40.dp,
@@ -500,6 +520,7 @@ fun MindMapEditor(
                             onColor = { model.setColor(id, it) },
                             onCustomColor = { model.setCustomColor(id, it) },
                             onTextColor = { model.setTextColor(id, it) },
+                            onRememberColor = { model.rememberColor(it) },
                             onFont = { model.setFont(id, it) },
                             onFontSize = { model.setFontSize(id, it) },
                             onBold = { model.setBold(id, it) },
@@ -520,9 +541,9 @@ fun MindMapEditor(
                         horizontalAlignment = Alignment.Start,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("Pusta mapa", style = Kajet.type.title, color = colors.text)
+                        Text(words.emptyMap, style = Kajet.type.title, color = colors.text)
                         Text(
-                            text = "Dodaj pierwszy węzeł przyciskiem po lewej stronie albo dotknij planszę dwa razy, a potem doczepiaj gałęzie.",
+                            text = words.emptyMapAbout,
                             style = Kajet.type.body,
                             color = colors.muted,
                             modifier = Modifier.width(360.dp),
@@ -550,7 +571,7 @@ fun MindMapEditor(
                     modifier = Modifier.widthIn(min = 80.dp, max = 280.dp),
                     decorationBox = { field ->
                         if (document?.title.isNullOrEmpty()) {
-                            Text("Bez nazwy", style = Kajet.type.titleSmall, color = colors.muted)
+                            Text(words.unnamed, style = Kajet.type.titleSmall, color = colors.muted)
                         }
                         field()
                     },
@@ -558,6 +579,8 @@ fun MindMapEditor(
                 SaveIndicator(state = saveState, lastSave = lastSave)
             }
         }
+
+        if (toolbarOnRight) rail()
     }
 
     inkLabel?.let { id ->
@@ -629,6 +652,7 @@ private fun NodeOnBoard(
     onConnectEnd: () -> Unit,
     onConnectCancel: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     val density = LocalDensity.current
     val color = nodeColor(node, colors.isDark)
@@ -660,8 +684,10 @@ private fun NodeOnBoard(
                 .border(
                     // Węzeł pod ciągniętą linią dostaje grubszą obwódkę,
                     // żeby było widać, gdzie linia trafi po puszczeniu palca.
+                    // Obwódka trzyma barwę węzła także przy zaznaczeniu —
+                    // inaczej dobieranej barwy nie było widać na żywo.
                     width = if (connectTarget) 3.dp else if (selected) 2.dp else 1.5.dp,
-                    color = if (connectTarget || selected) colors.accent else color,
+                    color = if (connectTarget) colors.accent else color,
                     shape = if (node.shape == NodeShape.OVAL) {
                         RoundedCornerShape(percent = 50)
                     } else {
@@ -683,6 +709,24 @@ private fun NodeOnBoard(
                         onDrag(drag.x, drag.y)
                     }
                 }
+                .then(
+                    // Zaznaczenie: akcentowy pierścień tuż pod obwódką barwy.
+                    if (selected && !connectTarget) {
+                        Modifier
+                            .padding(3.dp)
+                            .border(
+                                width = 2.dp,
+                                color = colors.accent,
+                                shape = if (node.shape == NodeShape.OVAL) {
+                                    RoundedCornerShape(percent = 50)
+                                } else {
+                                    RoundedCornerShape(Kajet.dimens.corner)
+                                },
+                            )
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -710,7 +754,7 @@ private fun NodeOnBoard(
                 )
             } else {
                 Text(
-                    text = node.text.ifEmpty { if (node.ink.isEmpty()) "Dotknij dwa razy, aby wpisać" else "" },
+                    text = node.text.ifEmpty { if (node.ink.isEmpty()) words.tapTwiceToType else "" },
                     style = if (node.text.isEmpty()) style.copy(color = colors.muted) else style,
                 )
             }
@@ -732,7 +776,7 @@ private fun NodeOnBoard(
                     .size(side)
                     .background(colors.accent, RoundedCornerShape(percent = 50))
                     .border(2.dp, colors.sheet, RoundedCornerShape(percent = 50))
-                    .semantics { contentDescription = "Pociągnij, żeby połączyć z innym węzłem" }
+                    .semantics { contentDescription = words.dragToConnect }
                     .pointerInput(node.id) {
                         detectDragGestures(
                             onDragStart = { onConnectStart() },
@@ -771,7 +815,7 @@ private fun NodeOnBoard(
                     .size(grip)
                     .background(colors.sheet, RoundedCornerShape(6.dp))
                     .border(2.dp, colors.accent, RoundedCornerShape(6.dp))
-                    .semantics { contentDescription = "Pociągnij, żeby zmienić rozmiar węzła" }
+                    .semantics { contentDescription = words.dragToResize }
                     // Klucz z zoomem: po zmianie przybliżenia delta palca musi
                     // być dzielona świeżą wartością, nie tą sprzed gestu.
                     .pointerInput(node.id, zoom) {
@@ -796,7 +840,7 @@ private fun NodeOnBoard(
                     .size(with(density) { chevron.toDp() })
                     .background(colors.sheet, RoundedCornerShape(percent = 50))
                     .border(1.dp, color, RoundedCornerShape(percent = 50))
-                    .clickable(onClickLabel = if (node.collapsed) "Rozwiń gałąź" else "Zwiń gałąź", onClick = onCollapse),
+                    .clickable(onClickLabel = if (node.collapsed) words.expandBranch else words.collapseBranch, onClick = onCollapse),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -839,6 +883,8 @@ private fun NodePanel(
     onColor: (String) -> Unit,
     onCustomColor: (Int) -> Unit,
     onTextColor: (Int) -> Unit,
+    /** Dokłada barwę do spisu „twoich kolorów" - po zamknięciu okna z tęczą. */
+    onRememberColor: (Int) -> Unit,
     onFont: (NoteFont) -> Unit,
     onFontSize: (Float) -> Unit,
     onBold: (Boolean) -> Unit,
@@ -848,6 +894,7 @@ private fun NodePanel(
     onInkLabel: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     var nodeColourPicker by remember { mutableStateOf(false) }
     var textColourPicker by remember { mutableStateOf(false) }
@@ -871,10 +918,10 @@ private fun NodePanel(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SectionLabel("Wybrany węzeł", modifier = Modifier.weight(1f))
+            SectionLabel(words.selectedNode, modifier = Modifier.weight(1f))
             IconAction(
                 icon = if (expanded) KajetIcons.ArrowDown else KajetIcons.ArrowRight,
-                description = if (expanded) "Schowaj ustawienia" else "Pokaż więcej ustawień",
+                description = if (expanded) words.hideSettings else words.showMoreSettings,
                 onClick = { expanded = !expanded },
                 iconSize = 16.dp,
                 touchTarget = 32.dp,
@@ -882,7 +929,7 @@ private fun NodePanel(
         }
 
         // Treść węzła da się poprawić tutaj, bez celowania w mały napis na planszy.
-        SectionLabel("Tekst węzła")
+        SectionLabel(words.nodeText)
         BasicTextField(
             value = node.text,
             onValueChange = { onText(it.take(500)) },
@@ -894,14 +941,14 @@ private fun NodePanel(
                 .padding(vertical = 4.dp),
             decorationBox = { field ->
                 if (node.text.isEmpty()) {
-                    Text("Wpisz treść węzła", style = Kajet.type.body, color = colors.muted)
+                    Text(words.typeNodeText, style = Kajet.type.body, color = colors.muted)
                 }
                 field()
             },
         )
         HorizontalRule(color = colors.muted.copy(alpha = 0.5f))
 
-        SectionLabel("Pismo")
+        SectionLabel(words.textLabel)
         SegmentedChoice(
             options = NoteFont.entries,
             selected = node.font,
@@ -910,7 +957,7 @@ private fun NodePanel(
         )
 
         SettingSlider(
-            name = "Wielkość pisma",
+            name = words.fontSize,
             value = node.fontSize,
             range = 8f..48f,
             onChange = onFontSize,
@@ -920,13 +967,13 @@ private fun NodePanel(
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             IconToggle(
                 icon = KajetIcons.Bold,
-                description = "Pogrubienie",
+                description = words.bold,
                 checked = node.bold,
                 onCheckedChange = onBold,
             )
             IconToggle(
                 icon = KajetIcons.Italic,
-                description = "Kursywa",
+                description = words.italic,
                 checked = node.italic,
                 onCheckedChange = onItalic,
             )
@@ -938,7 +985,7 @@ private fun NodePanel(
                         NoteAlign.CENTER -> KajetIcons.AlignCentre
                         NoteAlign.RIGHT -> KajetIcons.AlignRight
                     },
-                    description = align.labelPl,
+                    description = align.label(words),
                     onClick = { onAlign(align) },
                     selected = node.align == align,
                     touchTarget = 40.dp,
@@ -948,7 +995,7 @@ private fun NodePanel(
 
         HorizontalRule()
 
-        SectionLabel("Kolor węzła")
+        SectionLabel(words.nodeColour)
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
@@ -956,22 +1003,22 @@ private fun NodePanel(
             FolderColor.entries.forEach { variant ->
                 ColourDot(
                     color = variant.color(colors.isDark).toArgb(),
-                    description = "Kolor ${variant.labelPl}",
+                    description = "${words.colourNamed} ${variant.label(words)}",
                     onClick = { onColor(variant.id) },
                     selected = node.customColor == 0 && node.colorId == variant.id,
                     diameter = 20.dp,
                 )
             }
-            IconAction(KajetIcons.ColorSwatch, "Dobierz własny kolor", { nodeColourPicker = true })
+            IconAction(KajetIcons.ColorSwatch, words.pickOwnColour, { nodeColourPicker = true })
         }
 
         // Połączenia stoją poza zwijaną częścią. Rozłączanie to zwykła czynność,
         // a nie ustawienie, którego szuka się raz na rok.
         if (connections.isNotEmpty()) {
             HorizontalRule()
-            SectionLabel("Połączenia")
+            SectionLabel(words.connections)
             Text(
-                text = "Możesz też dotknąć linii na planszy i rozłączyć ją tam.",
+                text = words.connectionsAbout,
                 style = Kajet.type.meta,
                 color = colors.muted,
             )
@@ -982,7 +1029,7 @@ private fun NodePanel(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = neighbour.text.ifBlank { "Węzeł bez nazwy" },
+                        text = neighbour.text.ifBlank { words.nodeWithoutName },
                         style = Kajet.type.body,
                         color = colors.text,
                         maxLines = 1,
@@ -991,7 +1038,7 @@ private fun NodePanel(
                     )
                     IconAction(
                         icon = KajetIcons.Close,
-                        description = "Rozłącz z ${neighbour.text.ifBlank { "tym węzłem" }}",
+                        description = words.disconnectFrom(neighbour.text.ifBlank { words.thisNode() }),
                         onClick = { onDisconnect(edge.id) },
                         iconSize = 14.dp,
                         touchTarget = 36.dp,
@@ -1001,25 +1048,25 @@ private fun NodePanel(
         }
 
         if (expanded) {
-            SectionLabel("Kolor pisma")
+            SectionLabel(words.nodeTextColour)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ColourDot(
                     color = if (node.textColor != 0) node.textColor else colors.text.toArgb(),
-                    description = "Kolor pisma",
+                    description = words.nodeTextColour,
                     onClick = { textColourPicker = true },
                 )
                 Text(
-                    text = if (node.textColor == 0) "dobierany do motywu" else "własny",
+                    text = if (node.textColor == 0) words.colourFromTheme else words.colourOwn,
                     style = Kajet.type.meta,
                     color = colors.muted,
                 )
             }
 
-            SectionLabel("Kształt")
+            SectionLabel(words.shapeLabel)
             SegmentedChoice(
                 options = NodeShape.entries,
                 selected = node.shape,
-                name = { it.labelPl },
+                name = { it.label(words) },
                 onSelect = onShape,
             )
 
@@ -1028,21 +1075,21 @@ private fun NodePanel(
         HorizontalRule()
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecondaryButton("Podpis rysikiem", onInkLabel, icon = KajetIcons.Pen)
-            SecondaryButton("Skasuj", onDelete, icon = KajetIcons.Bin, color = colors.danger)
+            SecondaryButton(words.inkLabel, onInkLabel, icon = KajetIcons.Pen)
+            SecondaryButton(words.delete, onDelete, icon = KajetIcons.Bin, color = colors.danger)
         }
     }
 
     if (nodeColourPicker) {
         ColourPickerDialog(
-            title = "Kolor węzła",
+            title = words.nodeColourTitle,
             color = if (node.customColor != 0) {
                 node.customColor
             } else {
                 FolderColor.fromId(node.colorId).color(colors.isDark).toArgb()
             },
             onChange = onCustomColor,
-            onClose = { nodeColourPicker = false },
+            onClose = { nodeColourPicker = false; onRememberColor(node.customColor) },
             withAlpha = false,
             recentColors = recentColors,
         )
@@ -1050,10 +1097,10 @@ private fun NodePanel(
 
     if (textColourPicker) {
         ColourPickerDialog(
-            title = "Kolor pisma w węźle",
+            title = words.nodeTextColourTitle,
             color = if (node.textColor != 0) node.textColor else colors.text.toArgb(),
             onChange = onTextColor,
-            onClose = { textColourPicker = false },
+            onClose = { textColourPicker = false; onRememberColor(node.textColor) },
             withAlpha = false,
             recentColors = recentColors,
         )

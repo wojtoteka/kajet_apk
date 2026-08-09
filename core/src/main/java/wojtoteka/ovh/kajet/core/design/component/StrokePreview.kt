@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.core.design.component
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -12,6 +13,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.Rect
 
+/**
+ * Miniatura strony.
+ *
+ * [outlines] to gotowe łamane kształtów — ciąg x, y, x, y… we współrzędnych
+ * strony. Kształty przychodzą policzone z zewnątrz, bo ich geometria siedzi w
+ * module atramentu, a ten leży wyżej niż wygląd aplikacji.
+ */
 @Composable
 fun StrokePreview(
     strokes: List<InkStroke>,
@@ -19,12 +27,17 @@ fun StrokePreview(
     color: Color,
     maxStrokes: Int = 240,
     width: Float = 1.4f,
+    outlines: List<FloatArray> = emptyList(),
 ) {
-    if (strokes.isEmpty()) return
+    if (strokes.isEmpty() && outlines.isEmpty()) return
     val shown = if (strokes.size > maxStrokes) strokes.take(maxStrokes) else strokes
 
-    Canvas(modifier) {
-        val bounds = boundsOf(shown) ?: return@Canvas
+    // Przycięcie do własnych granic. Bez niego rysunek wychodzi poza pasek
+    // podglądu i wchodzi na datę oraz na tytuł następnej notatki — kreski
+    // ratowało do tej pory pomijanie punktów spod dolnej krawędzi, ale kształt
+    // to jedna łamana, której w środku nie da się w ten sposób uciąć.
+    Canvas(modifier.clipToBounds()) {
+        val bounds = boundsOf(shown, outlines) ?: return@Canvas
         val contentWidth = (bounds.width).coerceAtLeast(1f)
         val contentHeight = (bounds.height).coerceAtLeast(1f)
 
@@ -57,6 +70,23 @@ fun StrokePreview(
                 style = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
+
+        for (outline in outlines) {
+            if (outline.size < 4) continue
+            val path = Path()
+            var i = 0
+            while (i < outline.size) {
+                val x = (outline[i] - bounds.left) * used
+                val y = (outline[i + 1] - bounds.top) * used
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                i += 2
+            }
+            drawPath(
+                path = path,
+                color = color,
+                style = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            )
+        }
     }
 }
 
@@ -83,7 +113,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStrokes(
     }
 }
 
-private fun boundsOf(strokes: List<InkStroke>): Rect? {
+private fun boundsOf(strokes: List<InkStroke>, outlines: List<FloatArray>): Rect? {
     var minX = Float.MAX_VALUE
     var minY = Float.MAX_VALUE
     var maxX = -Float.MAX_VALUE
@@ -98,6 +128,19 @@ private fun boundsOf(strokes: List<InkStroke>): Rect? {
             if (x > maxX) maxX = x
             if (y < minY) minY = y
             if (y > maxY) maxY = y
+        }
+    }
+    for (outline in outlines) {
+        var i = 0
+        while (i < outline.size) {
+            empty = false
+            val x = outline[i]
+            val y = outline[i + 1]
+            if (x < minX) minX = x
+            if (x > maxX) maxX = x
+            if (y < minY) minY = y
+            if (y > maxY) maxY = y
+            i += 2
         }
     }
     if (empty) return null

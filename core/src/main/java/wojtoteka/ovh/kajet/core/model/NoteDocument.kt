@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.core.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import wojtoteka.ovh.kajet.core.text.Strings
 
 @Serializable
 data class NoteDocument(
@@ -43,6 +44,12 @@ enum class NoteKind {
             TEXT -> "Notatka tekstowa"
             MINDMAP -> "Mapa myśli"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        HANDWRITTEN -> "Handwritten note"
+        TEXT -> "Text note"
+        MINDMAP -> "Mind map"
+    }
 }
 
 // Handwritten note
@@ -66,8 +73,13 @@ enum class PageMode {
     val labelPl: String
         get() = when (this) {
             A4 -> "Strony A4"
-            SCROLL -> "Nieskończona strona w dół"
+            SCROLL -> "Jedna długa strona"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        A4 -> "A4 pages"
+        SCROLL -> "One long page"
+    }
 }
 
 @Serializable
@@ -96,6 +108,14 @@ enum class PageBackground {
             DOTS -> "W kropki"
             STAVE -> "Pięciolinia"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        PLAIN -> "Blank"
+        LINED -> "Ruled"
+        GRID -> "Squared"
+        DOTS -> "Dotted"
+        STAVE -> "Music staves"
+    }
 }
 
 @Serializable
@@ -105,6 +125,7 @@ data class NotePage(
     val height: Float = A4_HEIGHT,
     val background: PageBackground? = null,
     val strokes: List<InkStroke> = emptyList(),
+    val shapes: List<ShapeElement> = emptyList(),
     val texts: List<TextBoxElement> = emptyList(),
     val images: List<ImageElement> = emptyList(),
     val recognized: List<RecognizedText> = emptyList(),
@@ -135,6 +156,12 @@ enum class NoteFont {
             BODY -> "Tekstowy"
             MONO -> "Maszynowy"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        HEADING -> "Display"
+        BODY -> "Body"
+        MONO -> "Typewriter"
+    }
 }
 
 @Serializable
@@ -155,6 +182,12 @@ enum class NoteAlign {
             CENTER -> "Do środka"
             RIGHT -> "Do prawej"
         }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        LEFT -> "Align left"
+        CENTER -> "Align centre"
+        RIGHT -> "Align right"
+    }
 }
 
 @Serializable
@@ -185,6 +218,112 @@ data class ImageElement(
     val height: Float,
     val rotation: Float = 0f,
 )
+
+@Serializable
+enum class ShapeKind {
+    @SerialName("line")
+    LINE,
+
+    @SerialName("arrow")
+    ARROW,
+
+    @SerialName("rect")
+    RECTANGLE,
+
+    @SerialName("round_rect")
+    ROUNDED_RECTANGLE,
+
+    @SerialName("ellipse")
+    ELLIPSE,
+
+    @SerialName("triangle")
+    TRIANGLE,
+
+    @SerialName("diamond")
+    DIAMOND,
+
+    @SerialName("star")
+    STAR,
+    ;
+
+    /** Linia i strzałka mają dwa końce zamiast pola — stąd inne uchwyty i brak wypełnienia. */
+    val open: Boolean get() = this == LINE || this == ARROW
+
+    val labelPl: String
+        get() = when (this) {
+            LINE -> "Linia"
+            ARROW -> "Strzałka"
+            RECTANGLE -> "Prostokąt"
+            ROUNDED_RECTANGLE -> "Prostokąt zaokrąglony"
+            ELLIPSE -> "Elipsa"
+            TRIANGLE -> "Trójkąt"
+            DIAMOND -> "Romb"
+            STAR -> "Gwiazda"
+        }
+
+    fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
+        LINE -> "Line"
+        ARROW -> "Arrow"
+        RECTANGLE -> "Rectangle"
+        ROUNDED_RECTANGLE -> "Rounded rectangle"
+        ELLIPSE -> "Ellipse"
+        TRIANGLE -> "Triangle"
+        DIAMOND -> "Diamond"
+        STAR -> "Star"
+    }
+}
+
+/**
+ * Kształt wstawiony ręcznie: obiekt, nie wypalona kreska. Da się go zaznaczyć,
+ * przesunąć, skalować, obrócić i skasować, a plik notatki trzyma go obok
+ * pociągnięć rysika, w tych samych współrzędnych strony.
+ *
+ * Kształt siedzi w prostokącie odniesienia [x], [y], [width], [height]
+ * i dopiero potem obraca się o [rotation] wokół swojego środka. Dzięki temu
+ * skalowanie za uchwyty i obrót to zmiana czterech liczb, a nie przeliczanie
+ * całej geometrii.
+ *
+ * Kształt zamknięty ma boki dodatnie. Linia i strzałka mogą mieć [width] albo
+ * [height] ujemne: ich końce to (x, y) oraz (x + width, y + height), a grot
+ * strzałki siedzi na tym drugim — bez znaku nie dałoby się narysować strzałki
+ * w lewo inaczej niż obrotem o 180 stopni.
+ */
+@Serializable
+data class ShapeElement(
+    val id: String,
+    val kind: ShapeKind,
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val height: Float,
+    /** Obrót w stopniach, wokół środka prostokąta odniesienia. */
+    val rotation: Float = 0f,
+    /** Barwa obrysu w ARGB. */
+    val color: Int,
+    val strokeWidth: Float = 2f,
+    /** Wypełnienie w ARGB; 0 znaczy „bez wypełnienia" — tak samo jak tło pola tekstowego. */
+    val fill: Int = 0,
+    val opacity: Float = 1f,
+    /** Zaokrąglenie rogu prostokąta zaokrąglonego, jako ułamek krótszego boku. */
+    val corner: Float = 0.18f,
+) {
+    val centerX: Float get() = x + width / 2f
+    val centerY: Float get() = y + height / 2f
+
+    /**
+     * Prostokąt odniesienia BEZ obrotu, z bokami ustawionymi rosnąco — linia
+     * w lewo ma ujemną szerokość, a prostokąt obejmujący musi zostać dodatni.
+     * Obrys po obrocie liczy ShapeGeometry.
+     */
+    fun box(): Rect = Rect(
+        left = minOf(x, x + width),
+        top = minOf(y, y + height),
+        right = maxOf(x, x + width),
+        bottom = maxOf(y, y + height),
+    )
+
+    fun movedBy(dx: Float, dy: Float): ShapeElement = copy(x = x + dx, y = y + dy)
+}
 
 @Serializable
 data class RecognizedText(
@@ -273,6 +412,12 @@ enum class NodeShape {
     ;
 
     val labelPl: String get() = if (this == RECTANGLE) "Prostokąt" else "Owal"
+
+    fun label(words: Strings): String = when {
+        !words.english -> labelPl
+        this == RECTANGLE -> "Rectangle"
+        else -> "Oval"
+    }
 }
 
 @Serializable

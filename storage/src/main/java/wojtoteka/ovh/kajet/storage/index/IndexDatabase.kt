@@ -117,6 +117,52 @@ interface IndexDao {
     @Query("SELECT * FROM entries WHERE type = 'NOTE' AND documentId != ''")
     suspend fun allNotes(): List<IndexEntry>
 
+    /** Cały spis — do wypatrywania wierszy po plikach, których już nie ma. */
+    @Query("SELECT * FROM entries")
+    suspend fun allEntries(): List<IndexEntry>
+
+    /** Adresy plików w gałęzi — po nich kasuje się treść z wyszukiwarki. */
+    @Query("SELECT documentUri FROM entries WHERE path = :path OR path LIKE :path || '/%'")
+    suspend fun urisUnder(path: String): List<String>
+
+    /** Wszystkie pliki z kodem — one też jeżdżą do chmury. */
+    @Query("SELECT path FROM entries WHERE type = 'CODE_FILE'")
+    suspend fun allCodeFilePaths(): List<String>
+
+    /** Wszystkie foldery — do synchronizacji struktury katalogów z chmurą. */
+    @Query("SELECT path FROM entries WHERE type = 'FOLDER'")
+    suspend fun allFolderPaths(): List<String>
+
+    /** Notatki w gałęzi (wpis i wszystko pod nim) — do zgłaszania kasowań. */
+    @Query(
+        """
+        SELECT * FROM entries
+        WHERE (path = :path OR path LIKE :path || '/%')
+          AND type = 'NOTE' AND documentId != ''
+        """,
+    )
+    suspend fun notesUnder(path: String): List<IndexEntry>
+
+    /** Foldery w gałęzi (wpis i wszystko pod nim) — do zgłaszania kasowań. */
+    @Query(
+        """
+        SELECT path FROM entries
+        WHERE (path = :path OR path LIKE :path || '/%')
+          AND type = 'FOLDER'
+        """,
+    )
+    suspend fun folderPathsUnder(path: String): List<String>
+
+    /** Pliki z kodem w gałęzi — do zgłaszania kasowań. */
+    @Query(
+        """
+        SELECT path FROM entries
+        WHERE (path = :path OR path LIKE :path || '/%')
+          AND type = 'CODE_FILE'
+        """,
+    )
+    suspend fun codeFilePathsUnder(path: String): List<String>
+
     // Searching
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -156,6 +202,20 @@ interface IndexDao {
         if (content.isNotBlank() || title.isNotBlank()) {
             upsertContent(ContentFts(documentUri = entry.documentUri, title = title, content = content))
         }
+    }
+
+    /**
+     * Kasuje gałąź razem z treścią do wyszukiwania.
+     *
+     * Samo [deleteBranch] zostawiało wiersze w `content_fts` — szukanie po
+     * treści oddawało wtedy notatki, których dawno nie ma (złączenie z
+     * `entries` je gubi, ale wiersze rosną w nieskończoność). Kasowanie ma po
+     * sobie nie zostawiać niczego, więc idą razem i jednym zapisem.
+     */
+    @Transaction
+    suspend fun deleteBranchWithContent(path: String) {
+        for (uri in urisUnder(path)) deleteContent(uri)
+        deleteBranch(path)
     }
 
     @Transaction

@@ -16,6 +16,8 @@ import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.core.model.RecognizedText
+import wojtoteka.ovh.kajet.core.model.ShapeElement
+import wojtoteka.ovh.kajet.core.model.ShapeKind
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.TextContent
 
@@ -57,6 +59,25 @@ class NoteCodecTest {
                             color = 0xFF23211D.toInt(),
                         ),
                     ),
+                    shapes = listOf(
+                        ShapeElement(
+                            id = "f-1",
+                            kind = ShapeKind.ELLIPSE,
+                            x = 60f, y = 400f, width = 180f, height = 120f,
+                            rotation = 30f,
+                            color = 0xFFB3261E.toInt(),
+                            strokeWidth = 3f,
+                            fill = 0x33FFD54F,
+                            opacity = 0.8f,
+                        ),
+                        ShapeElement(
+                            id = "f-2",
+                            kind = ShapeKind.ARROW,
+                            // Strzałka w lewo w górę: ujemne boki mają przetrwać zapis.
+                            x = 300f, y = 300f, width = -120f, height = -80f,
+                            color = 0xFF23211D.toInt(),
+                        ),
+                    ),
                     recognized = listOf(
                         RecognizedText(
                             id = "r-1",
@@ -87,6 +108,31 @@ class NoteCodecTest {
         assertThat(stroke.y(1)).isEqualTo(22.25f)
         assertThat(stroke.pressure(2)).isEqualTo(0.62f)
         assertThat(stroke.tilt(0)).isEqualTo(0.9f)
+    }
+
+    @Test
+    fun `ksztalty przezywaja zapis i odczyt razem z kreskami`() {
+        val before = handwrittenNote()
+        val after = NoteCodec.decodeNote(NoteCodec.encodeNote(before))
+        val shapes = after.handwriting!!.pages.first().shapes
+
+        assertThat(shapes).hasSize(2)
+        assertThat(shapes[0].kind).isEqualTo(ShapeKind.ELLIPSE)
+        assertThat(shapes[0].rotation).isEqualTo(30f)
+        assertThat(shapes[0].fill).isEqualTo(0x33FFD54F)
+        assertThat(shapes[1].width).isEqualTo(-120f)
+    }
+
+    @Test
+    fun `strona z pliku sprzed ksztaltow czyta sie bez nich`() {
+        val text = """
+            {"format":1,"id":"n-8","kind":"handwritten","title":"Stara","createdAt":1,"updatedAt":2,
+             "handwriting":{"pageMode":"a4","background":"lined",
+              "pages":[{"id":"s-1","width":595,"height":842,"strokes":[]}]}}
+        """.trimIndent()
+        val after = NoteCodec.decodeNote(text)
+
+        assertThat(after.handwriting!!.pages.first().shapes).isEmpty()
     }
 
     @Test

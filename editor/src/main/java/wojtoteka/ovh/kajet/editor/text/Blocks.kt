@@ -13,6 +13,21 @@ sealed interface Block {
         val content: String,
     ) : Block
 
+    /**
+     * Tabelka. Pierwszy wiersz to nagłówek — tak samo czyta ją markdown
+     * i tak samo pokazuje strona. W pliku zostaje zwykłym zapisem
+     * markdownu (`| Kolumna | Kolumna |`), więc nic się nie zmienia ani
+     * dla serwera, ani dla eksportu.
+     */
+    data class Table(
+        override val key: String,
+        val rows: List<List<String>>,
+    ) : Block {
+        val columns: Int get() = rows.maxOfOrNull { it.size } ?: 0
+
+        fun cell(row: Int, column: Int): String = rows.getOrNull(row)?.getOrNull(column).orEmpty()
+    }
+
     data class Image(
         override val key: String,
         val alt: String,
@@ -50,6 +65,28 @@ object Blocks {
 
     private val taskOnly = Regex("""^\s*[-*+] \[([ xX])] ?(.*)$""")
 
+    /** Znacznik zadania dokładany przez pasek narzędzi. */
+    const val TASK_MARKER = "- [ ] "
+
+    /** Czy wiersz jest zadaniem — czyli czy zmieni budowę notatki. */
+    fun isTaskLine(line: String): Boolean = taskOnly.matches(line)
+
+    /** Sama treść zadania, bez kwadracika. */
+    fun taskContent(line: String): String =
+        taskOnly.find(line)?.groupValues?.get(2).orEmpty()
+
+    private val tableRow = Regex("""^\s*\|(.*)\|\s*$""")
+
+    /**
+     * Wiersz z kreskami pod nagłówkiem — sama składnia, nie treść. Myślnik
+     * musi w nim stać: bez tego pusty wiersz „|  |  |" też wyglądałby jak
+     * kreski i znikałby z tabelki.
+     */
+    private val tableRule = Regex("""^\s*\|[\s|:-]*-[\s|:-]*\|\s*$""")
+
+    private fun cellsOf(line: String): List<String> =
+        (tableRow.find(line)?.groupValues?.get(1) ?: "").split('|').map { it.trim() }
+
     fun split(markdown: String): List<Block> {
         val result = mutableListOf<Block>()
         val buffer = StringBuilder()
@@ -66,10 +103,29 @@ object Blocks {
             if (content.isNotEmpty()) result += Block.Text("t${number++}", content)
         }
 
-        for (line in markdown.split('\n')) {
+        val lines = markdown.split('\n')
+        var at = 0
+        while (at < lines.size) {
+            val line = lines[at]
+
             if (line.trimStart().startsWith("```")) {
                 inCode = !inCode
                 buffer.append(line).append('\n')
+                at++
+                continue
+            }
+
+            // Tabelka: kolejne wiersze z kreskami zbierają się w jeden blok,
+            // żeby dało się ją pokazać jako tabelkę, a nie jako wiersze pełne
+            // kresek. Wiersz z myślnikami to sama składnia — nie treść.
+            if (!inCode && tableRow.matches(line)) {
+                closeText()
+                val rows = mutableListOf<List<String>>()
+                while (at < lines.size && tableRow.matches(lines[at])) {
+                    if (!tableRule.matches(lines[at])) rows += cellsOf(lines[at])
+                    at++
+                }
+                if (rows.isNotEmpty()) result += Block.Table("b${number++}", rows)
                 continue
             }
 
@@ -82,6 +138,7 @@ object Blocks {
                     url = image.groupValues[2].trim(),
                     width = widthFromTitle(image.groupValues[3]),
                 )
+                at++
                 continue
             }
 
@@ -96,6 +153,7 @@ object Blocks {
             } else {
                 buffer.append(line).append('\n')
             }
+            at++
         }
         closeText()
 
@@ -106,7 +164,9 @@ object Blocks {
         // która kończy się zdjęciem, nie ma już żadnego pola tekstowego i nie da
         // się w niej dopisać ani słowa. Do treści ten pusty akapit nie trafia,
         // bo join zdejmuje puste akapity z końca.
-        if (result.last() is Block.Image) result += Block.Text("t${number++}", "")
+        if (result.last() is Block.Image || result.last() is Block.Table) {
+            result += Block.Text("t${number++}", "")
+        }
         return result
     }
 
@@ -136,6 +196,19 @@ object Blocks {
             "![${block.alt}](${block.url} \"${(block.width * 100).roundToInt()}%\")"
         }
         is Block.Task -> "- [${if (block.done) "x" else " "}] ${block.content}"
+        is Block.Table -> renderTable(block)
+    }
+
+    /** Tabelka z powrotem na markdown: nagłówek, kreski, reszta wierszy. */
+    private fun renderTable(table: Block.Table): String {
+        val columns = table.columns.coerceAtLeast(1)
+        fun line(cells: List<String>): String =
+            (0 until columns).joinToString(" | ", "| ", " |") { cells.getOrNull(it).orEmpty() }
+
+        val out = mutableListOf(line(table.rows.firstOrNull().orEmpty()))
+        out += (0 until columns).joinToString(" | ", "| ", " |") { "---" }
+        for (row in table.rows.drop(1)) out += line(row)
+        return out.joinToString("\n")
     }
 
     private fun separator(before: Block, after: Block): String =
@@ -151,6 +224,79 @@ object Blocks {
             }
         }
 
+    // --- Tabelka ---
+
+    private fun mapTable(
+        blocks: List<Block>,
+        key: String,
+        change: (Block.Table) -> Block.Table,
+    ): List<Block> = blocks.map { block ->
+        if (block is Block.Table && block.key == key) change(block) else block
+    }
+
+    /** Wyrównuje wiersze do tej samej liczby kolumn — tabelka ma być prostokątem. */
+    private fun squared(rows: List<List<String>>): List<List<String>> {
+        val columns = (rows.maxOfOrNull { it.size } ?: 1).coerceAtLeast(1)
+        return rows.map { row -> List(columns) { row.getOrNull(it).orEmpty() } }
+    }
+
+    fun setCell(
+        blocks: List<Block>,
+        key: String,
+        row: Int,
+        column: Int,
+        text: String,
+    ): List<Block> = mapTable(blocks, key) { table ->
+        val rows = squared(table.rows).toMutableList()
+        if (row !in rows.indices) return@mapTable table
+        val cells = rows[row].toMutableList()
+        if (column !in cells.indices) return@mapTable table
+        // Kreska pionowa rozbiłaby tabelkę na kolumny przy najbliższym
+        // odczycie, więc w treści komórki jej nie ma.
+        cells[column] = text.replace("|", "/").replace("\n", " ")
+        rows[row] = cells
+        table.copy(rows = rows)
+    }
+
+    fun addRow(blocks: List<Block>, key: String, after: Int): List<Block> =
+        mapTable(blocks, key) { table ->
+            val rows = squared(table.rows).toMutableList()
+            val columns = rows.firstOrNull()?.size ?: 1
+            rows.add((after + 1).coerceIn(0, rows.size), List(columns) { "" })
+            table.copy(rows = rows)
+        }
+
+    fun addColumn(blocks: List<Block>, key: String, after: Int): List<Block> =
+        mapTable(blocks, key) { table ->
+            val at = (after + 1).coerceIn(0, table.columns)
+            table.copy(rows = squared(table.rows).map { row -> row.toMutableList().apply { add(at, "") } })
+        }
+
+    fun removeRow(blocks: List<Block>, key: String, row: Int): List<Block> =
+        mapTable(blocks, key) { table ->
+            // Nagłówek zostaje: tabelka bez niego przestaje być tabelką.
+            val rows = squared(table.rows)
+            if (rows.size <= 1 || row !in rows.indices) {
+                table
+            } else {
+                table.copy(rows = rows.filterIndexed { index, _ -> index != row })
+            }
+        }
+
+    fun removeColumn(blocks: List<Block>, key: String, column: Int): List<Block> =
+        mapTable(blocks, key) { table ->
+            val rows = squared(table.rows)
+            if (table.columns <= 1 || column !in 0 until table.columns) {
+                table
+            } else {
+                table.copy(rows = rows.map { row -> row.filterIndexed { index, _ -> index != column } })
+            }
+        }
+
+    /** Pusta tabelka do wstawienia: nagłówek i jeden wiersz. */
+    fun emptyTable(heading: String): String =
+        "\n| $heading | $heading |\n| --- | --- |\n|  |  |\n"
+
     fun toggleTask(blocks: List<Block>, key: String): List<Block> =
         blocks.map { block ->
             if (block is Block.Task && block.key == key) {
@@ -160,9 +306,19 @@ object Blocks {
             }
         }
 
-    fun splitTask(blocks: List<Block>, key: String, content: String): List<Block> {
+    /**
+     * Nowy układ bloków i blok, w którym ma stanąć kursor.
+     *
+     * Klucz jest tu tak samo ważny jak same bloki: nowa pozycja listy dostaje
+     * własny klucz, więc jej pole do pisania jest NOWE. Bez oddania tego klucza
+     * skupienie zostawało w poprzednim wierszu i wszystko pisane po klawiszu
+     * nowej linii doklejało się do niego.
+     */
+    class Split(val blocks: List<Block>, val focusKey: String)
+
+    fun splitTask(blocks: List<Block>, key: String, content: String): Split {
         val position = blocks.indexOfFirst { it.key == key }
-        if (position < 0) return blocks
+        if (position < 0) return Split(blocks, key)
         val done = (blocks[position] as? Block.Task)?.done ?: false
 
         val before = content.substringBefore('\n')
@@ -171,13 +327,46 @@ object Blocks {
         val result = blocks.toMutableList()
         if (before.isBlank() && after.isBlank()) {
             // Puste zadanie i klawisz nowej linii: koniec listy.
-            result[position] = Block.Text(freshKey(blocks), "")
-            return result
+            val fresh = freshKey(blocks)
+            result[position] = Block.Text(fresh, "")
+            return Split(result, fresh)
         }
 
+        val fresh = freshKey(blocks)
         result[position] = Block.Task(key, done, before)
-        result.add(position + 1, Block.Task(freshKey(blocks), done = false, content = after))
-        return result
+        result.add(position + 1, Block.Task(fresh, done = false, content = after))
+        return Split(result, fresh)
+    }
+
+    /**
+     * Zamienia zadanie w zwykły wiersz zaczynający się od [marker].
+     *
+     * Nagłówek, cytat i punkt to budowa wiersza, a nie format fragmentu:
+     * doklejone do treści zadania dawały „- [ ] > cytat", czyli zadanie ze
+     * znacznikiem w środku. Wiersz może być albo zadaniem, albo cytatem —
+     * pusty [marker] robi z zadania zwykły akapit.
+     */
+    fun taskToLine(blocks: List<Block>, key: String, marker: String): Split? {
+        val position = blocks.indexOfFirst { it.key == key }
+        if (position < 0) return null
+        val task = blocks[position] as? Block.Task ?: return null
+
+        val fresh = freshKey(blocks)
+        val result = blocks.toMutableList()
+        result[position] = Block.Text(fresh, marker + task.content)
+        return Split(result, fresh)
+    }
+
+    /**
+     * Miejsce do pisania na końcu notatki. Kiedy ostatni blok jest akapitem,
+     * wystarczy w nim stanąć; pod listą, zdjęciem albo tabelką dokładamy pusty
+     * akapit. Do pliku on nie trafia — [join] zdejmuje puste akapity z końca.
+     */
+    fun appendParagraph(blocks: List<Block>): Split {
+        val last = blocks.lastOrNull()
+        if (last is Block.Text) return Split(blocks, last.key)
+        val fresh = freshKey(blocks)
+        return Split(blocks + Block.Text(fresh, ""), fresh)
     }
 
     private fun freshKey(blocks: List<Block>): String {

@@ -15,6 +15,19 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Od Androida 11 aplikacja nie widzi innych aplikacji bez pytania.
+         Udostepnianie i otwieranie eksportu musi moc znalezc odbiorcow. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KajetApp"
         android:allowBackup="true"
@@ -46,6 +59,16 @@
                 <data android:scheme="kajet" android:host="auth" />
             </intent-filter>
         </activity>
+
+        <!-- Ekran po awarii. Osobny proces (:blad), bo po nieobsluzonym wyjatku
+             watek glowny starego procesu jest martwy i nic by sie w nim juz
+             nie narysowalo. -->
+        <activity
+            android:name=".awaria.ErrorActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:process=":blad"
+            android:theme="@style/Theme.Kajet" />
 
         <!-- Udostepnia pliki innym aplikacjom: zdjecie z aparatu i gotowy eksport. -->
         <provider

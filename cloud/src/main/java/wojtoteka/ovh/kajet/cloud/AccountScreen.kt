@@ -155,6 +155,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
                     onSynchronise = model::synchroniseNow,
                     onRetryStuck = model::retryStuck,
                     onSignOut = model::signOut,
+                    onWithdrawAiConsent = model::withdrawAiConsent,
                 )
             }
         }
@@ -265,6 +266,7 @@ private fun SignedIn(
     onSynchronise: () -> Unit,
     onRetryStuck: () -> Unit,
     onSignOut: () -> Unit,
+    onWithdrawAiConsent: () -> Unit,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
@@ -401,6 +403,32 @@ private fun SignedIn(
                     enabled = !syncBusy,
                 )
                 SecondaryButton(words.signOut, onSignOut, color = colors.danger)
+            }
+        }
+
+        /*
+          Zgoda na asystenta. Pokazuje się TYLKO temu, kto ma uprawnienie -
+          konto bez niego nie ma się na co zgadzać i nie ma się dowiedzieć,
+          że jest czego odmawiać.
+
+          Wycofanie to jeden przycisk, bez pytania „czy na pewno": zgoda ma
+          być łatwiejsza do cofnięcia niż do udzielenia, a nie odwrotnie.
+        */
+        if (state.aiAvailable) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel(words.aiConsentSection)
+                Text(
+                    text = if (state.aiConsented) words.aiConsentGiven else words.aiConsentMissing,
+                    style = Kajet.type.body,
+                    color = colors.muted,
+                )
+                if (state.aiConsented) {
+                    SecondaryButton(
+                        text = words.aiConsentWithdraw,
+                        onClick = onWithdrawAiConsent,
+                        color = colors.danger,
+                    )
+                }
             }
         }
 

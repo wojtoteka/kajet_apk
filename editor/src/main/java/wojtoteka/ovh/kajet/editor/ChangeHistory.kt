@@ -1,9 +1,11 @@
 package wojtoteka.ovh.kajet.editor
 
+import wojtoteka.ovh.kajet.core.model.ImageElement
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NotePage
+import wojtoteka.ovh.kajet.core.model.ShapeElement
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 
 sealed interface Change {
@@ -55,6 +57,30 @@ data class FieldChange(
         document.withPage(page) { it.copy(texts = before) }
 }
 
+data class ImageChange(
+    val page: Int,
+    val before: List<ImageElement>,
+    val after: List<ImageElement>,
+) : Change {
+    override fun applyTo(document: NoteDocument) =
+        document.withPage(page) { it.copy(images = after) }
+
+    override fun revert(document: NoteDocument) =
+        document.withPage(page) { it.copy(images = before) }
+}
+
+data class ShapeChange(
+    val page: Int,
+    val before: List<ShapeElement>,
+    val after: List<ShapeElement>,
+) : Change {
+    override fun applyTo(document: NoteDocument) =
+        document.withPage(page) { it.copy(shapes = after) }
+
+    override fun revert(document: NoteDocument) =
+        document.withPage(page) { it.copy(shapes = before) }
+}
+
 data class PageChange(
     val before: List<NotePage>,
     val after: List<NotePage>,
@@ -79,8 +105,23 @@ class ChangeHistory(private val maxSteps: Int = 120) {
     val canUndo: Boolean get() = back.isNotEmpty()
     val canRedo: Boolean get() = forward.isNotEmpty()
 
+    private var lastRecordAt = 0L
+
     fun record(change: Change) {
-        back.addLast(change)
+        val now = System.currentTimeMillis()
+        val merged = if (now - lastRecordAt <= MERGE_WINDOW_MS) {
+            (back.lastOrNull() as? ShapeChange)?.mergedWith(change)
+        } else {
+            null
+        }
+        lastRecordAt = now
+
+        if (merged != null) {
+            back.removeLast()
+            back.addLast(merged)
+        } else {
+            back.addLast(change)
+        }
         while (back.size > maxSteps) back.removeFirst()
         forward.clear()
     }
@@ -101,6 +142,29 @@ class ChangeHistory(private val maxSteps: Int = 120) {
         back.clear()
         forward.clear()
     }
+
+    companion object {
+        /**
+         * Przez tyle od poprzedniego kroku poprawki tego samego kształtu
+         * dokładają się do niego zamiast zakładać nowy. Suwak grubości
+         * wysyła kilkadziesiąt zmian na sekundę i bez tego jedno pociągnięcie
+         * suwaka wypchnęłoby z historii całą wcześniejszą pracę.
+         */
+        const val MERGE_WINDOW_MS = 1200L
+    }
+}
+
+/**
+ * Dwie zmiany tego samego kształtu pod rząd składają się w jedną, o ile żadna
+ * nic nie dokłada ani nie kasuje — dopisanie kształtu zostaje osobnym krokiem,
+ * bo cofnięcie „przesunięcia" nie może kasować całego kształtu.
+ */
+private fun ShapeChange.mergedWith(next: Change): ShapeChange? {
+    if (next !is ShapeChange) return null
+    if (next.page != page) return null
+    if (next.before != after) return null
+    if (before.size != after.size || next.before.size != next.after.size) return null
+    return ShapeChange(page, before, next.after)
 }
 
 // Pomocnicze przekształcenia dokumentu

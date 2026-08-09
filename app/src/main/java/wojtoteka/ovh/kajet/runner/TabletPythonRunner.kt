@@ -10,10 +10,12 @@ import wojtoteka.ovh.kajet.code.CodeRunner
 import wojtoteka.ovh.kajet.code.RunException
 import wojtoteka.ovh.kajet.code.RunResult
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
+import wojtoteka.ovh.kajet.core.text.pythonInternalError
+import wojtoteka.ovh.kajet.core.text.words
 
 class TabletPythonRunner(private val context: Context) : CodeRunner {
 
-    override val name: String = "na tablecie"
+    override val name: String get() = words.pythonOnTablet
     override val requiresInternet: Boolean = false
 
     override fun supports(language: CodeLanguage): Boolean = language == CodeLanguage.PYTHON
@@ -27,7 +29,7 @@ class TabletPythonRunner(private val context: Context) : CodeRunner {
         if (!Python.isStarted()) {
             runCatching { Python.start(AndroidPlatform(context)) }.onFailure {
                 throw RunException(
-                    "Nie udało się uruchomić Pythona na tablecie. Zamknij aplikację i otwórz ją ponownie.",
+                    words.pythonStartFailed,
                     it,
                 )
             }
@@ -40,7 +42,7 @@ class TabletPythonRunner(private val context: Context) : CodeRunner {
             val module = python.getModule("kajet_runner")
             module.callAttr("run", code, input)
         } catch (e: PyException) {
-            throw RunException("Wewnętrzny błąd Pythona: ${e.message}", e)
+            throw RunException(words.pythonInternalError(e.message), e)
         }
         val elapsed = System.currentTimeMillis() - start
 

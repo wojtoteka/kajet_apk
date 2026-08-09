@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InlineDrawing
@@ -55,9 +56,13 @@ class TextNoteViewModel(
         )
     }
 
+    /**
+     * Do spisu „twoich kolorów" barwa trafia dopiero po zamknięciu okna z
+     * tęczą (rememberColor woła pasek formatowania). Tęcza zgłasza każdy
+     * odcień mijany pod palcem, więc zapisywanie po drodze zapychało spis.
+     */
     fun setTextColor(argb: Int) {
         changeAppearance { it.copy(textColor = argb) }
-        if (argb != 0) rememberColor(argb)
     }
 
     fun setAlign(align: NoteAlign) = changeAppearance { it.copy(align = align) }
@@ -89,7 +94,7 @@ class TextNoteViewModel(
         val content = markdown
         val from = start.coerceIn(0, content.length)
         val to = end.coerceIn(from, content.length)
-        val middle = content.substring(from, to).ifEmpty { "tekst" }
+        val middle = content.substring(from, to).ifEmpty { words.placeholderWord }
         val next = content.substring(0, from) + marker + middle + marker + content.substring(to)
         setContent(next)
         return (from + marker.length)..(from + marker.length + middle.length)
@@ -134,7 +139,7 @@ class TextNoteViewModel(
 
     fun insertPhoto(data: ByteArray, extension: String, position: Int) {
         viewModelScope.launch {
-            _busy.value = "Zapisuję zdjęcie"
+            _busy.value = words.savingPhoto
             try {
                 // Nazwa z zegara, bo przy kolizji magazyn dokleja " (2)" ze spacją,
                 // a takiego adresu nie czyta blok obrazka w podglądzie.
@@ -144,9 +149,9 @@ class TextNoteViewModel(
                     data = data,
                     mime = if (extension == "png") "image/png" else "image/jpeg",
                 )
-                insert("\n![zdjęcie](assets/$name)\n", position, position)
+                insert("\n![${words.photoAltText}](assets/$name)\n", position, position)
             } catch (e: Exception) {
-                setError(e.message ?: "Nie udało się zapisać zdjęcia w notatce.")
+                setError(e.message ?: words.photoSaveFailed)
             } finally {
                 _busy.value = null
             }
@@ -159,7 +164,7 @@ class TextNoteViewModel(
             return
         }
         viewModelScope.launch {
-            _busy.value = "Zapisuję rysunek"
+            _busy.value = words.savingDrawing
             try {
                 val png = DrawingToImage.png(strokes, width, height)
                 val imageName =
@@ -188,7 +193,7 @@ class TextNoteViewModel(
                 }
                 insert("\n![rysunek](assets/$imageName)\n", position, position)
             } catch (e: Exception) {
-                setError(e.message ?: "Nie udało się zapisać rysunku w notatce.")
+                setError(e.message ?: words.drawingSaveFailed)
             } finally {
                 _busy.value = null
                 _drawing.value = false

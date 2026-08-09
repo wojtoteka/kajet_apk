@@ -627,6 +627,37 @@ interface Strings {
     val checkingUpdates: String
     val upToDate: String
     val updateCheckFailed: String
+
+    // --- Asystent KajetAI ---
+    val aiTitle: String
+    val aiOpen: String
+    val aiClose: String
+    val aiHint: String
+    val aiAsk: String
+    val aiWorking: String
+    val aiUndo: String
+    val aiUndone: String
+    val aiUndoFailed: String
+    val aiQuestionLabel: String
+    val aiHistoryTitle: String
+    val aiHistoryEmpty: String
+    val aiForgetHistory: String
+    val aiNoteChangedElsewhere: String
+    val aiSaveFirst: String
+    val aiOffline: String
+    /* Zgoda */
+    val aiConsentTitle: String
+    val aiConsentWhatHappens: String
+    val aiConsentTraining: String
+    val aiConsentVoluntary: String
+    val aiConsentReadPolicy: String
+    val aiConsentAgree: String
+    val aiConsentNo: String
+    val aiConsentSection: String
+    val aiConsentGiven: String
+    val aiConsentMissing: String
+    val aiConsentWithdraw: String
+    val aiConsentWithdrawn: String
 }
 
 /*
@@ -1690,6 +1721,44 @@ object PolishStrings : Strings {
     override val upToDate = "Zainstalowana wersja jest najnowsza."
     override val updateCheckFailed = "Nie udało się zapytać serwera. Sprawdź połączenie " +
         "z internetem i spróbuj jeszcze raz."
+
+    // --- Asystent KajetAI ---
+    override val aiTitle = "Asystent"
+    override val aiOpen = "Poproś asystenta o zmianę"
+    override val aiClose = "Zamknij asystenta"
+    override val aiHint = "Co zmienić w tej notatce?"
+    override val aiAsk = "Poproś"
+    override val aiWorking = "Asystent pracuje nad notatką…"
+    override val aiUndo = "Cofnij zmianę"
+    override val aiUndone = "Zmiana cofnięta."
+    override val aiUndoFailed = "Nie udało się cofnąć zmiany. Notatka została taka, jak ją zmienił asystent."
+    override val aiQuestionLabel = "Asystent pyta"
+    override val aiHistoryTitle = "Wcześniejsze polecenia"
+    override val aiHistoryEmpty = "Przy tej notatce jeszcze o nic nie proszono."
+    override val aiForgetHistory = "Wyczyść rozmowę"
+    override val aiNoteChangedElsewhere =
+        "Notatka zmieniła się w międzyczasie. Odśwież ją i poproś jeszcze raz."
+    override val aiSaveFirst = "Najpierw zapisz notatkę – asystent pracuje na tym, co jest na serwerze."
+    override val aiOffline = "Asystent potrzebuje internetu."
+    override val aiConsentTitle = "Zanim poprosisz asystenta"
+    override val aiConsentWhatHappens =
+        "Treść tej notatki – cały tekst, kod albo napisy w węzłach mapy – zostanie wysłana " +
+            "do Google, bo to jego model wprowadza zmiany. Pismo odręczne i zdjęcia nie są wysyłane."
+    override val aiConsentTraining =
+        "Kajet korzysta z darmowego poziomu tej usługi, a to znaczy, że Google wykorzystuje " +
+            "wysłaną treść do rozwoju swoich produktów, w tym do uczenia modeli, i że mogą ją " +
+            "przeczytać jego pracownicy. Nie wysyłaj tą drogą notatek, które mają zostać prywatne."
+    override val aiConsentVoluntary =
+        "Zgoda jest dobrowolna i możesz ją wycofać w każdej chwili w ustawieniach konta. " +
+            "Bez niej asystent nie działa, a cała reszta Kajetu działa tak samo jak dotąd."
+    override val aiConsentReadPolicy = "Przeczytaj politykę prywatności"
+    override val aiConsentAgree = "Zgadzam się"
+    override val aiConsentNo = "Nie teraz"
+    override val aiConsentSection = "Asystent AI"
+    override val aiConsentGiven = "Zgoda na wysyłanie treści notatek do Google jest udzielona."
+    override val aiConsentMissing = "Bez zgody asystent nie działa."
+    override val aiConsentWithdraw = "Wycofaj zgodę"
+    override val aiConsentWithdrawn = "Zgoda wycofana. Rozmowy z asystentem zostały skasowane."
 }
 
 object EnglishStrings : Strings {
@@ -2341,4 +2410,43 @@ object EnglishStrings : Strings {
     override val upToDate = "The installed version is the newest one."
     override val updateCheckFailed = "The server could not be reached. Check the internet " +
         "connection and try again."
+
+    // --- Asystent KajetAI ---
+    override val aiTitle = "Assistant"
+    override val aiOpen = "Ask the assistant for a change"
+    override val aiClose = "Close the assistant"
+    override val aiHint = "What should change in this note?"
+    override val aiAsk = "Ask"
+    override val aiWorking = "The assistant is working on the note..."
+    override val aiUndo = "Undo the change"
+    override val aiUndone = "Change undone."
+    override val aiUndoFailed = "The change could not be undone. The note stayed as the assistant left it."
+    override val aiQuestionLabel = "The assistant asks"
+    override val aiHistoryTitle = "Earlier instructions"
+    override val aiHistoryEmpty = "Nothing has been asked about this note yet."
+    override val aiForgetHistory = "Clear the conversation"
+    override val aiNoteChangedElsewhere =
+        "The note changed in the meantime. Refresh it and ask again."
+    override val aiSaveFirst = "Save the note first – the assistant works on what is on the server."
+    override val aiOffline = "The assistant needs the internet."
+    override val aiConsentTitle = "Before you ask the assistant"
+    override val aiConsentWhatHappens =
+        "The content of this note – all the text, the code, or the labels in the map nodes – " +
+            "will be sent to Google, because it is their model that makes the change. " +
+            "Handwriting and photographs are not sent."
+    override val aiConsentTraining =
+        "Kajet uses the free tier of that service, which means Google uses what is sent to " +
+            "develop its products, including training models, and its staff may read it. " +
+            "Do not send notes this way if they are meant to stay private."
+    override val aiConsentVoluntary =
+        "The consent is voluntary and you can withdraw it at any time in account settings. " +
+            "Without it the assistant does not work, and the rest of Kajet works exactly as before."
+    override val aiConsentReadPolicy = "Read the privacy policy"
+    override val aiConsentAgree = "I agree"
+    override val aiConsentNo = "Not now"
+    override val aiConsentSection = "AI assistant"
+    override val aiConsentGiven = "Consent to sending note content to Google has been given."
+    override val aiConsentMissing = "Without consent the assistant does not work."
+    override val aiConsentWithdraw = "Withdraw consent"
+    override val aiConsentWithdrawn = "Consent withdrawn. Conversations with the assistant have been deleted."
 }

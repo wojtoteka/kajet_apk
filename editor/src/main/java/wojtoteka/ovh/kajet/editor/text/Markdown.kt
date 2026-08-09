@@ -168,23 +168,45 @@ object Markdown {
             Regex("^\\d+[.)] ").containsMatchIn(line)
 
     private val colorMarker = TextMarkers.colorPattern
+    private val sizeMarker = TextMarkers.sizePattern
     private val underlineMarker = TextMarkers.underline
+    private val strayOpening = Regex("""<span style="(?:color|font-size):[^"]*">""")
 
     fun inline(text: String): String {
         // Kolor i podkreślenie zapisujemy znacznikiem HTML, bo Markdown nie ma
         // na nie własnego zapisu. Wyjmujemy je przed ucieczką znaków, żeby
         // nie zamieniły się w widoczny napis z nawiasami trójkątnymi.
+        //
+        // W kółko aż do skutku: wzorce łapią najbardziej wewnętrzny znacznik
+        // (treść bez „<"), więc zapis zagnieżdżony — kolor w rozmiarze, kolor
+        // w podkreśleniu — rozwija się od środka, po jednym opakowaniu na
+        // okrążenie. Bez pętli zewnętrzny znacznik straszył w podglądzie
+        // jako goły HTML.
         val hidden = mutableListOf<String>()
-        var prepared = colorMarker.replace(text) { match ->
-            val color = Regex("""color:([^"]*)""").find(match.value)?.groupValues?.get(1).orEmpty()
-            hidden += "<span style=\"color:${escape(color)}\">" +
-                escape(match.groupValues[1]) + "</span>"
-            placeholder("HTML", hidden.size - 1)
-        }
-        prepared = underlineMarker.replace(prepared) { match ->
-            hidden += "<u>" + escape(match.groupValues[1]) + "</u>"
-            placeholder("HTML", hidden.size - 1)
-        }
+        var prepared = text
+        var previous: String
+        do {
+            previous = prepared
+            prepared = colorMarker.replace(prepared) { match ->
+                val color = Regex("""color:([^"]*)""").find(match.value)?.groupValues?.get(1).orEmpty()
+                hidden += "<span style=\"color:${escape(color)}\">" +
+                    escape(match.groupValues[1]) + "</span>"
+                placeholder("HTML", hidden.size - 1)
+            }
+            prepared = sizeMarker.replace(prepared) { match ->
+                hidden += "<span style=\"font-size:${escape(match.groupValues[1])}px\">" +
+                    escape(match.groupValues[2]) + "</span>"
+                placeholder("HTML", hidden.size - 1)
+            }
+            prepared = underlineMarker.replace(prepared) { match ->
+                hidden += "<u>" + escape(match.groupValues[1]) + "</u>"
+                placeholder("HTML", hidden.size - 1)
+            }
+        } while (prepared != previous)
+
+        // Ślady zepsutego zapisu — znacznik bez pary — nie mają straszyć
+        // w podglądzie: sam znacznik znika, treść zostaje.
+        prepared = prepared.replace(strayOpening, "").replace("</span>", "")
 
         var result = escape(prepared)
 
@@ -227,8 +249,10 @@ object Markdown {
         formulas.forEachIndexed { number, formula ->
             result = result.replace("\u0000WZOR$number\u0000", "\\($formula\\)")
         }
-        hidden.forEachIndexed { number, html ->
-            result = result.replace(placeholder("HTML", number), html)
+        // Od końca: znacznik zewnętrzny (dodany później) ma w treści odsyłacz
+        // do wewnętrznego, więc najpierw wraca on, a dopiero potem środek.
+        for (number in hidden.indices.reversed()) {
+            result = result.replace(placeholder("HTML", number), hidden[number])
         }
         return result
     }

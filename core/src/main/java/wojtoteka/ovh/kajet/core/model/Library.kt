@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.core.model
 
 import kotlinx.serialization.Serializable
+import wojtoteka.ovh.kajet.core.text.Strings
 
 @Serializable
 data class FolderMeta(
@@ -10,6 +11,10 @@ data class FolderMeta(
     val colorId: String = "grafit",
     val iconId: String = "folder",
     val createdAt: Long = 0L,
+    // Ostatnia zmiana nazwy albo wyglądu — synchronizacja folderów porównuje
+    // to ze znacznikiem serwera, żeby wiedzieć, która strona jest świeższa.
+    // Stare pliki nie mają tego pola (zero = serwer wygrywa).
+    val modifiedAt: Long = 0L,
     val order: Int = 0,
 ) {
     companion object {
@@ -43,46 +48,55 @@ data class LibraryItem(
     val parentPath: String get() = path.substringBeforeLast('/', "")
 }
 
-enum class FolderIcon(val id: String, val labelPl: String) {
-    FOLDER("folder", "Folder"),
-    BOOKS("ksiazki", "Książki"),
-    LETTERS("litery", "Litery"),
-    OPERATIONS("dzialania", "Działania"),
-    NOTE("nuta", "Nuta"),
-    FLASK("kolba", "Kolba"),
-    GLOBE("globus", "Globus"),
-    CODE("kod", "Kod"),
-    STAR("gwiazdka", "Gwiazdka"),
-    BRUSH("pedzel", "Pędzel"),
-    HEART("serce", "Serce"),
-    ATOM("atom", "Atom"),
-    DNA("dna", "Nić DNA"),
-    MAP("mapa", "Mapa"),
-    COG("zebatka", "Zębatka"),
-    BULB("zarowka", "Żarówka"),
-    COMPASS("kompas", "Kompas"),
-    ROCKET("rakieta", "Rakieta"),
-    CROWN("korona", "Korona"),
-    CUP("filizanka", "Filiżanka"),
-    TREE("drzewo", "Drzewo"),
-    MOUNTAIN("gora", "Góra"),
-    CLOUD("cloud", "Chmura"),
-    KEY("klucz", "Klucz"),
-    CLOCK("zegar", "Zegar"),
-    CALENDAR("kalendarz", "Kalendarz"),
-    FLAG("flaga", "Flaga"),
-    MICROSCOPE("mikroskop", "Mikroskop"),
-    BALL("pilka", "Piłka"),
-    MASK("maska", "Maska"),
-    SCALES("waga", "Waga"),
-    SHIELD("tarcza", "Tarcza"),
-    HOUSE("dom", "Dom"),
-    CAMERA("aparat", "Aparat"),
-    PHOTO("zdjecie", "Zdjęcie"),
-    DRAWING("rysunek", "Rysunek"),
-    NODE("wezel", "Węzeł"),
-    TAG("tag", "Etykieta"),
+/*
+  Ikony folderów.
+
+  Nazwy stoją tu, przy ikonach, a nie w słowniku napisów — trzydzieści osiem
+  pozycji rozdętoby go bez żadnego zysku, a nazwa ikony nigdy nie zmieni się
+  bez zmiany samej ikony. Który język wybrać, mówi `Strings.english`.
+*/
+enum class FolderIcon(val id: String, val labelPl: String, val labelEn: String) {
+    FOLDER("folder", "Folder", "Folder"),
+    BOOKS("ksiazki", "Książki", "Books"),
+    LETTERS("litery", "Litery", "Letters"),
+    OPERATIONS("dzialania", "Działania", "Arithmetic"),
+    NOTE("nuta", "Nuta", "Music note"),
+    FLASK("kolba", "Kolba", "Flask"),
+    GLOBE("globus", "Globus", "Globe"),
+    CODE("kod", "Kod", "Code"),
+    STAR("gwiazdka", "Gwiazdka", "Star"),
+    BRUSH("pedzel", "Pędzel", "Brush"),
+    HEART("serce", "Serce", "Heart"),
+    ATOM("atom", "Atom", "Atom"),
+    DNA("dna", "Nić DNA", "DNA strand"),
+    MAP("mapa", "Mapa", "Map"),
+    COG("zebatka", "Zębatka", "Cog"),
+    BULB("zarowka", "Żarówka", "Light bulb"),
+    COMPASS("kompas", "Kompas", "Compass"),
+    ROCKET("rakieta", "Rakieta", "Rocket"),
+    CROWN("korona", "Korona", "Crown"),
+    CUP("filizanka", "Filiżanka", "Cup"),
+    TREE("drzewo", "Drzewo", "Tree"),
+    MOUNTAIN("gora", "Góra", "Mountain"),
+    CLOUD("cloud", "Chmura", "Cloud"),
+    KEY("klucz", "Klucz", "Key"),
+    CLOCK("zegar", "Zegar", "Clock"),
+    CALENDAR("kalendarz", "Kalendarz", "Calendar"),
+    FLAG("flaga", "Flaga", "Flag"),
+    MICROSCOPE("mikroskop", "Mikroskop", "Microscope"),
+    BALL("pilka", "Piłka", "Ball"),
+    MASK("maska", "Maska", "Mask"),
+    SCALES("waga", "Waga", "Scales"),
+    SHIELD("tarcza", "Tarcza", "Shield"),
+    HOUSE("dom", "Dom", "House"),
+    CAMERA("aparat", "Aparat", "Camera"),
+    PHOTO("zdjecie", "Zdjęcie", "Photo"),
+    DRAWING("rysunek", "Rysunek", "Drawing"),
+    NODE("wezel", "Węzeł", "Node"),
+    TAG("tag", "Etykieta", "Tag"),
     ;
+
+    fun label(words: Strings): String = if (words.english) labelEn else labelPl
 
     companion object {
         fun fromId(id: String?): FolderIcon = entries.firstOrNull { it.id == id } ?: FOLDER

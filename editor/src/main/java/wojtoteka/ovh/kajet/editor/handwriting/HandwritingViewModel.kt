@@ -5,36 +5,49 @@ import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import wojtoteka.ovh.kajet.core.awaria.failureHandler
+import wojtoteka.ovh.kajet.core.design.InkPalette
+import wojtoteka.ovh.kajet.core.image.Bitmaps
+import wojtoteka.ovh.kajet.core.text.words
+import android.graphics.Bitmap
+import wojtoteka.ovh.kajet.core.model.ImageElement
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InkTool
+import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
-import wojtoteka.ovh.kajet.core.model.RecognizedText
+import wojtoteka.ovh.kajet.core.model.ShapeElement
+import wojtoteka.ovh.kajet.core.model.ShapeKind
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.editor.StrokeChange
 import wojtoteka.ovh.kajet.editor.FieldChange
+import wojtoteka.ovh.kajet.editor.ImageChange
 import wojtoteka.ovh.kajet.editor.PageChange
+import wojtoteka.ovh.kajet.editor.ShapeChange
 import wojtoteka.ovh.kajet.editor.page
 import wojtoteka.ovh.kajet.editor.withPage
 import wojtoteka.ovh.kajet.ink.Strokes
 import wojtoteka.ovh.kajet.ink.EditorTool
 import wojtoteka.ovh.kajet.ink.Brushes
-import wojtoteka.ovh.kajet.ink.HandwritingRecognition
-import wojtoteka.ovh.kajet.ink.RecognitionState
 import wojtoteka.ovh.kajet.ink.PenSettings
+import wojtoteka.ovh.kajet.ink.ShapeGeometry
+import wojtoteka.ovh.kajet.ink.ShapeSettings
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.FingerBehavior
 import wojtoteka.ovh.kajet.storage.RememberedPen
+import wojtoteka.ovh.kajet.storage.RememberedShape
 import java.util.UUID
 
 class HandwritingViewModel(
-    repo: LibraryRepository,
+    private val repo: LibraryRepository,
     settings: SettingsStore,
     path: String,
     inkColor: Int,
@@ -80,7 +93,18 @@ class HandwritingViewModel(
                 penKind = saved.tool
                     ?.let { name -> runCatching { InkTool.valueOf(name) }.getOrNull() }
                     ?: _pens.value.penKind,
-                penColor = saved.color ?: _pens.value.penColor,
+                /*
+                  Zapamiętany dawny „Biały" zlewał się z kartką; wraca kolor
+                  domyślny. Tak samo zwykły atrament: zapamiętany na jasnej
+                  kartce jest czarny i na ciemnej byłby niewidoczny, więc
+                  zamiast go przywracać, zostaje atrament TEJ kartki (przyszedł
+                  z ekranu notatki jako `inkColor` i już siedzi w _pens).
+                  Kolory dobrane świadomie - czerwony, zielony - wracają.
+                */
+                penColor = saved.color
+                    ?.takeUnless { it == InkPalette.LEGACY_WHITE_ARGB }
+                    ?.takeUnless { InkPalette.isDefaultInk(it) }
+                    ?: _pens.value.penColor,
                 penWidth = saved.width ?: _pens.value.penWidth,
                 penOpacity = saved.opacity ?: _pens.value.penOpacity,
                 highlighterColor = saved.highlighterColor ?: _pens.value.highlighterColor,
@@ -118,14 +142,6 @@ class HandwritingViewModel(
     private val _editedBox = MutableStateFlow<String?>(null)
     val editedBox: StateFlow<String?> = _editedBox.asStateFlow()
 
-    private val recognition = HandwritingRecognition()
-
-    private val _recognitionState = MutableStateFlow<RecognitionState>(RecognitionState.Ready)
-    val recognitionState: StateFlow<RecognitionState> = _recognitionState.asStateFlow()
-
-    private val _textSuggestions = MutableStateFlow<List<String>>(emptyList())
-    val textSuggestions: StateFlow<List<String>> = _textSuggestions.asStateFlow()
-
     // Zbieranie jednego pociągnięcia gumki albo jednego przesunięcia zaznaczenia
     private var pendingRemoved = mutableListOf<Pair<Int, InkStroke>>()
     private var pendingAdded = mutableListOf<InkStroke>()
@@ -136,13 +152,20 @@ class HandwritingViewModel(
     fun selectTool(next: EditorTool) {
         _tool.value = next
         if (next != EditorTool.LASSO) deselect()
+        // Kształt zostaje wzięty tylko przy narzędziach, które umieją go ruszyć.
+        if (next != EditorTool.SHAPES && next != EditorTool.LASSO) selectShape(null)
     }
 
     fun setPenKind(kind: InkTool) = updatePen { it.copy(penKind = kind) }
 
+    /**
+     * Sama barwa pisma. Do spisu „twoich kolorów" nie trafia od razu:
+     * tęcza w oknie koloru woła to przy każdym drgnięciu palca, więc jedno
+     * dobranie barwy zapychało cały spis odcieniami mijanymi po drodze.
+     * Zapamiętuje dopiero [rememberColor], wołane po zamknięciu okna.
+     */
     fun setPenColor(argb: Int) {
         updatePen { it.copy(penColor = argb) }
-        rememberColor(argb)
     }
 
     fun setPenWidth(width: Float) = updatePen {
@@ -153,9 +176,9 @@ class HandwritingViewModel(
         it.copy(penOpacity = opacity.coerceIn(0.05f, 1f))
     }
 
+    /** Jak [setPenColor] - zapamiętanie barwy zostawiamy na zamknięcie okna. */
     fun setHighlighterColor(argb: Int) {
         updatePen { it.copy(highlighterColor = argb) }
-        rememberColor(argb)
     }
 
     fun setHighlighterWidth(width: Float) = updatePen {
@@ -182,7 +205,13 @@ class HandwritingViewModel(
         val handwriting = document.handwriting ?: return
         if (page != handwriting.pages.lastIndex) return
         val sheet = handwriting.pages[page]
-        val lowest = sheet.strokes.maxOfOrNull { it.bounds().bottom } ?: return
+        val lowestInk = sheet.strokes.maxOfOrNull { it.bounds().bottom }
+        val lowestShape = sheet.shapes.maxOfOrNull { ShapeGeometry.bounds(it).bottom }
+        val lowest = when {
+            lowestInk == null -> lowestShape ?: return
+            lowestShape == null -> lowestInk
+            else -> maxOf(lowestInk, lowestShape)
+        }
         if (lowest < sheet.height - GROW_THRESHOLD) return
 
         val pages = handwriting.pages.toMutableList()
@@ -214,6 +243,9 @@ class HandwritingViewModel(
         if (handwriting.pages.size <= 1) return
         if (index !in handwriting.pages.indices) return
         val pages = handwriting.pages.toMutableList().also { it.removeAt(index) }
+        // Zaznaczenie pamięta numer strony. Po skasowaniu strony ten numer
+        // wskazywałby w pustkę, a obrys zaznaczenia leci przy rysowaniu kartki.
+        deselect()
         perform(PageChange(before = handwriting.pages, after = pages))
     }
 
@@ -232,6 +264,11 @@ class HandwritingViewModel(
         val handwriting = document.value?.handwriting ?: return
         if (handwriting.pageMode == mode) return
 
+        // Tryb przewijania scala wszystkie strony w jedną, więc numer strony
+        // zapamiętany przez zaznaczenie przestaje istnieć. Bez tego obrys
+        // zaznaczenia sięgał poza spis stron przy rysowaniu.
+        deselect()
+
         if (mode == PageMode.A4 || handwriting.pages.size <= 1) {
             editWithoutHistory { it.copy(handwriting = handwriting.copy(pageMode = mode)) }
             return
@@ -240,9 +277,13 @@ class HandwritingViewModel(
         var top = 0f
         val strokes = mutableListOf<InkStroke>()
         val boxes = mutableListOf<TextBoxElement>()
+        val images = mutableListOf<ImageElement>()
+        val shapes = mutableListOf<ShapeElement>()
         for (sheet in handwriting.pages) {
             strokes += sheet.strokes.map { it.translated(0f, top) }
             boxes += sheet.texts.map { it.copy(y = it.y + top) }
+            images += sheet.images.map { it.copy(y = it.y + top) }
+            shapes += sheet.shapes.map { it.movedBy(0f, top) }
             top += sheet.height
         }
 
@@ -250,6 +291,8 @@ class HandwritingViewModel(
             height = top,
             strokes = strokes,
             texts = boxes,
+            images = images,
+            shapes = shapes,
             recognized = emptyList(),
         )
         editWithoutHistory {
@@ -260,6 +303,10 @@ class HandwritingViewModel(
     // Gumka
 
     fun erase(page: Int, x: Float, y: Float, radius: Float, wholeStroke: Boolean) {
+        // Kształt jest obiektem: gumka do całej kreski kasuje go w całości,
+        // zwykła gumka go nie tyka, bo obiektu nie da się przeciąć w połowie.
+        if (wholeStroke) eraseShapes(page, x, y, radius)
+
         val sheet = document.value?.page(page) ?: return
         if (pendingPage != page) {
             flushPending()
@@ -284,6 +331,16 @@ class HandwritingViewModel(
         pendingRemoved += removed
         pendingAdded.removeAll { stroke -> removed.any { it.second.id == stroke.id } }
         pendingAdded += added
+    }
+
+    private fun eraseShapes(page: Int, x: Float, y: Float, radius: Float) {
+        val sheet = document.value?.page(page) ?: return
+        if (sheet.shapes.isEmpty()) return
+        val left = sheet.shapes.filterNot { ShapeGeometry.hits(it, x, y, radius) }
+        if (left.size == sheet.shapes.size) return
+        val gone = sheet.shapes.filterNot { kept -> left.any { it.id == kept.id } }
+        perform(ShapeChange(page, sheet.shapes, left))
+        if (gone.any { it.id == _selectedShape.value }) _selectedShape.value = null
     }
 
     fun eraseFinished() = flushPending()
@@ -312,6 +369,7 @@ class HandwritingViewModel(
     fun deselect() {
         _selected.value = emptyList()
         _selectionPage.value = -1
+        _selectedShape.value = null
     }
 
     fun moveSelection(dx: Float, dy: Float, finished: Boolean) {
@@ -364,6 +422,170 @@ class HandwritingViewModel(
         deselect()
     }
 
+    // Kształty
+
+    private val _shapes = MutableStateFlow(ShapeSettings(color = inkColor))
+    val shapeSettings: StateFlow<ShapeSettings> = _shapes.asStateFlow()
+
+    /** Blokada proporcji 1:1 z panelu — dla tych, którzy nie mają klawiatury. */
+    private val _squareShapes = MutableStateFlow(false)
+    val squareShapes: StateFlow<Boolean> = _squareShapes.asStateFlow()
+
+    private val _selectedShape = MutableStateFlow<String?>(null)
+    val selectedShape: StateFlow<String?> = _selectedShape.asStateFlow()
+
+    /*
+      Osobny init, niżej niż pola powyżej: blok wpisany na górze klasy sięgałby
+      po `_shapes`, zanim to pole w ogóle powstanie.
+    */
+    init {
+        viewModelScope.launch {
+            val saved = runCatching { settings.settings.first().shapes }.getOrNull() ?: return@launch
+            _shapes.value = _shapes.value.copy(
+                kind = saved.kind
+                    ?.let { name -> runCatching { ShapeKind.valueOf(name) }.getOrNull() }
+                    ?: _shapes.value.kind,
+                // Kolor jak przy pisaku: zapamiętany atrament domyślny zostaje
+                // atramentem TEJ kartki, żeby na ciemnej nie wyszedł niewidoczny.
+                color = saved.color
+                    ?.takeUnless { it == InkPalette.LEGACY_WHITE_ARGB }
+                    ?.takeUnless { InkPalette.isDefaultInk(it) }
+                    ?: _shapes.value.color,
+                strokeWidth = saved.strokeWidth ?: _shapes.value.strokeWidth,
+                fill = saved.fill ?: _shapes.value.fill,
+                opacity = saved.opacity ?: _shapes.value.opacity,
+            )
+            _squareShapes.value = saved.square ?: false
+        }
+    }
+
+    fun addShape(page: Int, shape: ShapeElement) {
+        val sheet = document.value?.page(page) ?: return
+        val placed = shape.copy(id = UUID.randomUUID().toString())
+        perform(ShapeChange(page, sheet.shapes, sheet.shapes + placed))
+        _selectedShape.value = placed.id
+        growIfNeeded(page)
+    }
+
+    fun selectShape(id: String?) {
+        _selectedShape.value = id
+    }
+
+    /** Kształt wzięty do poprawek razem z numerem strony, na której leży. */
+    fun currentShape(): Pair<Int, ShapeElement>? {
+        val id = _selectedShape.value ?: return null
+        val handwriting = document.value?.handwriting ?: return null
+        handwriting.pages.forEachIndexed { index, sheet ->
+            sheet.shapes.firstOrNull { it.id == id }?.let { return index to it }
+        }
+        return null
+    }
+
+    fun updateShape(page: Int, shape: ShapeElement, toHistory: Boolean) {
+        val sheet = document.value?.page(page) ?: return
+        val shapes = sheet.shapes.map { if (it.id == shape.id) shape else it }
+        if (toHistory) {
+            perform(ShapeChange(page, sheet.shapes, shapes))
+        } else {
+            editWithoutHistory { document -> document.withPage(page) { it.copy(shapes = shapes) } }
+        }
+    }
+
+    /** Jak [commitTextBox]: domyka przeciąganie, obrót albo rozciąganie kształtu. */
+    fun commitShape(page: Int, before: ShapeElement, after: ShapeElement) {
+        val sheet = document.value?.page(page) ?: return
+        val then = sheet.shapes.map { if (it.id == before.id) before else it }
+        val now = sheet.shapes.map { if (it.id == after.id) after else it }
+        perform(ShapeChange(page, then, now))
+    }
+
+    fun removeShape(page: Int, id: String) {
+        val sheet = document.value?.page(page) ?: return
+        if (sheet.shapes.none { it.id == id }) return
+        perform(ShapeChange(page, sheet.shapes, sheet.shapes.filterNot { it.id == id }))
+        if (_selectedShape.value == id) _selectedShape.value = null
+    }
+
+    fun removeSelectedShape() {
+        val (page, shape) = currentShape() ?: return
+        removeShape(page, shape.id)
+    }
+
+    fun setShapeKind(kind: ShapeKind) = updateShapeSettings { it.copy(kind = kind) }
+
+    fun setShapeColor(argb: Int) = updateShapeSettings { it.copy(color = argb) }
+
+    fun setShapeWidth(width: Float) = updateShapeSettings {
+        it.copy(strokeWidth = width.coerceIn(Brushes.MIN_WIDTH, Brushes.MAX_WIDTH))
+    }
+
+    fun setShapeFill(argb: Int) = updateShapeSettings { it.copy(fill = argb) }
+
+    fun setShapeOpacity(opacity: Float) = updateShapeSettings {
+        it.copy(opacity = opacity.coerceIn(0.05f, 1f))
+    }
+
+    fun toggleSquareShapes() {
+        val next = !_squareShapes.value
+        _squareShapes.value = next
+        saveShapeSettings(square = next)
+    }
+
+    /**
+     * Ustawienia kształtu i, jeżeli jakiś jest wzięty, ten kształt razem z nimi.
+     * Inaczej poprawienie koloru znaczyłoby skasować figurę i narysować ją od nowa.
+     */
+    private fun updateShapeSettings(transform: (ShapeSettings) -> ShapeSettings) {
+        val next = transform(_shapes.value)
+        _shapes.value = next
+        currentShape()?.let { (page, shape) ->
+            updateShape(page, shape.withSettings(next), toHistory = true)
+        }
+        saveShapeSettings()
+    }
+
+    private fun saveShapeSettings(square: Boolean = _squareShapes.value) {
+        val current = _shapes.value
+        viewModelScope.launch {
+            runCatching {
+                settings.setShape(
+                    RememberedShape(
+                        kind = current.kind.name,
+                        color = current.color,
+                        strokeWidth = current.strokeWidth,
+                        fill = current.fill,
+                        opacity = current.opacity,
+                        square = square,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Kształt przebrany w podane ustawienia. Zmiana rodzaju z linii na figurę
+     * zamkniętą prostuje przy okazji boki: linia w lewo ma ujemną szerokość,
+     * a prostokąt musi mieć dodatnią.
+     */
+    private fun ShapeElement.withSettings(settings: ShapeSettings): ShapeElement {
+        val dressed = copy(
+            color = settings.color,
+            strokeWidth = settings.strokeWidth,
+            fill = settings.fill,
+            opacity = settings.opacity,
+        )
+        if (settings.kind == kind) return dressed
+        if (settings.kind.open) return dressed.copy(kind = settings.kind)
+        val box = box()
+        return dressed.copy(
+            kind = settings.kind,
+            x = box.left,
+            y = box.top,
+            width = box.width,
+            height = box.height,
+        )
+    }
+
     // Pola tekstowe
 
     fun addTextBox(page: Int, x: Float, y: Float, argb: Int) {
@@ -391,6 +613,164 @@ class HandwritingViewModel(
         }
     }
 
+    /**
+     * Domyka przeciąganie albo rozciąganie pola: [before] to pole sprzed
+     * gestu. Zwykłe [updateTextBox] z historią nie umie tego zapisać, bo w
+     * trakcie gestu dokument ma już położenia pośrednie i „przed" wyszłoby
+     * równe „po" — cofnięcie nie miałoby czego cofać.
+     */
+    fun commitTextBox(page: Int, before: TextBoxElement, after: TextBoxElement) {
+        val sheet = document.value?.page(page) ?: return
+        val then = sheet.texts.map { if (it.id == before.id) before else it }
+        val now = sheet.texts.map { if (it.id == after.id) after else it }
+        perform(FieldChange(page, then, now))
+    }
+
+    /**
+     * Blok kodu na kartce to pole tekstowe w maszynowym kroju na ciemnej
+     * płytce — od razu szersze, bo kod rzadko mieści się w wizytówce.
+     */
+    fun addCodeBox(page: Int, x: Float, y: Float, argb: Int, background: Int) {
+        val sheet = document.value?.page(page) ?: return
+        val box = TextBoxElement(
+            id = UUID.randomUUID().toString(),
+            x = x,
+            y = y,
+            width = 340f,
+            height = 140f,
+            text = "",
+            color = argb,
+            font = NoteFont.MONO,
+            background = background,
+        )
+        perform(FieldChange(page, sheet.texts, sheet.texts + box))
+        _editedBox.value = box.id
+    }
+
+    // Zdjęcia na kartce
+
+    private val _editedImage = MutableStateFlow<String?>(null)
+    val editedImage: StateFlow<String?> = _editedImage.asStateFlow()
+
+    /** Wczytane bitmapy załączników — kartka rysuje z nich, nie z dysku. */
+    private val _imageBitmaps = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
+    val imageBitmaps: StateFlow<Map<String, Bitmap>> = _imageBitmaps.asStateFlow()
+
+    init {
+        /*
+          Wczytywanie zdjęć chodzi na wątku roboczym, nie na głównym.
+
+          `viewModelScope` domyślnie wpuszcza na wątek główny, a ten kolektor
+          rusza przy KAŻDEJ zmianie dokumentu, czyli przy każdym pociągnięciu
+          rysika. Dekodowanie zdjęcia stało wtedy w poprzek rysowania i ekran
+          zamierał na sekundy — w ciemnym motywie nie do odróżnienia od
+          zawieszenia, bo tło jest niemal czarne.
+
+          Bitmapy nie dostają `recycle()`: kartka rysuje z tej samej mapy i
+          zwolniona w tej chwili bitmapa mogłaby jeszcze siedzieć w widoku.
+          Zwolnienie odwołania wystarcza, a przed brakiem pamięci broni
+          zmniejszanie w [Bitmaps.decode].
+        */
+        viewModelScope.launch(failureHandler("wczytywanie zdjęć kartki")) {
+            document.collect { doc ->
+                val wanted = doc?.handwriting?.pages.orEmpty()
+                    .flatMap { it.images }
+                    .map { it.asset }
+                    .toSet()
+                val loaded = _imageBitmaps.value
+                if (wanted == loaded.keys) return@collect
+                val next = loaded.filterKeys { it in wanted }.toMutableMap()
+                for (name in wanted - loaded.keys) {
+                    val bitmap = withContext(Dispatchers.IO) {
+                        val data = runCatching { repo.readAttachment(path, name) }.getOrNull()
+                        data?.let { Bitmaps.decode(it) }
+                    } ?: continue
+                    next[name] = bitmap
+                }
+                _imageBitmaps.value = next
+            }
+        }
+    }
+
+    // Wybór zdjęcia trwa dłuższą chwilę i dzieje się poza edytorem, więc
+    // miejsce wstawienia zapamiętuje się przy naciśnięciu przycisku.
+    private var photoTarget: Triple<Int, Float, Float>? = null
+
+    fun rememberPhotoTarget(page: Int, x: Float, y: Float) {
+        photoTarget = Triple(page, x, y)
+    }
+
+    fun insertPhoto(data: ByteArray, extension: String) {
+        val (page, x, y) = photoTarget ?: Triple(0, 60f, 60f)
+        photoTarget = null
+        val sheet = document.value?.page(page) ?: return
+        viewModelScope.launch {
+            try {
+                // Nazwa z zegara, bo przy kolizji magazyn dokleja " (2)" ze
+                // spacją — a jedna nazwa ma wskazywać jeden plik.
+                val name = repo.writeAttachment(
+                    notePath = path,
+                    name = "zdjecie-${System.currentTimeMillis()}.$extension",
+                    data = data,
+                    mime = if (extension == "png") "image/png" else "image/jpeg",
+                )
+                // Na dysk idzie pełna rozdzielczość, do pamięci zmniejszona.
+                val bitmap = withContext(Dispatchers.IO) { Bitmaps.decode(data) }
+
+                // Zdjęcie wchodzi na pół szerokości kartki, w swoich proporcjach.
+                val width = (sheet.width * 0.5f).coerceAtLeast(120f)
+                val height = if (bitmap != null && bitmap.width > 0) {
+                    width * bitmap.height / bitmap.width
+                } else {
+                    width * 0.75f
+                }
+                val image = ImageElement(
+                    id = UUID.randomUUID().toString(),
+                    asset = name,
+                    x = x.coerceIn(0f, (sheet.width - width).coerceAtLeast(0f)),
+                    y = y.coerceIn(0f, (sheet.height - height).coerceAtLeast(0f)),
+                    width = width,
+                    height = height,
+                )
+                if (bitmap != null) {
+                    _imageBitmaps.value = _imageBitmaps.value + (name to bitmap)
+                }
+                perform(ImageChange(page, sheet.images, sheet.images + image))
+                _editedImage.value = image.id
+            } catch (e: Exception) {
+                setError(e.message ?: words.photoSaveFailed)
+            }
+        }
+    }
+
+    fun editImage(id: String?) {
+        _editedImage.value = id
+    }
+
+    fun updateImage(page: Int, image: ImageElement, toHistory: Boolean) {
+        val sheet = document.value?.page(page) ?: return
+        val images = sheet.images.map { if (it.id == image.id) image else it }
+        if (toHistory) {
+            perform(ImageChange(page, sheet.images, images))
+        } else {
+            editWithoutHistory { document -> document.withPage(page) { it.copy(images = images) } }
+        }
+    }
+
+    /** Jak [commitTextBox], tylko dla zdjęcia. */
+    fun commitImage(page: Int, before: ImageElement, after: ImageElement) {
+        val sheet = document.value?.page(page) ?: return
+        val then = sheet.images.map { if (it.id == before.id) before else it }
+        val now = sheet.images.map { if (it.id == after.id) after else it }
+        perform(ImageChange(page, then, now))
+    }
+
+    fun removeImage(page: Int, id: String) {
+        val sheet = document.value?.page(page) ?: return
+        perform(ImageChange(page, sheet.images, sheet.images.filterNot { it.id == id }))
+        if (_editedImage.value == id) _editedImage.value = null
+    }
+
     fun removeTextBox(page: Int, id: String) {
         val sheet = document.value?.page(page) ?: return
         perform(FieldChange(page, sheet.texts, sheet.texts.filterNot { it.id == id }))
@@ -413,76 +793,6 @@ class HandwritingViewModel(
     fun styleCurrentTextBox(transform: (TextBoxElement) -> TextBoxElement) {
         val (page, box) = currentTextBox() ?: return
         updateTextBox(page, transform(box), toHistory = true)
-    }
-
-    // Handwriting recognition
-
-    fun recognizeSelection() {
-        val strokes = _selected.value
-        if (strokes.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                if (!recognition.isModelDownloaded()) {
-                    _recognitionState.value = RecognitionState.Downloading(
-                        "Pobieram model pisma po polsku. Robi się to raz, potem działa bez internetu.",
-                    )
-                    recognition.downloadModel()
-                }
-                _recognitionState.value = RecognitionState.Downloading("Odczytuję pismo...")
-
-                val sheet = document.value?.page(_selectionPage.value)
-                val suggestions = recognition.recognize(
-                    strokes = strokes,
-                    areaWidth = sheet?.width ?: 595f,
-                    areaHeight = sheet?.height ?: 842f,
-                )
-                _recognitionState.value = RecognitionState.Ready
-                if (suggestions.isEmpty()) {
-                    _recognitionState.value = RecognitionState.Failed(
-                        "Nie odczytałem tego pisma. Zaznacz mniejszy fragment i spróbuj jeszcze raz.",
-                    )
-                } else {
-                    _textSuggestions.value = suggestions.take(5)
-                }
-            } catch (e: Exception) {
-                _recognitionState.value = RecognitionState.Failed(
-                    e.message ?: "Nie udało się odczytać pisma.",
-                )
-            }
-        }
-    }
-
-    fun acceptRecognition(text: String) {
-        val page = _selectionPage.value
-        val strokes = _selected.value
-        _textSuggestions.value = emptyList()
-        if (page < 0 || strokes.isEmpty()) return
-
-        val area = Strokes.bounds(strokes) ?: return
-        editWithoutHistory { document ->
-            document.withPage(page) { sheet ->
-                sheet.copy(
-                    recognized = sheet.recognized + RecognizedText(
-                        id = UUID.randomUUID().toString(),
-                        text = text,
-                        x = area.left,
-                        y = area.top,
-                        width = area.width,
-                        height = area.height,
-                        strokeIds = strokes.map { it.id },
-                    ),
-                )
-            }
-        }
-        deselect()
-    }
-
-    fun dismissSuggestions() {
-        _textSuggestions.value = emptyList()
-    }
-
-    fun dismissRecognitionState() {
-        _recognitionState.value = RecognitionState.Ready
     }
 
     companion object {

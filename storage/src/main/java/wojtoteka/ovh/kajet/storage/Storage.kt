@@ -12,5 +12,10 @@ object Storage {
             context = context.applicationContext,
             settings = settings,
             dao = IndexDatabase.get(context).index(),
+            retries = DeleteRetryQueue(context.applicationContext),
         )
+
+    /** Sprzątanie po kasowaniu — woła je aplikacja przy starcie, raz na dobę. */
+    fun housekeeping(context: Context, library: LibraryRepository): Housekeeping =
+        Housekeeping(context.applicationContext, library)
 }
