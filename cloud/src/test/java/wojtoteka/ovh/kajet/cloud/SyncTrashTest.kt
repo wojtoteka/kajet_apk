@@ -191,6 +191,117 @@ class SyncTrashTest {
         assertThat(queue.size()).isEqualTo(1)
     }
 
+    // --- Nieudane przenoszenie do kosza (błąd SAF, cofnięte uprawnienie) ---
+
+    @Test
+    fun `nieudany kosz przy gone zostawia wpis i wersje`() {
+        library.notes[notePath] = document()
+        rememberVersion(noteId, 4)
+        queue.add(notePath, noteId)
+        library.failTrash = true
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "gone")) }
+
+        sync()
+
+        // Nic nie udajemy: notatka na miejscu, wersja niezapomniana, wpis
+        // w kolejce z odnotowaną porażką — kiedyś wszystko schodziło mimo
+        // nieudanego przeniesienia i plik zostawał bezpański.
+        assertThat(library.notes).containsKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(4)
+        assertThat(queue.all().single().failedAttempts).isEqualTo(1)
+
+        // Awaria ustąpiła — wszystko dochodzi do końca.
+        library.failTrash = false
+        sync()
+        assertThat(library.trashedNoteIds).containsExactly(noteId)
+        assertThat(knownVersion(noteId)).isEqualTo(0)
+        assertThat(queue.size()).isEqualTo(0)
+    }
+
+    @Test
+    fun `nieudany kosz przy konflikcie z uzgadniania zostawia wpis`() {
+        library.notes[notePath] = document()
+        queue.add(notePath, noteId, reconciled = true)
+        library.failTrash = true
+        transport.onSendNote = {
+            CloudClient.Result.Ok(
+                SaveResponse(
+                    status = "conflict",
+                    onServer = ServerNote(id = noteId, version = 9, deletedAt = 4_000),
+                ),
+            )
+        }
+
+        sync()
+
+        assertThat(library.notes).containsKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(0)
+        assertThat(queue.all().single().failedAttempts).isEqualTo(1)
+    }
+
+    @Test
+    fun `nieudany kosz pliku z kodem nie zwalnia numeru`() {
+        library.texts[codePath] = "print(1)"
+        val id = codeIds.idFor(codePath)
+        rememberVersion(id, 3)
+        queue.add(codePath, id, QueueEntry.KIND_CODE)
+        library.failTrash = true
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "gone")) }
+
+        sync()
+
+        // Numer nie schodzi — inaczej plik dostałby świeży i wrócił na
+        // serwer jako duplikat, choć wciąż leży w bibliotece.
+        assertThat(library.texts).containsKey(codePath)
+        assertThat(codeIds.existingIdFor(codePath)).isEqualTo(id)
+        assertThat(knownVersion(id)).isEqualTo(3)
+        assertThat(queue.all().single().failedAttempts).isEqualTo(1)
+    }
+
+    @Test
+    fun `nieudany kosz przy pobranym nagrobku nie zapamietuje wersji`() {
+        library.notes[notePath] = document()
+        rememberVersion(noteId, 4)
+        library.failTrash = true
+        transport.serverNotes = listOf(
+            ServerNote(id = noteId, title = "Fizyka", version = 6, updatedAt = 5_000, deletedAt = 4_500),
+        )
+
+        sync()
+
+        // Zapamiętana wersja nagrobka udawałaby, że zadziałał — notatka
+        // zostałaby przy życiu na zawsze.
+        assertThat(library.notes).containsKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(4)
+
+        library.failTrash = false
+        sync()
+        assertThat(library.notes).doesNotContainKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(6)
+    }
+
+    @Test
+    fun `nieudane sprzatniecie nagrobka nie przesuwa znacznika`() {
+        rememberVersion(noteId, 4)
+        library.notes[notePath] = document()
+        transport.tombstones = listOf(noteId)
+        library.serverDeletions[noteId] = ServerDeletion.TRASHED
+        library.failServerDeletions = true
+
+        sync()
+
+        // Znacznik stoi — przesunięty schowałby nagrobek na zawsze.
+        assertThat(account.lastDeleted).isEqualTo(0)
+        assertThat(library.notes).containsKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(4)
+
+        library.failServerDeletions = false
+        sync()
+        assertThat(library.notes).doesNotContainKey(notePath)
+        assertThat(knownVersion(noteId)).isEqualTo(0)
+        assertThat(account.lastDeleted).isGreaterThan(0L)
+    }
+
     @Test
     fun `nagrobek pliku z kodem trafia w plik po sciezce z rejestru`() {
         library.texts[codePath] = "print(1)"

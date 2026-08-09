@@ -2,7 +2,9 @@ package wojtoteka.ovh.kajet.cloud
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -294,6 +296,83 @@ class SyncTest {
         sync()
         assertThat(transport.sentNotes.single().id).isEqualTo(noteId)
         assertThat(queue.size()).isEqualTo(0)
+    }
+
+    // --- Utknięte wpisy ---
+
+    // --- Załączniki ---
+
+    @Test
+    fun `nieudany zapis zalacznika nie liczy notatki za pobrana`() {
+        transport.serverNotes = listOf(
+            serverCopy(body = "z serwera").copy(
+                attachments = listOf(AttachmentInfo(name = "rys.png", hash = "h1")),
+            ),
+        )
+        transport.attachmentData = mapOf((noteId to "rys.png") to byteArrayOf(1))
+        library.failAttachmentWrites = true
+
+        sync()
+
+        // Zapamiętana wersja udawałaby komplet — brakującego załącznika
+        // nikt by już nie dociągnął.
+        assertThat(knownVersion(noteId)).isEqualTo(0)
+
+        // Dysk wrócił do życia: następny przebieg dociąga wszystko.
+        library.failAttachmentWrites = false
+        sync()
+        assertThat(knownVersion(noteId)).isEqualTo(7)
+        assertThat(library.attachments).containsKey("Fizyka.note" to "rys.png")
+    }
+
+    @Test
+    fun `nieudana wysylka zalacznika zostawia wpis w kolejce`() {
+        library.notes[path] = document()
+        library.attachments[path to "rys.png"] = byteArrayOf(1)
+        queue.add(path, noteId)
+        transport.failSendAttachment = true
+
+        sync()
+
+        // Treść doszła i wersja słusznie zapamiętana, ale wpis zostaje —
+        // kiedyś schodził i braku załącznika nie nadrabiało już nic.
+        assertThat(knownVersion(noteId)).isEqualTo(1)
+        assertThat(queue.size()).isEqualTo(1)
+        assertThat(queue.all().single().failedAttempts).isEqualTo(1)
+
+        transport.failSendAttachment = false
+        sync()
+        assertThat(queue.size()).isEqualTo(0)
+        assertThat(transport.sentAttachments).contains(noteId to "rys.png")
+    }
+
+    // --- Wyjątek w zaplanowanej synchronizacji ---
+
+    @Test
+    fun `wyjatek w tle nie blokuje nastepnych synchronizacji`() {
+        library.notes[path] = document()
+
+        // Pierwsze pytanie o zalogowanie zadaje reportChange, drugie —
+        // synchronizacja w tle; to ono rzuca wyjątkiem.
+        account.throwOnSignedInCall = 2
+        sync.reportChange(path, noteId)
+
+        // Awaria w tle ma zapalić stan „czeka" (brokenSync) — kiedyś
+        // połknięty wyjątek zostawiał wieczne „Synchronizuję…".
+        runBlocking {
+            withTimeout(5_000) {
+                while (sync.state.value !is SyncState.Waiting) delay(20)
+            }
+        }
+
+        // Zwolniona flaga: następna synchronizacja rusza i wysyła zaległości.
+        sync.syncSoon()
+        runBlocking {
+            withTimeout(5_000) {
+                while (queue.size() > 0) delay(20)
+            }
+        }
+        assertThat(transport.sentNotes.single().id).isEqualTo(noteId)
     }
 
     // --- Utknięte wpisy ---

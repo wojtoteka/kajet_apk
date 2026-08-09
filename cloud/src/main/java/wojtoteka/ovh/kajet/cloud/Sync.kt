@@ -96,7 +96,18 @@ class Sync(
         if (!client.hasNetwork()) return
         if (!syncScheduled.compareAndSet(false, true)) return
         scope.launch {
-            runCatching { synchronise() }
+            // Flaga gaśnie normalnie POD zamkiem w synchronise. Wyjątek przed
+            // tym miejscem zostawiał ją podniesioną na zawsze: scheduleSync
+            // nie umiał już nic zaplanować i synchronizacja stawała do
+            // restartu aplikacji. Sam wyjątek idzie dalej, do [brokenSync] —
+            // wcześniej znikał tu bez śladu.
+            var reachedSync = false
+            try {
+                synchronise()
+                reachedSync = true
+            } finally {
+                if (!reachedSync) syncScheduled.set(false)
+            }
         }
     }
 
@@ -685,9 +696,19 @@ class Sync(
                                             // Uzgadnianie trafiło na plik skasowany gdzie
                                             // indziej — serwerowy kosz wygrywa, plik idzie
                                             // do lokalnego kosza zamiast się wskrzeszać.
-                                            runCatching { repository.trashFileFromCloud(entry.path) }
-                                            rememberVersion(entry.noteId, onServer.version)
-                                            queue.removeIfUnchanged(entry)
+                                            // Rozliczenie dopiero PO udanym przeniesieniu:
+                                            // porażka zostawiała wersję zapamiętaną, wpis
+                                            // znikał, a plik wisiał osierocony bez śladu.
+                                            val moved = runCatching {
+                                                repository.trashFileFromCloud(entry.path)
+                                            }
+                                            if (moved.isSuccess) {
+                                                rememberVersion(entry.noteId, onServer.version)
+                                                queue.removeIfUnchanged(entry)
+                                            } else {
+                                                reason = reason ?: words.syncTrashMoveFailed
+                                                queue.recordFailure(entry.path)
+                                            }
                                         } else if (onServer?.deletedAt != null) {
                                             // Plik leży w serwerowym koszu, a tu ktoś
                                             // go właśnie zapisał. Wersja z serwera już
@@ -711,11 +732,21 @@ class Sync(
                                     "gone" -> {
                                         // Notatka trwale skasowana gdzie indziej.
                                         // Plik idzie do lokalnego kosza zamiast
-                                        // wskrzeszać skasowane.
-                                        runCatching { repository.trashFileFromCloud(entry.path) }
-                                        codeIds.remove(entry.path)
-                                        forgetVersion(entry.noteId)
-                                        queue.removeIfUnchanged(entry)
+                                        // wskrzeszać skasowane. Numer i wersja
+                                        // schodzą dopiero PO udanym przeniesieniu —
+                                        // bez tego plik zostawał w bibliotece jako
+                                        // bezpański i wracał na serwer jako duplikat.
+                                        val moved = runCatching {
+                                            repository.trashFileFromCloud(entry.path)
+                                        }
+                                        if (moved.isSuccess) {
+                                            codeIds.remove(entry.path)
+                                            forgetVersion(entry.noteId)
+                                            queue.removeIfUnchanged(entry)
+                                        } else {
+                                            reason = reason ?: words.syncTrashMoveFailed
+                                            queue.recordFailure(entry.path)
+                                        }
                                     }
                                     else -> {
                                         rememberVersion(entry.noteId, response.data.version)
@@ -771,9 +802,17 @@ class Sync(
                                             // w koszu — czyli skasowano ją gdzie indziej.
                                             // Kosz wygrywa; wcześniej taka wysyłka
                                             // wskrzeszała wszystko po każdym logowaniu.
-                                            runCatching { repository.trashNoteFromCloud(document.id) }
-                                            rememberVersion(document.id, onServer.version)
-                                            queue.removeIfUnchanged(entry)
+                                            // Rozliczenie dopiero PO udanym przeniesieniu.
+                                            val moved = runCatching {
+                                                repository.trashNoteFromCloud(document.id)
+                                            }
+                                            if (moved.isSuccess) {
+                                                rememberVersion(document.id, onServer.version)
+                                                queue.removeIfUnchanged(entry)
+                                            } else {
+                                                reason = reason ?: words.syncTrashMoveFailed
+                                                queue.recordFailure(entry.path)
+                                            }
                                         } else if (onServer?.deletedAt != null) {
                                             // Notatka leży w serwerowym koszu, a lokalnie
                                             // ktoś ją dalej pisze. Nie robimy kopii kosza —
@@ -803,16 +842,32 @@ class Sync(
                                     "gone" -> {
                                         // Notatka trwale skasowana gdzie indziej.
                                         // Lokalna kopia idzie do kosza — stamtąd
-                                        // zawsze można ją wyjąć.
-                                        runCatching { repository.trashNoteFromCloud(document.id) }
-                                        forgetVersion(document.id)
-                                        queue.removeIfUnchanged(entry)
+                                        // zawsze można ją wyjąć. Wersja i wpis
+                                        // schodzą dopiero PO udanym przeniesieniu.
+                                        val moved = runCatching {
+                                            repository.trashNoteFromCloud(document.id)
+                                        }
+                                        if (moved.isSuccess) {
+                                            forgetVersion(document.id)
+                                            queue.removeIfUnchanged(entry)
+                                        } else {
+                                            reason = reason ?: words.syncTrashMoveFailed
+                                            queue.recordFailure(entry.path)
+                                        }
                                     }
                                     else -> {
                                         rememberVersion(document.id, response.data.version)
-                                        sendAttachments(document.id, entry.path)
-                                        queue.removeIfUnchanged(entry)
-                                        sent += 1
+                                        if (sendAttachments(document.id, entry.path)) {
+                                            queue.removeIfUnchanged(entry)
+                                            sent += 1
+                                        } else {
+                                            // Treść doszła (wersja słusznie
+                                            // zapamiętana), ale załącznik nie —
+                                            // wpis zostaje i ponowna wysyłka
+                                            // dośle brakujące po skrócie treści.
+                                            reason = reason ?: words.syncAttachmentFailed
+                                            queue.recordFailure(entry.path)
+                                        }
                                     }
                                 }
                             }
@@ -828,22 +883,36 @@ class Sync(
         StepResult(sent, conflicts, reason, worthRetrying, retryNeeded || heldBack)
     }
 
-    private suspend fun sendAttachments(noteId: String, path: String) {
+    /**
+     * Zwraca, czy każdy załącznik z dysku naprawdę dojechał na serwer.
+     * Kiedyś porażka przechodziła bez śladu i brakujący załącznik nie miał
+     * już żadnej okazji, żeby pojechać — aż do następnej zmiany notatki.
+     */
+    private suspend fun sendAttachments(noteId: String, path: String): Boolean {
         val onDisk = runCatching { repository.attachmentNames(path) }.getOrDefault(emptyList())
-        if (onDisk.isEmpty()) return
+        if (onDisk.isEmpty()) return true
 
         val onServer = when (val listing = client.listAttachments(noteId)) {
             is CloudClient.Result.Ok -> listing.data.attachments.associateBy { it.name }
-            is CloudClient.Result.Error -> return
+            is CloudClient.Result.Error -> return false
         }
 
+        var allSent = true
         for (name in onDisk) {
-            val data = runCatching { repository.readAttachment(path, name) }.getOrNull() ?: continue
+            val data = runCatching { repository.readAttachment(path, name) }.getOrNull()
+            if (data == null) {
+                // Jest na spisie, a nie daje się odczytać — nie udajemy,
+                // że dojechał.
+                allSent = false
+                continue
+            }
             val localHash = hash(data)
             if (onServer[name]?.hash == localHash) continue
 
-            client.sendAttachment(noteId, name, mimeFromName(name), data)
+            val outcome = client.sendAttachment(noteId, name, mimeFromName(name), data)
+            if (outcome is CloudClient.Result.Error) allSent = false
         }
+        return allSent
     }
 
     // --- Fetching ---
@@ -976,17 +1045,28 @@ class Sync(
                         // wersji nie ma prawa zostawić przy życiu notatki,
                         // której serwer już nie ma.
                         if (fromServer.deletedAt != null) {
-                            runCatching {
+                            val moved = runCatching {
                                 if (fromServer.kind == KIND_CODE) {
                                     trashCodeFileFromCloud(fromServer.id)
                                 } else {
                                     repository.trashNoteFromCloud(fromServer.id)
                                 }
-                            }.onFailure {
-                                Log.w("Kajet", "Nie udało się wyrzucić do kosza ${fromServer.id}", it)
                             }
-                            rememberVersion(fromServer.id, fromServer.version)
-                            settled(fromServer.updatedAt)
+                            if (moved.isSuccess) {
+                                rememberVersion(fromServer.id, fromServer.version)
+                                settled(fromServer.updatedAt)
+                            } else {
+                                // Zapamiętana wersja udawałaby, że nagrobek
+                                // zadziałał — notatka zostałaby przy życiu
+                                // na zawsze. Zakładka staje, następny przebieg
+                                // spróbuje jeszcze raz.
+                                Log.w(
+                                    "Kajet",
+                                    "Nie udało się wyrzucić do kosza ${fromServer.id}",
+                                    moved.exceptionOrNull(),
+                                )
+                                failed(fromServer, moved.exceptionOrNull())
+                            }
                             continue
                         }
 
@@ -1023,9 +1103,25 @@ class Sync(
                                 local == null || serverDoc == null ->
                                     failed(fromServer, null)
                                 samePayload(local, serverDoc) -> {
-                                    rememberVersion(fromServer.id, fromServer.version)
-                                    if (pending.isNotEmpty()) resolvedPending = true
-                                    settled(fromServer.updatedAt)
+                                    // Zgodna treść to jeszcze nie komplet:
+                                    // załączniki też muszą być na miejscu,
+                                    // inaczej zapamiętana wersja zamknęłaby
+                                    // im drogę na zawsze.
+                                    if (fetchAttachments(
+                                            fromServer.id,
+                                            unknownBase,
+                                            fromServer.attachments,
+                                        )
+                                    ) {
+                                        rememberVersion(fromServer.id, fromServer.version)
+                                        if (pending.isNotEmpty()) resolvedPending = true
+                                        settled(fromServer.updatedAt)
+                                    } else {
+                                        failed(
+                                            fromServer,
+                                            IllegalStateException(words.syncAttachmentFailed),
+                                        )
+                                    }
                                 }
                                 saveServerCopyAlongside(unknownBase, fromServer, serverDoc) -> {
                                     rememberVersion(fromServer.id, fromServer.version)
@@ -1077,10 +1173,19 @@ class Sync(
                             if (target != null && saved.substringBeforeLast('/', "") != target) {
                                 runCatching { repository.moveNoteFromCloud(fromServer.id, target) }
                             }
-                            fetchAttachments(fromServer.id, saved, fromServer.attachments)
-                            rememberVersion(fromServer.id, fromServer.version)
-                            fetched += 1
-                            settled(fromServer.updatedAt)
+                            if (fetchAttachments(fromServer.id, saved, fromServer.attachments)) {
+                                rememberVersion(fromServer.id, fromServer.version)
+                                fetched += 1
+                                settled(fromServer.updatedAt)
+                            } else {
+                                // Załącznik nie dojechał — notatka nie liczy
+                                // się za pobraną. Zapis po identyfikatorze jest
+                                // idempotentny, więc ponowienie nie dubluje.
+                                failed(
+                                    fromServer,
+                                    IllegalStateException(words.syncAttachmentFailed),
+                                )
+                            }
                         } else {
                             Log.w(
                                 "Kajet",
@@ -1159,6 +1264,7 @@ class Sync(
         var pages = 0
         var erased = 0
         var trashed = 0
+        var failures = 0
 
         // Rejestr plików z kodem i zawartość kosza czytamy raz na przebieg, nie
         // raz na nagrobek: jedno i drugie oznacza przejście po wszystkim, co
@@ -1202,6 +1308,7 @@ class Sync(
                                 repository.applyServerDeletion(id, trash)
                             }
                         }.onFailure {
+                            failures += 1
                             Log.w("Kajet", "Nie udało się posprzątać po skasowanej $id", it)
                         }.getOrNull()
 
@@ -1246,9 +1353,6 @@ class Sync(
             }
         }
 
-        // Dopiero tutaj: cały spis przeszedł od początku do końca.
-        if (since > startedAt) account.rememberDeletedSync(since)
-
         if (erased > 0 || trashed > 0) {
             Log.i(
                 "Kajet",
@@ -1257,6 +1361,23 @@ class Sync(
             )
             repository.refresh()
         }
+
+        // Nieudane sprzątnięcie nie może przesunąć znacznika — nagrobek
+        // zniknąłby z oczu na zawsze, a notatka zostałaby przy życiu.
+        // Powtórka niczego nie psuje: następny przebieg zaczyna od tego
+        // samego miejsca.
+        if (failures > 0) {
+            return@withContext DeletionStep(
+                tombstonesWork = true,
+                erased = erased,
+                trashed = trashed,
+                reason = words.syncTrashMoveFailed,
+                worthRetrying = true,
+            )
+        }
+
+        // Dopiero tutaj: cały spis przeszedł od początku do końca.
+        if (since > startedAt) account.rememberDeletedSync(since)
 
         DeletionStep(tombstonesWork = true, erased = erased, trashed = trashed)
     }
@@ -1291,6 +1412,7 @@ class Sync(
         val trash = runCatching { repository.readTrashContents() }.getOrDefault(TrashContents())
         var erased = 0
         var trashed = 0
+        var failures = 0
 
         suspend fun settle(id: String, codePath: String?) {
             if (id.isBlank()) return
@@ -1304,6 +1426,7 @@ class Sync(
                     repository.applyServerDeletion(id, trash)
                 }
             }.onFailure {
+                failures += 1
                 Log.w("Kajet", "Nie udało się posprzątać po skasowanej $id", it)
             }.getOrNull()
 
@@ -1340,7 +1463,10 @@ class Sync(
             )
             repository.refresh()
         }
-        true
+        // Porażka choć jednego sprzątnięcia = przebieg niedokończony. Nie
+        // wolno na jego podstawie postawić znacznika zamiatania — zamknąłby
+        // drogę zapasową z niezałatwioną zaległością.
+        failures == 0
     }
 
     /**
@@ -1371,31 +1497,43 @@ class Sync(
         }
     }
 
+    /**
+     * Zwraca, czy KAŻDY załącznik z serwera naprawdę wylądował na dysku.
+     * Kiedyś porażka przechodziła bez śladu: notatka liczyła się za pobraną,
+     * wersja zostawała zapamiętana i brakującego załącznika nikt już nie
+     * dociągał.
+     */
     private suspend fun fetchAttachments(
         noteId: String,
         path: String,
         listed: List<AttachmentInfo> = emptyList(),
-    ) {
+    ): Boolean {
         val onServer = listed.ifEmpty {
             when (val listing = client.listAttachments(noteId)) {
                 is CloudClient.Result.Ok -> listing.data.attachments
-                is CloudClient.Result.Error -> return
+                is CloudClient.Result.Error -> return false
             }
         }
-        if (onServer.isEmpty()) return
+        if (onServer.isEmpty()) return true
 
+        var allSaved = true
         for (info in onServer) {
             val local = runCatching { repository.readAttachment(path, info.name) }.getOrNull()
             if (local != null && hash(local) == info.hash) continue
 
             val bytes = when (val downloaded = client.fetchAttachment(noteId, info.name)) {
                 is CloudClient.Result.Ok -> downloaded.data
-                is CloudClient.Result.Error -> continue
+                is CloudClient.Result.Error -> {
+                    allSaved = false
+                    continue
+                }
             }
-            runCatching {
+            val saved = runCatching {
                 repository.putAttachment(path, info.name, bytes, info.mime.ifBlank { mimeFromName(info.name) })
             }
+            if (saved.isFailure) allSaved = false
         }
+        return allSaved
     }
 
     private suspend fun saveVersionAlongside(path: String, response: SaveResponse): Boolean {
@@ -1433,7 +1571,11 @@ class Sync(
 
         // Attachments live under the original server note id; the conflict copy
         // is a new local note that still points at assets/... in its content.
-        fetchAttachments(fromServer.id, saved, fromServer.attachments)
+        if (!fetchAttachments(fromServer.id, saved, fromServer.attachments)) {
+            // Kopia już stoi i cofnąć jej nie wolno — ponowienie mnożyłoby
+            // kopie „(wersja z serwera)". Brak załącznika zostaje w dzienniku.
+            Log.w("Kajet", "Kopia konfliktu ${fromServer.id} bez części załączników")
+        }
         return true
     }
 
@@ -1580,7 +1722,9 @@ class Sync(
 
     private suspend fun trashCodeFileFromCloud(noteId: String) {
         val path = codeIds.pathFor(noteId) ?: return
-        runCatching { repository.trashFileFromCloud(path) }
+        // Wyjątek idzie wyżej — połknięty tutaj sprawiał, że nagrobek liczył
+        // się za obsłużony, choć plik dalej leżał w bibliotece.
+        repository.trashFileFromCloud(path)
         // Mapowanie zostaje: przywrócenie z lokalnego kosza ma wskrzesić tę
         // samą notatkę na serwerze, a nie założyć duplikat pod nowym numerem.
     }

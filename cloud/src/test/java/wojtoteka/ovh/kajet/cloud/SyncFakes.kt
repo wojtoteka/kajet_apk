@@ -26,6 +26,18 @@ internal class FakeLibrary : CloudLibrary {
 
     var failWrites = false
 
+    /** Przenoszenie do kosza rzuca wyjątkiem (błąd SAF, cofnięte uprawnienie). */
+    var failTrash = false
+
+    /** Sprzątanie po nagrobku rzuca wyjątkiem. */
+    var failServerDeletions = false
+
+    /** Zapis załącznika na dysk rzuca wyjątkiem. */
+    var failAttachmentWrites = false
+
+    /** Załączniki na dysku: (ścieżka notatki, nazwa) → bajty. */
+    val attachments = LinkedHashMap<Pair<String, String>, ByteArray>()
+
     /** Co odpowiada biblioteka na nagrobek z serwera — po identyfikatorze. */
     val serverDeletions = mutableMapOf<String, ServerDeletion>()
 
@@ -105,6 +117,7 @@ internal class FakeLibrary : CloudLibrary {
     override suspend fun moveNoteFromCloud(noteId: String, targetFolder: String): String? = null
 
     override suspend fun trashNoteFromCloud(noteId: String): Boolean {
+        if (failTrash) throw IllegalStateException("kosz odmawia")
         trashedNoteIds += noteId
         val entry = notes.entries.firstOrNull { it.value.id == noteId } ?: return false
         notes.remove(entry.key)
@@ -112,11 +125,13 @@ internal class FakeLibrary : CloudLibrary {
     }
 
     override suspend fun trashFileFromCloud(path: String): Boolean {
+        if (failTrash) throw IllegalStateException("kosz odmawia")
         trashedFilePaths += path
         return texts.remove(path) != null
     }
 
     override suspend fun applyServerDeletion(noteId: String, trash: TrashContents?): ServerDeletion {
+        if (failServerDeletions) throw IllegalStateException("sprzątanie odmawia")
         serverDeletionCalls += noteId
         val outcome = serverDeletions[noteId] ?: ServerDeletion.NOTHING
         // Prawdziwa biblioteka po ERASED/TRASHED nie zostawia notatki tam,
@@ -129,15 +144,23 @@ internal class FakeLibrary : CloudLibrary {
     }
 
     override suspend fun applyServerCodeDeletion(path: String, trash: TrashContents?): ServerDeletion {
+        if (failServerDeletions) throw IllegalStateException("sprzątanie odmawia")
         serverCodeDeletionCalls += path
         val outcome = serverCodeDeletions[path] ?: ServerDeletion.NOTHING
         if (outcome != ServerDeletion.NOTHING) texts.remove(path)
         return outcome
     }
 
-    override suspend fun attachmentNames(notePath: String): List<String> = emptyList()
-    override suspend fun readAttachment(notePath: String, name: String): ByteArray? = null
-    override suspend fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) = Unit
+    override suspend fun attachmentNames(notePath: String): List<String> =
+        attachments.keys.filter { it.first == notePath }.map { it.second }
+
+    override suspend fun readAttachment(notePath: String, name: String): ByteArray? =
+        attachments[notePath to name]
+
+    override suspend fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) {
+        if (failAttachmentWrites) throw IllegalStateException("dysk odmawia")
+        attachments[notePath to name] = data
+    }
 
     override suspend fun allCloudFolders(): List<LibraryRepository.CloudFolder> = emptyList()
 
@@ -162,6 +185,18 @@ internal class FakeTransport : CloudTransport {
 
     /** Nagrobki, które odda pobieranie skasowanych na zawsze. */
     var tombstones: List<String> = emptyList()
+
+    /** Załączniki „na serwerze": numer notatki → spis. */
+    var serverAttachments: Map<String, List<AttachmentInfo>> = emptyMap()
+
+    /** Bajty do pobrania: (numer notatki, nazwa) → treść. */
+    var attachmentData: Map<Pair<String, String>, ByteArray> = emptyMap()
+
+    /** Wysyłka załącznika odbija się od serwera. */
+    var failSendAttachment = false
+
+    /** Każdy wysłany załącznik: (numer notatki, nazwa). */
+    val sentAttachments = mutableListOf<Pair<String, String>>()
 
     /** Każda wysłana notatka, po kolei. */
     val sentNotes = mutableListOf<OutgoingNote>()
@@ -220,24 +255,43 @@ internal class FakeTransport : CloudTransport {
         CloudClient.Result.Error("starszy serwer", notFound = true)
 
     override suspend fun listAttachments(noteId: String): CloudClient.Result<AttachmentsResponse> =
-        CloudClient.Result.Ok(AttachmentsResponse())
+        CloudClient.Result.Ok(AttachmentsResponse(serverAttachments[noteId].orEmpty()))
 
     override suspend fun sendAttachment(
         noteId: String,
         name: String,
         mime: String,
         data: ByteArray,
-    ): CloudClient.Result<AttachmentResponse> =
-        CloudClient.Result.Ok(AttachmentResponse(name = name))
+    ): CloudClient.Result<AttachmentResponse> {
+        sentAttachments += noteId to name
+        if (failSendAttachment) {
+            return CloudClient.Result.Error("zerwana sieć", worthRetrying = true)
+        }
+        return CloudClient.Result.Ok(AttachmentResponse(name = name))
+    }
 
     override suspend fun fetchAttachment(noteId: String, name: String): CloudClient.Result<ByteArray> =
-        CloudClient.Result.Error("brak", notFound = true)
+        attachmentData[noteId to name]
+            ?.let { CloudClient.Result.Ok(it) }
+            ?: CloudClient.Result.Error("brak", notFound = true)
 }
 
 internal class FakeAccount : SyncAccount {
     private var lastSync = 0L
-    private var lastDeleted = 0L
-    override fun isSignedIn(): Boolean = true
+
+    /** Znacznik nagrobków — jawny, żeby testy widziały, czy się przesunął. */
+    var lastDeleted = 0L
+
+    /** Które z kolei pytanie o zalogowanie ma rzucić wyjątkiem (0 = żadne). */
+    var throwOnSignedInCall = 0
+    private var signedInCalls = 0
+
+    override fun isSignedIn(): Boolean {
+        signedInCalls += 1
+        if (signedInCalls == throwOnSignedInCall) throw IllegalStateException("konto odmawia")
+        return true
+    }
+
     override fun lastSync(): Long = lastSync
     override fun rememberSync(moment: Long) { lastSync = moment }
     override fun lastDeletedSync(): Long = lastDeleted

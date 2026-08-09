@@ -499,6 +499,8 @@ interface Strings {
     val changeFolder: String
     val rebuildIndexAbout: String
     val conflictCopyFailed: String
+    val syncTrashMoveFailed: String
+    val syncAttachmentFailed: String
     val retryStuckButton: String
     val stuckAbout: String
     val notUploadedTag: String
@@ -1498,6 +1500,8 @@ object PolishStrings : Strings {
     override val rebuildIndexAbout = "Odbuduj spis wtedy, gdy notatki trafiły tu z komputera albo " +
         "gdy wyszukiwanie nie znajduje czegoś, co na pewno masz."
     override val conflictCopyFailed = "Nie udało się zapisać kopii konfliktu. Spróbuję ponownie."
+    override val syncTrashMoveFailed = "Nie udało się przenieść do kosza. Spróbuję ponownie."
+    override val syncAttachmentFailed = "Nie udało się przenieść załącznika. Spróbuję ponownie."
     override val retryStuckButton = "Spróbuj ponownie"
     override val stuckAbout = "Te notatki zostały na urządzeniu. Zajrzyj do nich albo spróbuj wysłać jeszcze raz."
     override val notUploadedTag = "nie wysłano"
@@ -2112,6 +2116,8 @@ object EnglishStrings : Strings {
     override val rebuildIndexAbout = "Rebuild the index when you have copied notes in from a computer, or " +
         "when search cannot find something you know is there."
     override val conflictCopyFailed = "The conflict copy could not be saved. I will try again."
+    override val syncTrashMoveFailed = "Could not move it to the bin. I will try again."
+    override val syncAttachmentFailed = "Could not carry an attachment over. I will try again."
     override val retryStuckButton = "Try again"
     override val stuckAbout = "These notes stayed on the device. Have a look at them or try uploading again."
     override val notUploadedTag = "not uploaded"
