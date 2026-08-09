@@ -11,11 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.TextContent
-import wojtoteka.ovh.kajet.storage.CloudLibrary
-import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.NoteCodec
-import wojtoteka.ovh.kajet.storage.ServerDeletion
-import wojtoteka.ovh.kajet.storage.TrashContents
 
 /**
  * Co synchronizacja ROBI z odpowiedzią serwera — dalszy ciąg
@@ -24,8 +20,10 @@ import wojtoteka.ovh.kajet.storage.TrashContents
  * Odpowiedź konfliktu rozgałęzia się na pięć ścieżek różniących się jedną
  * flagą albo jednym polem, a pomyłka między nimi to „skasowałem notatkę
  * i wróciła" albo „napisałem notatkę i zniknęła". Te testy przypinają każdą
- * ścieżkę z osobna, na atrapach biblioteki i serwera — prawdziwe są kolejka
+ * ścieżkę z osobna, na atrapach z [SyncFakes] — prawdziwe są kolejka
  * (SharedPreferences przez Robolectric) i zapamiętane wersje.
+ *
+ * Pliki z kodem ma [SyncCodeTest], a kosz i trwałe kasowanie [SyncTrashTest].
  */
 @RunWith(RobolectricTestRunner::class)
 class SyncTest {
@@ -286,169 +284,4 @@ class SyncTest {
         queue.add(path, noteId)
         assertThat(queue.stuckCount()).isEqualTo(0)
     }
-}
-
-// --- Atrapy ---
-
-private class FakeLibrary : CloudLibrary {
-
-    val notes = LinkedHashMap<String, NoteDocument>()
-    val texts = LinkedHashMap<String, String>()
-    val trashedNoteIds = mutableListOf<String>()
-    var failWrites = false
-
-    override fun refresh() = Unit
-    override suspend fun hasStore(): Boolean = true
-    override suspend fun rebuildIfEmpty(progress: ((Int, Int) -> Unit)?) = Unit
-
-    override suspend fun readNote(path: String): NoteDocument =
-        notes[path] ?: throw IllegalStateException("brak $path")
-
-    override suspend fun readText(path: String): String =
-        texts[path] ?: throw IllegalStateException("brak $path")
-
-    override suspend fun allNoteIds(): List<Pair<String, String>> =
-        notes.map { (notePath, doc) -> notePath to doc.id }
-
-    override suspend fun allCodeFilePaths(): List<String> = texts.keys.toList()
-
-    override suspend fun readTrashContents(): TrashContents = TrashContents()
-
-    override suspend fun writeNoteFromCloud(document: NoteDocument, targetFolder: String): String? {
-        if (failWrites) return null
-        val newPath = if (targetFolder.isEmpty()) {
-            "${document.title}.note"
-        } else {
-            "$targetFolder/${document.title}.note"
-        }
-        notes[newPath] = document
-        return newPath
-    }
-
-    override suspend fun writeTextFromCloud(path: String, content: String) {
-        if (failWrites) throw IllegalStateException("dysk odmawia")
-        texts[path] = content
-    }
-
-    override suspend fun createTextFileFromCloud(
-        parent: String,
-        fileName: String,
-        content: String,
-    ): String {
-        if (failWrites) throw IllegalStateException("dysk odmawia")
-        val newPath = if (parent.isEmpty()) fileName else "$parent/$fileName"
-        texts[newPath] = content
-        return newPath
-    }
-
-    override suspend fun moveNoteFromCloud(noteId: String, targetFolder: String): String? = null
-
-    override suspend fun trashNoteFromCloud(noteId: String): Boolean {
-        trashedNoteIds += noteId
-        val entry = notes.entries.firstOrNull { it.value.id == noteId } ?: return false
-        notes.remove(entry.key)
-        return true
-    }
-
-    override suspend fun trashFileFromCloud(path: String): Boolean = texts.remove(path) != null
-
-    override suspend fun applyServerDeletion(noteId: String, trash: TrashContents?) =
-        ServerDeletion.NOTHING
-
-    override suspend fun applyServerCodeDeletion(path: String, trash: TrashContents?) =
-        ServerDeletion.NOTHING
-
-    override suspend fun attachmentNames(notePath: String): List<String> = emptyList()
-    override suspend fun readAttachment(notePath: String, name: String): ByteArray? = null
-    override suspend fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) = Unit
-
-    override suspend fun allCloudFolders(): List<LibraryRepository.CloudFolder> = emptyList()
-
-    override suspend fun createFolderFromCloud(
-        parent: String,
-        name: String,
-        colorId: String,
-        iconId: String,
-        id: String,
-    ): String = if (parent.isEmpty()) name else "$parent/$name"
-
-    override suspend fun renameFolderFromCloud(path: String, newName: String): String = path
-    override suspend fun moveFolderFromCloud(path: String, targetFolder: String): String = path
-    override suspend fun updateFolderLookFromCloud(path: String, colorId: String, iconId: String) = Unit
-}
-
-private class FakeTransport : CloudTransport {
-
-    /** Notatki, które „leżą na serwerze" — odda je pobieranie zmian. */
-    var serverNotes: List<ServerNote> = emptyList()
-    var failFetch = false
-
-    /** Każda wysłana notatka, po kolei. */
-    val sentNotes = mutableListOf<OutgoingNote>()
-
-    var onSendNote: (OutgoingNote) -> CloudClient.Result<SaveResponse> = {
-        CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1))
-    }
-
-    override fun hasNetwork(): Boolean = true
-
-    override suspend fun fetchChanges(
-        since: Long,
-        afterId: String?,
-        withContent: Boolean,
-    ): CloudClient.Result<ChangesResponse> {
-        if (failFetch) return CloudClient.Result.Error("zerwana sieć", worthRetrying = true)
-        val notes = if (withContent) serverNotes else serverNotes.map { it.copy(content = null) }
-        return CloudClient.Result.Ok(
-            ChangesResponse(
-                notes = notes,
-                upTo = notes.maxOfOrNull { it.updatedAt } ?: 0,
-                hasMore = false,
-            ),
-        )
-    }
-
-    override suspend fun sendNote(note: OutgoingNote): CloudClient.Result<SaveResponse> {
-        sentNotes += note
-        return onSendNote(note)
-    }
-
-    override suspend fun deleteNote(noteId: String): CloudClient.Result<SaveResponse> =
-        CloudClient.Result.Ok(SaveResponse(status = "ok"))
-
-    override suspend fun fetchDeleted(since: Long, afterId: String?): CloudClient.Result<DeletedResponse> =
-        CloudClient.Result.Ok(DeletedResponse())
-
-    override suspend fun fetchFolders(): CloudClient.Result<FoldersResponse> =
-        CloudClient.Result.Error("starszy serwer", notFound = true)
-
-    override suspend fun sendFolder(folder: OutgoingFolder): CloudClient.Result<FolderSaveResponse> =
-        CloudClient.Result.Error("starszy serwer", notFound = true)
-
-    override suspend fun deleteFolder(folderId: String): CloudClient.Result<FolderSaveResponse> =
-        CloudClient.Result.Error("starszy serwer", notFound = true)
-
-    override suspend fun listAttachments(noteId: String): CloudClient.Result<AttachmentsResponse> =
-        CloudClient.Result.Ok(AttachmentsResponse())
-
-    override suspend fun sendAttachment(
-        noteId: String,
-        name: String,
-        mime: String,
-        data: ByteArray,
-    ): CloudClient.Result<AttachmentResponse> =
-        CloudClient.Result.Ok(AttachmentResponse(name = name))
-
-    override suspend fun fetchAttachment(noteId: String, name: String): CloudClient.Result<ByteArray> =
-        CloudClient.Result.Error("brak", notFound = true)
-}
-
-private class FakeAccount : SyncAccount {
-    private var lastSync = 0L
-    private var lastDeleted = 0L
-    override fun isSignedIn(): Boolean = true
-    override fun lastSync(): Long = lastSync
-    override fun rememberSync(moment: Long) { lastSync = moment }
-    override fun lastDeletedSync(): Long = lastDeleted
-    override fun rememberDeletedSync(moment: Long) { lastDeleted = moment }
 }
