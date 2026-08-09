@@ -4,8 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -36,14 +37,25 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import java.io.File
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.Strings
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ExportDialog(
     document: NoteDocument,
     path: String,
     service: ExportService,
     onClose: () -> Unit,
+    /**
+     * Otwiera panel udostępniania. Null, gdy nie ma konta w chmurze — wtedy
+     * nie ma czym zarządzać. Okno zapisu nie zna chmury i nie ma jej znać
+     * (moduł `export` nie zależy od `cloud`), więc dostaje gotowe przejście,
+     * a panel montuje ekran notatki, który zna jedno i drugie.
+     */
+    onShareLink: (() -> Unit)? = null,
 ) {
+    val words = LocalStrings.current
     val scope = rememberCoroutineScope()
     // Kontekst ekranu, nie aplikacji — systemowy druk wymaga Activity.
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -56,14 +68,16 @@ fun ExportDialog(
         Column(
             Modifier
                 // Na telefonie okno ma zmieścić się w ekranie, na tablecie nie
-                // rozciągać się na całą szerokość.
-                .fillMaxWidth()
+                // rozciągać się na całą szerokość. Granica idzie PRZED
+                // wypełnieniem — po nim byłaby martwa, bo `fillMaxWidth` ustala
+                // szerokość sztywno i `widthIn` nie ma już czego przyciąć.
                 .widthIn(max = 520.dp)
+                .fillMaxWidth()
                 .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
                 .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner)),
         ) {
             Text(
-                text = "Zapisz notatkę do pliku",
+                text = words.exportTitle,
                 style = Kajet.type.title,
                 color = Kajet.colors.text,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 12.dp),
@@ -74,9 +88,9 @@ fun ExportDialog(
                 Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                SectionLabel("Format")
+                SectionLabel(words.exportFormat)
                 ExportFormat.entries.forEach { variant ->
-                    val warning = warning(document, variant)
+                    val warning = warning(document, variant, words)
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -97,8 +111,8 @@ fun ExportDialog(
                             modifier = Modifier.size(18.dp),
                         )
                         Column {
-                            Text(variant.labelPl, style = Kajet.type.body, color = Kajet.colors.text)
-                            Text(variant.descriptionPl, style = Kajet.type.meta, color = Kajet.colors.muted)
+                            Text(variant.label(words), style = Kajet.type.body, color = Kajet.colors.text)
+                            Text(variant.description(words), style = Kajet.type.meta, color = Kajet.colors.muted)
                             if (warning != null) {
                                 Text(warning, style = Kajet.type.meta, color = Kajet.colors.danger)
                             }
@@ -112,17 +126,23 @@ fun ExportDialog(
 
                 if (ready != null) {
                     Text(
-                        text = "Plik jest gotowy: ${ready?.name}",
+                        text = "${words.fileReady}: ${ready?.name}",
                         style = Kajet.type.body,
                         color = Kajet.colors.text,
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Na telefonie wszystkie przyciski nie mieszczą się w jednym
+                // wierszu — bez zawijania ostatni był ściskany do zera.
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     val file = ready
                     if (file == null) {
                         PrimaryButton(
-                            text = if (working) "Zapisuję..." else "Zapisz plik",
+                            text = if (working) words.savingFile else words.exportSave,
                             onClick = {
                                 working = true
                                 error = null
@@ -130,7 +150,7 @@ fun ExportDialog(
                                     try {
                                         ready = service.export(path, document, format)
                                     } catch (e: Exception) {
-                                        error = e.message ?: "Zapis się nie udał. Spróbuj innego formatu."
+                                        error = e.message ?: words.exportFailed
                                     } finally {
                                         working = false
                                     }
@@ -141,40 +161,50 @@ fun ExportDialog(
                         )
                     } else {
                         PrimaryButton(
-                            text = "Wyślij",
-                            onClick = { error = service.share(file, format.mime, document.title) },
+                            text = words.sendFile,
+                            onClick = { error = service.share(context, file, format.mime, document.title) },
                             icon = KajetIcons.ShareArrow,
                         )
                         SecondaryButton(
-                            text = "Otwórz",
-                            onClick = { error = service.open(file, format.mime) },
+                            text = words.openFile,
+                            onClick = { error = service.open(context, file, format.mime) },
+                        )
+                    }
+                    if (onShareLink != null) {
+                        SecondaryButton(
+                            text = words.shareLink,
+                            onClick = onShareLink,
+                            icon = KajetIcons.ShareArrow,
                         )
                     }
                     SecondaryButton(
-                        text = "Drukuj",
+                        text = words.print,
                         onClick = { error = service.print(context, document, path) },
                         icon = KajetIcons.Printer,
                     )
-                    Box(Modifier.weight(1f))
-                    SecondaryButton("Zamknij", onClose)
+                    SecondaryButton(words.close, onClose)
                 }
             }
         }
     }
 }
 
-private fun warning(document: NoteDocument, format: ExportFormat): String? = when {
+private fun warning(
+    document: NoteDocument,
+    format: ExportFormat,
+    words: Strings,
+): String? = when {
     format == ExportFormat.DOCX && document.kind == NoteKind.HANDWRITTEN ->
-        "Pismo odręczne nie wejdzie do tego pliku."
+        words.exportNoHandwriting
 
     format == ExportFormat.DOCX && document.text?.markdown?.contains("![") == true ->
-        "Zdjęcia nie wejdą do tego pliku."
+        words.exportNoPhotos
 
     format == ExportFormat.PNG && document.kind != NoteKind.HANDWRITTEN ->
-        "Ten format zapisuje tylko notatki odręczne."
+        words.exportHandwrittenOnly
 
     format == ExportFormat.MARKDOWN && document.kind == NoteKind.HANDWRITTEN ->
-        "Zapisze się tylko tekst, bez pisma."
+        words.exportTextOnly
 
     else -> null
 }

@@ -154,15 +154,45 @@ class CloudClient(
     )
 
     /**
-     * Odnośnik do notatki — do podania komuś systemowym „Udostępnij".
-     *
-     * Serwer oddaje ten sam odnośnik przy kolejnych prośbach o te same prawa,
-     * więc udostępnienie tej samej notatki dwa razy nie mnoży linków.
+     * Wszystkie udostępnienia notatki — do panelu „Udostępnianie".
+     * Serwer oddaje też starsze pole `links`, ale panel czyta pełną listę.
      */
-    suspend fun shareNote(noteId: String, canEdit: Boolean): Result<ShareResponse> = request(
+    suspend fun listShares(noteId: String): Result<ShareListResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/share",
+        method = "GET",
+    )
+
+    /**
+     * Nowe udostępnienie notatki.
+     *
+     * Serwer oddaje ten sam odnośnik przy kolejnych prośbach o zwykły link
+     * o tych samych prawach, więc udostępnienie dwa razy nie mnoży wpisów.
+     * Z adresem e-mail udostępnienie jest imienne — serwer sam wysyła
+     * wiadomość i mówi w `mailSent`, czy wyszła.
+     */
+    suspend fun createShare(
+        noteId: String,
+        canEdit: Boolean,
+        email: String? = null,
+        anonymousAllowed: Boolean = true,
+        expiresInDays: Int? = null,
+    ): Result<ShareEntry> = request(
         url = "${account.serverUrl()}/api/v1/notes/$noteId/share",
         method = "POST",
-        body = json.encodeToString(ShareRequest(if (canEdit) "edit" else "read")),
+        body = json.encodeToString(
+            CreateShareRequest(
+                permission = if (canEdit) "edit" else "read",
+                email = email,
+                anonymousAllowed = anonymousAllowed,
+                expiresInDays = expiresInDays,
+            ),
+        ),
+    )
+
+    /** Cofnięcie udostępnienia. Powtórka jest bezpieczna: „już nie ma" to też „ok". */
+    suspend fun revokeShare(noteId: String, shareId: String): Result<RevokeShareResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/share/$shareId",
+        method = "DELETE",
     )
 
     override suspend fun listAttachments(noteId: String): Result<AttachmentsResponse> = request(
@@ -611,16 +641,42 @@ data class ServerFolder(
 data class FoldersResponse(val folders: List<ServerFolder> = emptyList())
 
 @Serializable
-private data class ShareRequest(val permission: String)
+private data class CreateShareRequest(
+    /** „read" - do czytania, „edit" - do pisania. */
+    val permission: String,
+    /** Adres odbiorcy - udostępnienie imienne. Null to zwykły odnośnik. */
+    val email: String? = null,
+    /** Czy odnośnik otworzy ktoś bez konta. Imienne zawsze wymagają konta. */
+    val anonymousAllowed: Boolean = true,
+    /** Po ilu dniach odnośnik wygasa. Null albo zero - bezterminowo. */
+    val expiresInDays: Int? = null,
+)
 
+/**
+ * Jedno udostępnienie - wiersz listy z GET i zarazem odpowiedź POST
+ * (tam dochodzą pola `fresh` i `mailSent`).
+ */
 @Serializable
-data class ShareResponse(
-    val url: String,
+data class ShareEntry(
+    val id: String = "",
+    val url: String = "",
     val permission: String = "read",
-    val title: String = "",
+    val email: String? = null,
+    val anonymousAllowed: Boolean = true,
+    val expiresAt: Long? = null,
+    val createdAt: Long = 0,
+    val lastUsedAt: Long? = null,
     /** Fałsz znaczy, że taki odnośnik już istniał i dostajemy go z powrotem. */
     val fresh: Boolean = true,
+    /** Czy wiadomość do adresata wyszła (tylko przy udostępnieniu imiennym). */
+    val mailSent: Boolean = false,
 )
+
+@Serializable
+data class ShareListResponse(val shares: List<ShareEntry> = emptyList())
+
+@Serializable
+data class RevokeShareResponse(val status: String = "ok")
 
 @Serializable
 data class FolderSaveResponse(

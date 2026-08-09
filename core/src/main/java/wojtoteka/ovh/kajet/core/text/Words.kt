@@ -106,6 +106,37 @@ interface Strings {
     val shareLink: String
     val shareLinkBusy: String
 
+    // --- Panel udostępniania ---
+    val sharePanelTitle: String
+    val shareWhatMayDo: String
+    val shareRightRead: String
+    val shareRightEdit: String
+    val shareEmailLabel: String
+    val shareEmailAbout: String
+    val shareValidDays: String
+    val shareValidForever: String
+    val shareAllowNoAccount: String
+    val shareMake: String
+    val shareMaking: String
+    val shareLinkReady: String
+    val copyLink: String
+    val copiedWord: String
+    val shareAlready: String
+    val shareNobodyYet: String
+    val shareListLoading: String
+    val shareLinkAnyone: String
+    val shareNeedsAccount: String
+    val shareByNameAbout: String
+    val shareNoDeadline: String
+    val shareExpiredMark: String
+    val shareNotOpenedYet: String
+    val shareRevoke: String
+    val shareRevokeSure: String
+    val shareMailNotSent: String
+    val shareTryAgain: String
+    val shareEmailWrong: String
+    val shareOfflineNow: String
+
     // --- Pisak ---
     val penInk: String
     val penBlack: String
@@ -609,6 +640,15 @@ interface Strings {
 fun Strings.searchFound(count: Int): String =
     if (english) "$count found" else "Znalezione: $count"
 
+fun Strings.shareValidUntil(date: String): String =
+    if (english) "Valid until $date" else "Ważne do $date"
+
+fun Strings.shareLastOpened(date: String): String =
+    if (english) "Last opened $date" else "Ostatnio otwarte $date"
+
+fun Strings.shareMailWent(address: String): String =
+    if (english) "The message went to $address." else "Wiadomość poszła na $address."
+
 fun Strings.cannotRunLanguage(language: String): String = if (english) {
     "Kajet cannot run $language. You can still write the file and save it."
 } else {
@@ -1077,6 +1117,41 @@ object PolishStrings : Strings {
     override val exportSave = "Zapisz plik"
     override val shareLink = "Udostępnij odnośnikiem"
     override val shareLinkBusy = "Robię odnośnik…"
+
+    override val sharePanelTitle = "Udostępnianie"
+    override val shareWhatMayDo = "Co wolno z odnośnikiem"
+    override val shareRightRead = "Tylko czytać"
+    override val shareRightEdit = "Czytać i poprawiać"
+    override val shareEmailLabel = "Adres e-mail odbiorcy (niekonieczny)"
+    override val shareEmailAbout =
+        "Puste pole daje zwykły odnośnik. Z adresem udostępnienie jest imienne: " +
+        "otworzy je tylko osoba zalogowana tym adresem, a wiadomość wysyła serwer."
+    override val shareValidDays = "Ważność w dniach"
+    override val shareValidForever = "Zero znaczy bezterminowo."
+    override val shareAllowNoAccount = "Pozwól otworzyć bez zakładania konta"
+    override val shareMake = "Udostępnij"
+    override val shareMaking = "Udostępniam…"
+    override val shareLinkReady = "Odnośnik gotowy"
+    override val copyLink = "Skopiuj odnośnik"
+    override val copiedWord = "Skopiowane"
+    override val shareAlready = "Już udostępnione"
+    override val shareNobodyYet = "Ta notatka nie jest jeszcze nikomu udostępniona."
+    override val shareListLoading = "Sprawdzam udostępnienia…"
+    override val shareLinkAnyone = "Odnośnik dla każdego"
+    override val shareNeedsAccount = "tylko z kontem"
+    override val shareByNameAbout = "Otworzy tylko osoba zalogowana tym adresem."
+    override val shareNoDeadline = "Bezterminowo"
+    override val shareExpiredMark = "wygasłe"
+    override val shareNotOpenedYet = "Jeszcze nie otwarte"
+    override val shareRevoke = "Cofnij"
+    override val shareRevokeSure = "Na pewno?"
+    override val shareMailNotSent =
+        "Wiadomość nie wyszła z serwera. Skopiuj odnośnik i podaj go inną drogą."
+    override val shareTryAgain = "Spróbuj jeszcze raz"
+    override val shareEmailWrong = "Ten adres e-mail wygląda na niepełny."
+    override val shareOfflineNow =
+        "Nie ma połączenia z internetem. Udostępnieniami zarządza serwer, więc bez " +
+        "połączenia nie da się ich obejrzeć ani zmienić."
 
     override val penInk = "Atrament"
     override val penBlack = "Czarny"
@@ -1696,6 +1771,41 @@ object EnglishStrings : Strings {
     override val exportSave = "Save file"
     override val shareLink = "Share a link"
     override val shareLinkBusy = "Making a link..."
+
+    override val sharePanelTitle = "Sharing"
+    override val shareWhatMayDo = "What the link allows"
+    override val shareRightRead = "Read only"
+    override val shareRightEdit = "Read and edit"
+    override val shareEmailLabel = "Recipient's e-mail (optional)"
+    override val shareEmailAbout =
+        "Leave it empty for a plain link. With an address the share is personal: " +
+        "only the person signed in with it can open the note, and the server sends the message."
+    override val shareValidDays = "Valid for days"
+    override val shareValidForever = "Zero means no time limit."
+    override val shareAllowNoAccount = "Allow opening without an account"
+    override val shareMake = "Share"
+    override val shareMaking = "Sharing..."
+    override val shareLinkReady = "The link is ready"
+    override val copyLink = "Copy the link"
+    override val copiedWord = "Copied"
+    override val shareAlready = "Already shared"
+    override val shareNobodyYet = "This note has not been shared with anyone yet."
+    override val shareListLoading = "Checking the shares..."
+    override val shareLinkAnyone = "Link for anyone"
+    override val shareNeedsAccount = "account required"
+    override val shareByNameAbout = "Opens only for the person signed in with this address."
+    override val shareNoDeadline = "No time limit"
+    override val shareExpiredMark = "expired"
+    override val shareNotOpenedYet = "Not opened yet"
+    override val shareRevoke = "Revoke"
+    override val shareRevokeSure = "Are you sure?"
+    override val shareMailNotSent =
+        "The message did not leave the server. Copy the link and hand it over another way."
+    override val shareTryAgain = "Try again"
+    override val shareEmailWrong = "This e-mail address looks incomplete."
+    override val shareOfflineNow =
+        "There is no internet connection. Shares live on the server, so without a " +
+        "connection they cannot be seen or changed."
 
     override val penInk = "Ink"
     override val penBlack = "Black"
