@@ -5,7 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +36,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -96,7 +100,10 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
 
         Column(
             Modifier
-                .fillMaxSize()
+                // weight, nie fillMaxSize: kolumna ma dostać dokładnie to, co
+                // zostaje obok szyny - ten sam wzorzec co w bibliotece.
+                .fillMaxHeight()
+                .weight(1f)
                 .background(colors.sheet)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = sheetPadding, vertical = 24.dp),
@@ -154,6 +161,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SignIn(
     busy: Boolean,
@@ -208,7 +216,12 @@ private fun SignIn(
             Field(words.emailAddress, email, { email = it }, KeyboardType.Email)
             Field(words.password, password, { password = it }, KeyboardType.Password, hidden = true)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Zawijanie jak w oknie eksportu: przy dużej czcionce systemowej
+            // dwa przyciski w sztywnym wierszu ściskały jeden drugiego do zera.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 PrimaryButton(
                     text = if (busy) words.signingIn else words.signIn,
                     onClick = { onSignIn(email, password) },
@@ -225,7 +238,10 @@ private fun SignIn(
             )
             Field(words.tokenFromSite, token, { token = it }, KeyboardType.Ascii)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 PrimaryButton(
                     text = if (busy) words.checking else words.connect,
                     onClick = { onSignInWithToken(token) },
@@ -238,6 +254,7 @@ private fun SignIn(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SignedIn(
     state: SignInState.SignedIn,
@@ -264,7 +281,15 @@ private fun SignedIn(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             SectionLabel(words.signedIn)
-            Text(state.login, style = Kajet.type.title, color = colors.text)
+            Text(
+                text = state.login,
+                style = Kajet.type.title,
+                color = colors.text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Adres zawija się w całości - w e-mailu i początek, i domena
+            // mówią, czyj to adres, więc nic nie ucinamy.
             Text(state.email, style = Kajet.type.meta, color = colors.muted)
 
             HorizontalRule()
@@ -309,6 +334,7 @@ private fun SignedIn(
             SectionLabel(words.syncSection)
 
             Row(
+                Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -330,6 +356,9 @@ private fun SignedIn(
                     text = describeState(syncState, waitingInQueue, words),
                     style = Kajet.type.body,
                     color = colors.text,
+                    // weight: tekst ma się zmieścić w tym, co zostaje po
+                    // ikonie, i zawinąć - nie rozpychać wiersza.
+                    modifier = Modifier.weight(1f),
                 )
             }
 
@@ -358,7 +387,10 @@ private fun SignedIn(
                 SecondaryButton(words.retryStuckButton, onRetryStuck)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 // Przycisk gaśnie też, kiedy synchronizacja chodzi w tle (po
                 // autozapisie), nie tylko po jego własnym kliknięciu.
                 val syncBusy = busy || syncState is SyncState.InProgress
