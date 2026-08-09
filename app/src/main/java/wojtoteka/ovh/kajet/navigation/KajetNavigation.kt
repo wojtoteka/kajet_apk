@@ -1,13 +1,18 @@
 package wojtoteka.ovh.kajet.navigation
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -21,9 +26,12 @@ import wojtoteka.ovh.kajet.code.CodeEditor
 import wojtoteka.ovh.kajet.code.CodeViewModel
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.ui.library.CloudStuckNotes
 import wojtoteka.ovh.kajet.ui.library.LibraryScreen
 import wojtoteka.ovh.kajet.ui.library.LibraryViewModel
 import wojtoteka.ovh.kajet.ui.note.NoteScreen
+import wojtoteka.ovh.kajet.ui.note.remoteDeletionGuard
 import wojtoteka.ovh.kajet.ui.start.FolderPickerScreen
 import wojtoteka.ovh.kajet.cloud.AccountScreen
 import wojtoteka.ovh.kajet.cloud.AccountViewModel
@@ -52,10 +60,42 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     val backStack by navController.currentBackStackEntryAsState()
 
     val model: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.Factory(container.library, container.export),
+        // Chmura wchodzi tu furtką, a nie gotowym obiektem: jej budowa to I/O
+        // na dysku, a model powstaje przy pierwszym rysowaniu biblioteki.
+        factory = LibraryViewModel.Factory(container.library, container.export) {
+            CloudStuckNotes(container.cloud.sync, container.cloud.queue)
+        },
     )
 
-    val start = if (settings.libraryFolder.isNullOrBlank()) Routes.START else Routes.LIBRARY
+    /*
+      Ekran startowy ustalamy RAZ, przy pierwszym złożeniu.
+
+      Wcześniej liczyło się to przy każdym przerysowaniu, z bieżących ustawień.
+      Zmiana wartości każe navigation-compose zbudować graf od nowa i wstawić go
+      do kontrolera — a wtedy dotychczasowy stos ekranów przestaje do niego
+      pasować i potrafi zostać pusty. Pusty stos to nic do narysowania, czyli
+      samo tło biurka: dokładnie ten „czarny ekran", z którego wychodziło się
+      tylko ubiciem aplikacji. Po wskazaniu katalogu i tak przechodzimy do
+      biblioteki wprost (niżej), więc przeliczanie tego jest niepotrzebne.
+    */
+    val start = rememberSaveable {
+        if (settings.libraryFolder.isNullOrBlank()) Routes.START else Routes.LIBRARY
+    }
+
+    /*
+      Bezpiecznik na wypadek, gdyby stos ekranów mimo wszystko został pusty —
+      po synchronizacji, po powrocie z notatki skasowanej gdzie indziej albo po
+      zmianie rozmiaru okna w trybie pulpitu. Zamiast gołego tła wracamy do
+      biblioteki. Chwila zwłoki, bo przy pierwszym złożeniu stos jest pusty
+      z natury i to jest w porządku.
+    */
+    LaunchedEffect(backStack) {
+        if (backStack != null) return@LaunchedEffect
+        delay(600)
+        if (navController.currentBackStackEntry != null) return@LaunchedEffect
+        Log.w("Kajet", "Stos ekranów został pusty — wracam na $start")
+        runCatching { navController.navigate(start) { launchSingleTop = true } }
+    }
 
     // Deep link from the website after device approval → open account screen.
     LaunchedEffect(authUri, backStack?.destination?.route) {
@@ -106,7 +146,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 export = container.export,
                 onBack = {
                     model.refreshAfterChange()
-                    navController.popBackStack()
+                    popOnce(navController, entry)
                 },
             )
         }
@@ -125,26 +165,43 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                     path = path,
                 ),
             )
-            CodeEditor(
-                model = codeModel,
+
+            // Ta sama osłona co przy notatkach: plik skasowany w trakcie
+            // pisania na innym urządzeniu pyta o los niezapisanej treści.
+            val words = LocalStrings.current
+            val deleted by codeModel.remotelyDeleted.collectAsStateWithLifecycle()
+            val saved by codeModel.saved.collectAsStateWithLifecycle()
+            val guardedBack = remoteDeletionGuard(
+                deleted = deleted,
+                unsaved = !saved,
+                message = words.fileDeletedElsewhereAbout,
+                saveLabel = words.saveAsNewFile,
+                onSaveAsNew = codeModel::saveAsNewFile,
+                onDiscard = codeModel::discardChanges,
                 onBack = {
                     model.refreshAfterChange()
-                    navController.popBackStack()
+                    popOnce(navController, entry)
                 },
+            )
+
+            CodeEditor(
+                model = codeModel,
+                onBack = guardedBack,
             )
         }
 
-        composable(Routes.SETTINGS) {
+        composable(Routes.SETTINGS) { entry ->
             SettingsScreen(
                 settingsStore = container.settings,
                 repo = container.library,
-                onBack = { navController.popBackStack() },
+                account = container.cloud.account,
+                onBack = { popOnce(navController, entry) },
                 onRebuildIndex = { model.rebuildIndex() },
                 onAccount = { navController.navigate(Routes.ACCOUNT) },
             )
         }
 
-        composable(Routes.ACCOUNT) {
+        composable(Routes.ACCOUNT) { entry ->
             val context = LocalContext.current
             val accountModel: AccountViewModel = viewModel(
                 factory = AccountViewModel.Factory(
@@ -159,10 +216,26 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 model = accountModel,
                 onBack = {
                     model.refreshAfterChange()
-                    navController.popBackStack()
+                    popOnce(navController, entry)
                 },
             )
         }
+    }
+}
+
+/*
+  Powrót zdejmuje TYLKO ekran, który wciąż jest na wierzchu.
+
+  Dwa szybkie stuknięcia „wstecz" wołały popBackStack dwa razy: drugie
+  zdejmowało ze stosu także bibliotekę i zostawał pusty stos — czyli samo tło
+  biurka, w ciemnym motywie praktycznie czarne, wyglądające jak zawieszona
+  aplikacja. Po pierwszym zdjęciu ekran przestaje być RESUMED, więc spóźnione
+  stuknięcie nie robi już nic. Bezpiecznik na pusty stos wyżej zostaje jako
+  druga linia obrony.
+*/
+private fun popOnce(navController: NavHostController, entry: NavBackStackEntry) {
+    if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+        navController.popBackStack()
     }
 }
 

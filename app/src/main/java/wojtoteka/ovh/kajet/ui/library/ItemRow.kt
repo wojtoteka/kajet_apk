@@ -37,6 +37,15 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.NoteKind
+import wojtoteka.ovh.kajet.ink.ShapeGeometry
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.Strings
+import wojtoteka.ovh.kajet.core.text.folderSummary
+import wojtoteka.ovh.kajet.core.text.hoursAgo
+import wojtoteka.ovh.kajet.core.text.minutesAgo
+import wojtoteka.ovh.kajet.core.text.actionsFor
+import wojtoteka.ovh.kajet.core.text.starNote
+import wojtoteka.ovh.kajet.core.text.unstarNote
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,7 +59,10 @@ fun ItemRow(
     onMenu: () -> Unit,
     modifier: Modifier = Modifier,
     onFavourite: (() -> Unit)? = null,
+    /** Wysyłka tej notatki wyczerpała próby — patrz [StuckNotes]. */
+    stuck: Boolean = false,
 ) {
+    val words = LocalStrings.current
     val colors = Kajet.colors
     val height = when {
         item.type == ItemType.FOLDER -> 60.dp
@@ -86,7 +98,7 @@ fun ItemRow(
             when {
                 item.type == ItemType.FOLDER -> {
                     Text(
-                        text = folderSummary(item.childCount),
+                        text = words.folderSummary(item.childCount),
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
@@ -95,7 +107,7 @@ fun ItemRow(
                 item.noteKind == NoteKind.HANDWRITTEN -> {
                     HandwritingThumbnail(item, repo)
                     Text(
-                        text = relativeTime(item.updatedAt),
+                        text = relativeTime(item.updatedAt, words),
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
@@ -103,14 +115,14 @@ fun ItemRow(
 
                 item.type == ItemType.NOTE -> {
                     Text(
-                        text = item.preview ?: "Pusta notatka",
+                        text = item.preview ?: words.emptyNote,
                         style = Kajet.type.meta,
                         color = colors.muted,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = relativeTime(item.updatedAt),
+                        text = relativeTime(item.updatedAt, words),
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
@@ -122,16 +134,22 @@ fun ItemRow(
                     val offlineHere = language.offline &&
                         !(language == CodeLanguage.PYTHON && phone)
                     Text(
-                        text = language.labelPl + if (offlineHere) {
-                            ", działa bez internetu"
-                        } else {
-                            ", uruchamiany przez internet"
+                        text = language.label(words) + when {
+                            language == CodeLanguage.HTML -> ", ${words.codeWithPreview}"
+                            !language.runnable -> ""
+                            offlineHere -> ", ${words.codeWorksOffline}"
+                            else -> ", ${words.codeNeedsInternet}"
                         },
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
                 }
             }
+
+            // Drobna linijka, nie ostrzeżenie na czerwono: notatka działa
+            // dalej, tyle że jej zmiany nie doszły na serwer. Po zbiorczy
+            // sygnał i przycisk ponowienia — pasek nad spisem.
+            if (stuck) NotUploadedTag()
         }
 
         // Gwiazdka jest osobnym przyciskiem, a nie samą ikoną. Wcześniej
@@ -140,9 +158,9 @@ fun ItemRow(
             IconAction(
                 icon = KajetIcons.Favourites,
                 description = if (item.favorite) {
-                    "Usuń ${item.name} z ulubionych"
+                    words.unstarNote(item.name)
                 } else {
-                    "Dodaj ${item.name} do ulubionych"
+                    words.starNote(item.name)
                 },
                 onClick = onFavourite,
                 selected = item.favorite,
@@ -152,7 +170,7 @@ fun ItemRow(
         } else if (item.favorite) {
             Icon(
                 imageVector = KajetIcons.Favourites,
-                contentDescription = "W ulubionych",
+                contentDescription = words.inFavorites,
                 tint = colors.accent,
                 modifier = Modifier
                     .padding(end = 4.dp)
@@ -162,9 +180,32 @@ fun ItemRow(
 
         IconAction(
             icon = KajetIcons.MoreDots,
-            description = "Działania dla ${item.name}",
+            description = words.actionsFor(item.name),
             onClick = onMenu,
             iconSize = 18.dp,
+        )
+    }
+}
+
+@Composable
+private fun NotUploadedTag() {
+    val words = LocalStrings.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = KajetIcons.Offline,
+            // Opis dla czytnika ekranu niesie całe zdanie — samo „nie wysłano"
+            // wyrwane z wiersza nie mówi, o co chodzi.
+            contentDescription = words.notUploadedAbout,
+            tint = Kajet.colors.muted,
+            modifier = Modifier.size(13.dp),
+        )
+        Text(
+            text = words.notUploadedTag,
+            style = Kajet.type.meta,
+            color = Kajet.colors.muted,
         )
     }
 }
@@ -218,18 +259,26 @@ private fun RowMark(item: LibraryItem) {
 
 @Composable
 private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
+    val words = LocalStrings.current
     var strokes by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<InkStroke>>(emptyList()) }
+    // Kształty idą do podglądu jako gotowe łamane — miniatura nie zna ich geometrii.
+    var outlines by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<FloatArray>>(emptyList()) }
 
     LaunchedEffect(item.documentUri, item.updatedAt) {
-        strokes = runCatching {
-            val document = repo.readNote(item.path)
-            document.handwriting?.pages?.firstOrNull()?.strokes.orEmpty()
-        }.getOrDefault(emptyList())
+        val page = runCatching {
+            repo.readNote(item.path).handwriting?.pages?.firstOrNull()
+        }.getOrNull()
+        strokes = page?.strokes.orEmpty()
+        outlines = page?.shapes.orEmpty().map { shape ->
+            val points = ShapeGeometry.points(shape)
+            // Figura zamknięta wraca do pierwszego punktu, żeby obrys się domykał.
+            if (shape.kind.open) points else points + floatArrayOf(points[0], points[1])
+        }
     }
 
-    if (strokes.isEmpty()) {
+    if (strokes.isEmpty() && outlines.isEmpty()) {
         Text(
-            text = "Pusta strona",
+            text = words.emptyPage,
             style = Kajet.type.meta,
             color = Kajet.colors.muted,
         )
@@ -248,28 +297,29 @@ private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
                     .height(34.dp)
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 color = Kajet.colors.muted,
+                outlines = outlines,
             )
         }
     }
 }
 
-private fun folderSummary(count: Int): String = when (count) {
-    0 -> "Pusty folder"
-    1 -> "1 wpis"
-    in 2..4 -> "$count wpisy"
-    else -> "$count wpisów"
-}
+/*
+  Data po ludzku.
 
-private val dateFormat = SimpleDateFormat("d MMMM yyyy, HH:mm", Locale("pl", "PL"))
+  Nazwy miesięcy bierze SimpleDateFormat z ustawień języka, więc format też
+  musi znać wybór z Kajetu - inaczej po przełączeniu na angielski wychodziło
+  "5 sierpnia 2026" pośród angielskich zdań.
+*/
+private val polishDate = SimpleDateFormat("d MMMM yyyy, HH:mm", Locale("pl", "PL"))
+private val englishDate = SimpleDateFormat("d MMMM yyyy, HH:mm", Locale.UK)
 
-fun relativeTime(millis: Long): String {
-    if (millis <= 0L) return "Bez daty"
-    val now = System.currentTimeMillis()
-    val elapsed = now - millis
+fun relativeTime(millis: Long, words: Strings): String {
+    if (millis <= 0L) return words.noDate
+    val elapsed = System.currentTimeMillis() - millis
     return when {
-        elapsed < 60_000 -> "Przed chwilą"
-        elapsed < 3_600_000 -> "${elapsed / 60_000} min temu"
-        elapsed < 86_400_000 -> "${elapsed / 3_600_000} godz. temu"
-        else -> dateFormat.format(Date(millis))
+        elapsed < 60_000 -> words.justNow
+        elapsed < 3_600_000 -> words.minutesAgo(elapsed / 60_000)
+        elapsed < 86_400_000 -> words.hoursAgo(elapsed / 3_600_000)
+        else -> (if (words.english) englishDate else polishDate).format(Date(millis))
     }
 }

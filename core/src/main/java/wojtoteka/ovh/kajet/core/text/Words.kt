@@ -501,6 +501,9 @@ interface Strings {
     val conflictCopyFailed: String
     val retryStuckButton: String
     val stuckAbout: String
+    val notUploadedTag: String
+    val notUploadedAbout: String
+    val stuckNothingLost: String
     val stylusAndFinger: String
     val stylusAndFingerAbout: String
     val fingerScrollsAbout: String
@@ -1497,6 +1500,9 @@ object PolishStrings : Strings {
     override val conflictCopyFailed = "Nie udało się zapisać kopii konfliktu. Spróbuję ponownie."
     override val retryStuckButton = "Spróbuj ponownie"
     override val stuckAbout = "Te notatki zostały na urządzeniu. Zajrzyj do nich albo spróbuj wysłać jeszcze raz."
+    override val notUploadedTag = "nie wysłano"
+    override val notUploadedAbout = "Nie udało się wysłać na serwer"
+    override val stuckNothingLost = "Nic nie ginie — zmiany czekają na urządzeniu."
     override val stylusAndFinger = "Rysik i palec"
     override val stylusAndFingerAbout = "Kiedy rysik dotyka ekranu, dłoń nie rysuje. Dzieje się tak " +
         "niezależnie od ustawienia poniżej."
@@ -2108,6 +2114,9 @@ object EnglishStrings : Strings {
     override val conflictCopyFailed = "The conflict copy could not be saved. I will try again."
     override val retryStuckButton = "Try again"
     override val stuckAbout = "These notes stayed on the device. Have a look at them or try uploading again."
+    override val notUploadedTag = "not uploaded"
+    override val notUploadedAbout = "Could not be uploaded to the server"
+    override val stuckNothingLost = "Nothing is lost — the changes wait on the device."
     override val stylusAndFinger = "Stylus and finger"
     override val stylusAndFingerAbout = "While the stylus is on the screen, your palm never draws. That " +
         "always holds."

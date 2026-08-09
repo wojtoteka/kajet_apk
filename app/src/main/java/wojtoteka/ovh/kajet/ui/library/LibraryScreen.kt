@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,11 +49,20 @@ import wojtoteka.ovh.kajet.core.design.component.EmptyState
 import wojtoteka.ovh.kajet.core.design.component.KajetMark
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.deleteForeverOf
+import wojtoteka.ovh.kajet.core.text.disappearsIn
+import wojtoteka.ovh.kajet.core.text.emptyTrashWarning
+import wojtoteka.ovh.kajet.core.text.folderLookTitle
+import wojtoteka.ovh.kajet.core.text.moveDialogTitle
+import wojtoteka.ovh.kajet.core.text.notesStuck
+import wojtoteka.ovh.kajet.core.text.trashedAt
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.export.ExportFormat
+import wojtoteka.ovh.kajet.storage.Housekeeping
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
 
@@ -71,6 +81,8 @@ fun LibraryScreen(
     val tree by model.tree.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val progress by model.progress.collectAsStateWithLifecycle()
+    val stuckPaths by model.stuckPaths.collectAsStateWithLifecycle()
+    val stuckNotice by model.stuckNotice.collectAsStateWithLifecycle()
 
     var folderDialog by remember { mutableStateOf(false) }
     var noteDialog by remember { mutableStateOf(false) }
@@ -80,6 +92,7 @@ fun LibraryScreen(
     var moving by remember { mutableStateOf<LibraryItem?>(null) }
     var folderLook by remember { mutableStateOf<LibraryItem?>(null) }
 
+    val words = LocalStrings.current
     val screenWidth = LocalConfiguration.current.screenWidthDp
     // Phones and narrow windows: hide the folder tree, keep the main list usable.
     val roomForTree = screenWidth >= 600
@@ -94,11 +107,15 @@ fun LibraryScreen(
             railWidth = railWidth,
         )
 
-        if (section == LibrarySection.LIBRARY && roomForTree) {
+        // Ulubione trzymają drzewo folderów na ekranie: są tam osobnym wierszem,
+        // więc mają wyglądać na miejsce w bibliotece, a nie na oddzielny ekran.
+        if ((section == LibrarySection.LIBRARY || section == LibrarySection.FAVORITES) && roomForTree) {
             TreeColumn(
                 tree = tree,
                 current = path,
+                favorites = section == LibrarySection.FAVORITES,
                 onSelect = model::goTo,
+                onFavorites = { model.setSection(LibrarySection.FAVORITES) },
                 onToggle = model::toggleExpanded,
             )
         }
@@ -112,7 +129,7 @@ fun LibraryScreen(
             if (progress != null) {
                 NoticeBar(
                     icon = KajetIcons.Restore,
-                    text = "Odbudowuję spis notatek. $progress",
+                    text = "${words.libRebuilding} $progress",
                     color = Kajet.colors.accent,
                 )
             }
@@ -122,7 +139,26 @@ fun LibraryScreen(
                     text = error.orEmpty(),
                     color = Kajet.colors.danger,
                 ) {
-                    SecondaryButton("Rozumiem", model::dismissError)
+                    SecondaryButton(words.understood, model::dismissError)
+                }
+            }
+            /*
+              Notatki, które nie doszły na serwer. Sygnał stał do tej pory sam
+              na ekranie konta — trzeba było tam z własnej woli zajrzeć, więc
+              w praktyce nikt się o tym nie dowiadywał.
+
+              Barwa spokojna, nie czerwona: notatki działają dalej i nic nie
+              ginie. Pasek da się zamknąć, a wraca dopiero wtedy, gdy utknie
+              coś jeszcze.
+            */
+            if (stuckNotice.isNotEmpty()) {
+                NoticeBar(
+                    icon = KajetIcons.Offline,
+                    text = "${words.notesStuck(stuckNotice.size)} ${words.stuckNothingLost}",
+                    color = Kajet.colors.muted,
+                ) {
+                    SecondaryButton(words.retryStuckButton, model::retryStuck)
+                    SecondaryButton(words.understood, model::hideStuckNotice)
                 }
             }
 
@@ -131,6 +167,7 @@ fun LibraryScreen(
                     path = path,
                     items = content,
                     repo = repo,
+                    stuckPaths = stuckPaths,
                     showPath = !roomForTree,
                     onUp = model::goUp,
                     onOpen = { item ->
@@ -149,22 +186,24 @@ fun LibraryScreen(
                 )
 
                 LibrarySection.FAVORITES -> SimpleList(
-                    title = "Ulubione",
-                    subtitle = "Notatki oznaczone gwiazdką w edytorze.",
+                    title = words.sectionFavorites,
+                    subtitle = words.libFavoritesAbout,
                     source = model.favorites,
                     repo = repo,
-                    emptyDescription = "Nie masz jeszcze ulubionych notatek. Otwórz notatkę i naciśnij gwiazdkę na pasku u góry.",
+                    stuckPaths = stuckPaths,
+                    emptyDescription = words.libFavoritesEmpty,
                     onOpen = { model.rememberOpened(it); onOpenItem(it) },
                     onMenu = { itemMenu = it },
                     onFavourite = model::toggleFavorite,
                 )
 
                 LibrarySection.RECENT -> SimpleList(
-                    title = "Ostatnio otwarte",
-                    subtitle = "Dwadzieścia notatek, przy których byłeś ostatnio.",
+                    title = words.sectionRecent,
+                    subtitle = words.libRecentAbout,
                     source = model.recent,
                     repo = repo,
-                    emptyDescription = "Tu pojawią się notatki, które otworzysz.",
+                    stuckPaths = stuckPaths,
+                    emptyDescription = words.libRecentEmpty,
                     onOpen = { model.rememberOpened(it); onOpenItem(it) },
                     onMenu = { itemMenu = it },
                     onFavourite = model::toggleFavorite,
@@ -173,6 +212,7 @@ fun LibraryScreen(
                 LibrarySection.SEARCH -> SearchView(
                     model = model,
                     repo = repo,
+                    stuckPaths = stuckPaths,
                     onOpen = { model.rememberOpened(it); onOpenItem(it) },
                 )
 
@@ -214,6 +254,9 @@ fun LibraryScreen(
     }
 
     itemMenu?.let { item ->
+        // Kontekst ekranu — okno „Udostępnij" po eksporcie musi wystartować
+        // z Activity, inaczej system potrafi je po cichu zdusić.
+        val context = androidx.compose.ui.platform.LocalContext.current
         ItemMenu(
             item = item,
             onClose = { itemMenu = null },
@@ -223,7 +266,7 @@ fun LibraryScreen(
             onLook = { itemMenu = null; folderLook = item },
             onExportFolder = { format ->
                 itemMenu = null
-                model.exportFolder(item, format)
+                model.exportFolder(context, item, format)
             },
             onTrash = { itemMenu = null; model.moveToTrash(item) },
         )
@@ -271,6 +314,7 @@ private fun SectionRail(
     onSettings: () -> Unit,
     railWidth: androidx.compose.ui.unit.Dp = Kajet.dimens.railWidth,
 ) {
+    val words = LocalStrings.current
     MarginRail(width = railWidth) {
         Box(
             Modifier
@@ -286,25 +330,25 @@ private fun SectionRail(
 
         IconAction(
             icon = KajetIcons.Library,
-            description = "Biblioteka",
+            description = words.sectionLibrary,
             onClick = { onSelect(LibrarySection.LIBRARY) },
             selected = selected == LibrarySection.LIBRARY,
         )
         IconAction(
             icon = KajetIcons.Search,
-            description = "Szukaj w notatkach",
+            description = words.libSearchInNotes,
             onClick = { onSelect(LibrarySection.SEARCH) },
             selected = selected == LibrarySection.SEARCH,
         )
         IconAction(
             icon = KajetIcons.Favourites,
-            description = "Ulubione",
+            description = words.sectionFavorites,
             onClick = { onSelect(LibrarySection.FAVORITES) },
             selected = selected == LibrarySection.FAVORITES,
         )
         IconAction(
             icon = KajetIcons.Recent,
-            description = "Ostatnio otwarte",
+            description = words.sectionRecent,
             onClick = { onSelect(LibrarySection.RECENT) },
             selected = selected == LibrarySection.RECENT,
         )
@@ -313,13 +357,13 @@ private fun SectionRail(
 
         IconAction(
             icon = KajetIcons.Bin,
-            description = "Kosz",
+            description = words.sectionTrash,
             onClick = { onSelect(LibrarySection.TRASH) },
             selected = selected == LibrarySection.TRASH,
         )
         IconAction(
             icon = KajetIcons.SettingsCog,
-            description = "Ustawienia",
+            description = words.settings,
             onClick = onSettings,
         )
         Spacer(Modifier.height(8.dp))
@@ -330,9 +374,12 @@ private fun SectionRail(
 private fun TreeColumn(
     tree: List<TreeNode>,
     current: String,
+    favorites: Boolean,
     onSelect: (String) -> Unit,
+    onFavorites: () -> Unit,
     onToggle: (String) -> Unit,
 ) {
+    val words = LocalStrings.current
     Column(
         Modifier
             .width(272.dp)
@@ -347,18 +394,31 @@ private fun TreeColumn(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            SectionLabel("Foldery")
+            SectionLabel(words.folders)
         }
 
         FolderRow(
-            name = "Wszystkie notatki",
+            name = words.libAllNotes,
             level = 0,
             color = Kajet.colors.muted,
             iconId = "ksiazki",
-            selected = current.isEmpty(),
+            selected = current.isEmpty() && !favorites,
             hasArrow = false,
             expanded = true,
             onClick = { onSelect("") },
+            onArrow = {},
+        )
+
+        FolderRow(
+            name = words.sectionFavorites,
+            level = 0,
+            color = Kajet.colors.accent,
+            iconId = null,
+            icon = KajetIcons.Favourites,
+            selected = favorites,
+            hasArrow = false,
+            expanded = true,
+            onClick = onFavorites,
             onArrow = {},
         )
 
@@ -369,7 +429,7 @@ private fun TreeColumn(
                     level = node.level + 1,
                     color = FolderColor.fromId(node.item.colorId).color(Kajet.colors.isDark),
                     iconId = node.item.iconId,
-                    selected = node.item.path == current,
+                    selected = node.item.path == current && !favorites,
                     hasArrow = node.item.childCount > 0,
                     expanded = node.expanded,
                     onClick = { onSelect(node.item.path) },
@@ -391,7 +451,10 @@ private fun FolderRow(
     expanded: Boolean,
     onClick: () -> Unit,
     onArrow: () -> Unit,
+    /** Znaczek spoza spisu ikon folderów - na razie tylko gwiazdka Ulubionych. */
+    icon: ImageVector? = null,
 ) {
+    val words = LocalStrings.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -410,14 +473,14 @@ private fun FolderRow(
             if (hasArrow) {
                 Icon(
                     imageVector = if (expanded) KajetIcons.ArrowDown else KajetIcons.ArrowRight,
-                    contentDescription = if (expanded) "Zwiń $name" else "Rozwiń $name",
+                    contentDescription = if (expanded) "${words.libCollapse} $name" else "${words.libExpand} $name",
                     tint = Kajet.colors.muted,
                     modifier = Modifier.size(14.dp),
                 )
             }
         }
         Icon(
-            imageVector = KajetIcons.folderIcon(iconId),
+            imageVector = icon ?: KajetIcons.folderIcon(iconId),
             contentDescription = null,
             tint = color,
             modifier = Modifier
@@ -439,6 +502,7 @@ private fun FolderView(
     path: String,
     items: List<LibraryItem>,
     repo: LibraryRepository,
+    stuckPaths: Set<String>,
     showPath: Boolean,
     onUp: () -> Unit,
     onOpen: (LibraryItem) -> Unit,
@@ -448,7 +512,8 @@ private fun FolderView(
     onNewNote: () -> Unit,
     onNewFile: () -> Unit,
 ) {
-    val placeName = if (path.isEmpty()) "Wszystkie notatki" else path.substringAfterLast('/')
+    val words = LocalStrings.current
+    val placeName = if (path.isEmpty()) words.libAllNotes else path.substringAfterLast('/')
     val narrow = LocalConfiguration.current.screenWidthDp < 600
 
     Column(Modifier.fillMaxSize()) {
@@ -464,13 +529,13 @@ private fun FolderView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (path.isNotEmpty() && showPath) {
-                        IconAction(KajetIcons.BackArrow, "Folder wyżej", onUp)
+                        IconAction(KajetIcons.BackArrow, words.libFolderUp, onUp)
                     }
                     Column(Modifier.weight(1f)) {
                         Text(placeName, style = Kajet.type.title, color = Kajet.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (path.isNotEmpty()) {
                             Text(
-                                text = path.substringBeforeLast('/', "Wszystkie notatki"),
+                                text = path.substringBeforeLast('/', words.libAllNotes),
                                 style = Kajet.type.meta,
                                 color = Kajet.colors.muted,
                                 maxLines = 1,
@@ -483,9 +548,9 @@ private fun FolderView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) {
-                    PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus)
-                    SecondaryButton("Folder", onNewFolder, icon = KajetIcons.Folder)
-                    SecondaryButton("Kod", onNewFile, icon = KajetIcons.CodeFile)
+                    PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
+                    SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
+                    SecondaryButton(words.codeShort, onNewFile, icon = KajetIcons.CodeFile)
                 }
             }
         } else {
@@ -498,30 +563,30 @@ private fun FolderView(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (path.isNotEmpty() && showPath) {
-                    IconAction(KajetIcons.BackArrow, "Folder wyżej", onUp)
+                    IconAction(KajetIcons.BackArrow, words.libFolderUp, onUp)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(placeName, style = Kajet.type.display, color = Kajet.colors.text)
                     if (path.isNotEmpty()) {
                         Text(
-                            text = path.substringBeforeLast('/', "Wszystkie notatki"),
+                            text = path.substringBeforeLast('/', words.libAllNotes),
                             style = Kajet.type.meta,
                             color = Kajet.colors.muted,
                         )
                     }
                 }
-                PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus)
-                SecondaryButton("Folder", onNewFolder, icon = KajetIcons.Folder)
-                SecondaryButton("Plik z kodem", onNewFile, icon = KajetIcons.CodeFile)
+                PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
+                SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
+                SecondaryButton(words.libKindCode, onNewFile, icon = KajetIcons.CodeFile)
             }
         }
         HorizontalRule()
 
         if (items.isEmpty()) {
             EmptyState(
-                title = "Ten folder jest pusty",
-                description = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze się w katalogu, który wskazałeś na urządzeniu.",
-                action = { PrimaryButton("Nowa notatka", onNewNote, icon = KajetIcons.Plus) },
+                title = words.libFolderEmpty,
+                description = words.libFolderEmptyHint,
+                action = { PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus) },
             )
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
@@ -532,6 +597,7 @@ private fun FolderView(
                         onOpen = { onOpen(item) },
                         onMenu = { onMenu(item) },
                         onFavourite = { onFavourite(item) },
+                        stuck = item.path in stuckPaths,
                         modifier = Modifier.padding(start = 12.dp),
                     )
                     HorizontalRule(insetFromStart = 60.dp)
@@ -547,11 +613,13 @@ private fun SimpleList(
     subtitle: String,
     source: kotlinx.coroutines.flow.StateFlow<List<LibraryItem>>,
     repo: LibraryRepository,
+    stuckPaths: Set<String>,
     emptyDescription: String,
     onOpen: (LibraryItem) -> Unit,
     onMenu: (LibraryItem) -> Unit,
     onFavourite: (LibraryItem) -> Unit,
 ) {
+    val words = LocalStrings.current
     val items by source.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
@@ -562,7 +630,7 @@ private fun SimpleList(
         HorizontalRule()
 
         if (items.isEmpty()) {
-            EmptyState(title = "Pusto", description = emptyDescription)
+            EmptyState(title = words.libNothingHere, description = emptyDescription)
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(items, key = { it.documentUri }) { item ->
@@ -572,6 +640,7 @@ private fun SimpleList(
                         onOpen = { onOpen(item) },
                         onMenu = { onMenu(item) },
                         onFavourite = { onFavourite(item) },
+                        stuck = item.path in stuckPaths,
                         modifier = Modifier.padding(start = 12.dp),
                     )
                     HorizontalRule(insetFromStart = 60.dp)
@@ -585,14 +654,16 @@ private fun SimpleList(
 private fun SearchView(
     model: LibraryViewModel,
     repo: LibraryRepository,
+    stuckPaths: Set<String>,
     onOpen: (LibraryItem) -> Unit,
 ) {
+    val words = LocalStrings.current
     val query by model.query.collectAsStateWithLifecycle()
     val results by model.searchResults.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)) {
-            Text("Szukaj", style = Kajet.type.display, color = Kajet.colors.text)
+            Text(words.search, style = Kajet.type.display, color = Kajet.colors.text)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -619,7 +690,7 @@ private fun SearchView(
             }
             HorizontalRule(color = Kajet.colors.muted.copy(alpha = 0.5f))
             Text(
-                text = "Szukam w tytułach i w treści. Pismo odręczne znajdę wtedy, kiedy zamienisz je na tekst.",
+                text = words.libSearchAbout,
                 style = Kajet.type.meta,
                 color = Kajet.colors.muted,
                 modifier = Modifier.padding(top = 8.dp),
@@ -628,13 +699,13 @@ private fun SearchView(
 
         when {
             query.length < 2 -> EmptyState(
-                title = "Wpisz, czego szukasz",
-                description = "Wystarczą dwie litery. Szukanie działa bez internetu, bo spis notatek leży na urządzeniu.",
+                title = words.libSearchPrompt,
+                description = words.libSearchPromptAbout,
             )
 
             results.isEmpty() -> EmptyState(
-                title = "Nic nie znalazłem",
-                description = "Sprawdź pisownię albo odbuduj spis notatek w ustawieniach, jeśli kopiowałeś pliki spoza aplikacji.",
+                title = words.libSearchNothing,
+                description = words.libSearchNothingAbout,
             )
 
             else -> LazyColumn(Modifier.fillMaxSize()) {
@@ -644,6 +715,7 @@ private fun SearchView(
                         repo = repo,
                         onOpen = { onOpen(item) },
                         onMenu = {},
+                        stuck = item.path in stuckPaths,
                         modifier = Modifier.padding(start = 12.dp),
                     )
                     HorizontalRule(insetFromStart = 60.dp)
@@ -655,8 +727,57 @@ private fun SearchView(
 
 @Composable
 private fun TrashView(model: LibraryViewModel) {
+    val words = LocalStrings.current
     val trash by model.trash.collectAsStateWithLifecycle()
     val narrow = LocalConfiguration.current.screenWidthDp < 600
+    var confirmEmpty by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf<TrashEntry?>(null) }
+
+    // Kasowanie jednego wpisu jest tak samo nieodwracalne jak opróżnienie
+    // całego kosza, więc pyta o to samo. Wcześniej sam kosz na ikonie
+    // wystarczał, żeby notatka przepadła bez słowa.
+    confirmDelete?.let { entry ->
+        KajetDialog(words.deleteForeverQuestion, onClose = { confirmDelete = null }) {
+            Text(
+                text = entry.displayName,
+                style = Kajet.type.title,
+                color = Kajet.colors.text,
+            )
+            Text(
+                text = words.deleteForeverWarning,
+                style = Kajet.type.body,
+                color = Kajet.colors.text,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    text = words.deleteForever,
+                    onClick = { confirmDelete = null; model.deletePermanently(entry) },
+                    icon = KajetIcons.Bin,
+                    color = Kajet.colors.danger,
+                )
+                SecondaryButton(words.cancel, { confirmDelete = null })
+            }
+        }
+    }
+
+    if (confirmEmpty) {
+        KajetDialog(words.emptyTrashQuestion, onClose = { confirmEmpty = false }) {
+            Text(
+                text = words.emptyTrashWarning(trash.size),
+                style = Kajet.type.body,
+                color = Kajet.colors.text,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    text = words.emptyTrash,
+                    onClick = { confirmEmpty = false; model.emptyTrash() },
+                    icon = KajetIcons.Bin,
+                    color = Kajet.colors.danger,
+                )
+                SecondaryButton(words.cancel, { confirmEmpty = false })
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         if (narrow) {
@@ -667,17 +788,17 @@ private fun TrashView(model: LibraryViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Column {
-                    Text("Kosz", style = Kajet.type.title, color = Kajet.colors.text)
+                    Text(words.sectionTrash, style = Kajet.type.title, color = Kajet.colors.text)
                     Text(
-                        text = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, dopóki nie opróżnisz kosza.",
+                        text = words.trashAbout,
                         style = Kajet.type.meta,
                         color = Kajet.colors.muted,
                     )
                 }
                 if (trash.isNotEmpty()) {
                     SecondaryButton(
-                        text = "Opróżnij kosz",
-                        onClick = model::emptyTrash,
+                        text = words.emptyTrash,
+                        onClick = { confirmEmpty = true },
                         icon = KajetIcons.Bin,
                         color = Kajet.colors.danger,
                     )
@@ -691,9 +812,9 @@ private fun TrashView(model: LibraryViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Kosz", style = Kajet.type.display, color = Kajet.colors.text)
+                    Text(words.sectionTrash, style = Kajet.type.display, color = Kajet.colors.text)
                     Text(
-                        text = "Wyrzucone notatki leżą w katalogu .trash obok biblioteki. Nic nie ginie, dopóki nie opróżnisz kosza.",
+                        text = words.trashAbout,
                         style = Kajet.type.meta,
                         color = Kajet.colors.muted,
                         modifier = Modifier.widthIn(max = 560.dp),
@@ -701,8 +822,8 @@ private fun TrashView(model: LibraryViewModel) {
                 }
                 if (trash.isNotEmpty()) {
                     SecondaryButton(
-                        text = "Opróżnij kosz",
-                        onClick = model::emptyTrash,
+                        text = words.emptyTrash,
+                        onClick = { confirmEmpty = true },
                         icon = KajetIcons.Bin,
                         color = Kajet.colors.danger,
                     )
@@ -713,8 +834,8 @@ private fun TrashView(model: LibraryViewModel) {
 
         if (trash.isEmpty()) {
             EmptyState(
-                title = "Kosz jest pusty",
-                description = "Wyrzucone notatki znajdziesz tutaj i będziesz mógł je przywrócić dokładnie tam, skąd zniknęły.",
+                title = words.trashEmptyTitle,
+                description = words.trashEmptyAbout,
             )
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
@@ -722,7 +843,7 @@ private fun TrashView(model: LibraryViewModel) {
                     TrashRow(
                         item = item,
                         onRestore = { model.restore(item) },
-                        onDelete = { model.deletePermanently(item) },
+                        onDelete = { confirmDelete = item },
                     )
                     HorizontalRule(insetFromStart = 20.dp)
                 }
@@ -733,6 +854,7 @@ private fun TrashView(model: LibraryViewModel) {
 
 @Composable
 private fun TrashRow(item: TrashEntry, onRestore: () -> Unit, onDelete: () -> Unit) {
+    val words = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -744,14 +866,27 @@ private fun TrashRow(item: TrashEntry, onRestore: () -> Unit, onDelete: () -> Un
         Column(Modifier.weight(1f)) {
             Text(item.displayName, style = Kajet.type.body, color = Kajet.colors.text)
             Text(
-                text = "Wyrzucone ${relativeTime(item.deletedAt).lowercase()}, było w: " +
-                    item.originalParent.ifEmpty { "Wszystkie notatki" },
+                text = words.trashedAt(
+                    relativeTime(item.deletedAt, words).lowercase(),
+                    item.originalParent.ifEmpty { words.libAllNotes },
+                ),
                 style = Kajet.type.meta,
                 color = Kajet.colors.muted,
             )
+            // Wpis, który trafił do kosza dlatego, że notatka zniknęła na
+            // serwerze, ma termin. Bez tego napisu przepadłby kiedyś sam i nikt
+            // by nie wiedział, że w ogóle miał na coś czekać. Ostatnie dni na
+            // czerwono — wtedy warto się pospieszyć z przywróceniem.
+            Housekeeping.daysLeft(item)?.let { days ->
+                Text(
+                    text = words.disappearsIn(days),
+                    style = Kajet.type.meta,
+                    color = if (days <= 3) Kajet.colors.danger else Kajet.colors.muted,
+                )
+            }
         }
-        SecondaryButton("Przywróć", onRestore, icon = KajetIcons.Restore)
-        IconAction(KajetIcons.Bin, "Usuń ${item.displayName} na dobre", onDelete)
+        SecondaryButton(words.restore, onRestore, icon = KajetIcons.Restore)
+        IconAction(KajetIcons.Bin, words.deleteForeverOf(item.displayName), onDelete)
     }
 }
 
@@ -766,27 +901,28 @@ private fun ItemMenu(
     onExportFolder: (ExportFormat) -> Unit,
     onTrash: () -> Unit,
 ) {
+    val words = LocalStrings.current
     KajetDialog(item.name, onClose, width = 420) {
         Column {
-            MenuAction(KajetIcons.Pen, "Zmień nazwę", onRename)
-            MenuAction(KajetIcons.Move, "Przenieś do innego folderu", onMove)
-            MenuAction(KajetIcons.Copy, "Zrób kopię", onCopy)
+            MenuAction(KajetIcons.Pen, words.rename, onRename)
+            MenuAction(KajetIcons.Move, words.menuMoveToFolder, onMove)
+            MenuAction(KajetIcons.Copy, words.menuCopy, onCopy)
             if (item.type == ItemType.FOLDER) {
-                MenuAction(KajetIcons.ColorSwatch, "Zmień kolor i ikonę", onLook)
+                MenuAction(KajetIcons.ColorSwatch, words.menuLook, onLook)
                 MenuAction(
                     icon = KajetIcons.Export,
-                    text = "Zapisz cały folder jako PDF",
+                    text = words.exportFolderPdf,
                     onClick = { onExportFolder(ExportFormat.PDF) },
                 )
                 MenuAction(
                     icon = KajetIcons.Export,
-                    text = "Zapisz cały folder jako Markdown",
+                    text = words.exportFolderMarkdown,
                     onClick = { onExportFolder(ExportFormat.MARKDOWN) },
                 )
             }
-            MenuAction(KajetIcons.Bin, "Wyrzuć do kosza", onTrash, Kajet.colors.danger)
+            MenuAction(KajetIcons.Bin, words.moveToTrash, onTrash, Kajet.colors.danger)
         }
-        SecondaryButton("Zamknij", onClose)
+        SecondaryButton(words.close, onClose)
     }
 }
 
@@ -817,20 +953,21 @@ private fun MoveDialog(
     onClose: () -> Unit,
     onMove: (String) -> Unit,
 ) {
-    KajetDialog("Przenieś: ${item.name}", onClose, width = 460) {
+    val words = LocalStrings.current
+    KajetDialog(words.moveDialogTitle(item.name), onClose, width = 460) {
         Text(
-            text = "Wybierz folder, do którego ma trafić ten wpis.",
+            text = words.movePrompt,
             style = Kajet.type.body,
             color = Kajet.colors.muted,
         )
         Column {
-            TargetRow("Wszystkie notatki", 0) { onMove("") }
+            TargetRow(words.libAllNotes, 0) { onMove("") }
             tree.filter { it.item.path != item.path && !it.item.path.startsWith(item.path + "/") }
                 .forEach { node ->
                     TargetRow(node.item.name, node.level + 1) { onMove(node.item.path) }
                 }
         }
-        SecondaryButton("Anuluj", onClose)
+        SecondaryButton(words.cancel, onClose)
     }
 }
 
@@ -861,15 +998,20 @@ private fun FolderLookDialog(
     onClose: () -> Unit,
     onSave: (String, String) -> Unit,
 ) {
+    val words = LocalStrings.current
     var color by remember { mutableStateOf(FolderColor.fromId(item.colorId)) }
     var icon by remember {
         mutableStateOf(wojtoteka.ovh.kajet.core.model.FolderIcon.fromId(item.iconId))
     }
 
-    KajetDialog("Wygląd folderu: ${item.name}", onClose) {
+    KajetDialog(words.folderLookTitle(item.name), onClose) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel("Kolor")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionLabel(words.colour)
+            // Kolorów jest więcej, niż mieści wąski ekran — pasek jeździ w bok.
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 FolderColor.entries.forEach { option ->
                     Box(
                         Modifier
@@ -891,8 +1033,8 @@ private fun FolderLookDialog(
         }
         FolderIconGrid(selected = icon, color = color, onSelect = { icon = it })
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton("Zapisz", { onSave(color.id, icon.id) })
-            SecondaryButton("Anuluj", onClose)
+            PrimaryButton(words.save, { onSave(color.id, icon.id) })
+            SecondaryButton(words.cancel, onClose)
         }
     }
 }
