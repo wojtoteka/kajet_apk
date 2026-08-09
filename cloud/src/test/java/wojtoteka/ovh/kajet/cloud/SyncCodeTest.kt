@@ -264,19 +264,54 @@ class SyncCodeTest {
     }
 
     @Test
-    fun `plik o innej tresci powstaje obok i nic nie ginie`() {
+    fun `plik o innej tresci dostaje kopie konfliktu i nic nie ginie`() {
         library.texts["skrypt.py"] = "print(1)"
         transport.serverNotes = listOf(serverCode("c1", version = 5, source = "print(2)"))
         transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1)) }
 
+        val result = sync()
+
+        // Jak przy notatkach: lokalny plik nietknięty i to ON przejmuje
+        // tożsamość, a treść serwera leży obok jako podpisana kopia konfliktu.
+        assertThat(library.texts["skrypt.py"]).isEqualTo("print(1)")
+        val copy = library.texts.keys.single { it != "skrypt.py" }
+        assertThat(copy).startsWith("skrypt (wersja z serwera")
+        assertThat(library.texts[copy]).isEqualTo("print(2)")
+        assertThat(codeIds.existingIdFor("skrypt.py")).isEqualTo("c1")
+        assertThat(knownVersion("c1")).isEqualTo(5)
+        assertThat(result.conflicts).isEqualTo(1)
+    }
+
+    @Test
+    fun `plik ze znanym numerem i nieznana wersja nie jest nadpisywany`() {
+        library.texts[path] = "moja wersja"
+        codeIds.bind(path, "c1")
+        transport.serverNotes = listOf(serverCode("c1", version = 5, source = "serwerowa"))
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1)) }
+
+        val result = sync()
+
+        // Rejestr zna plik, ale wersji nie znamy (np. plik przywrócony
+        // z kosza po nagrobku) — serwer nie ma prawa po cichu nadpisać.
+        assertThat(library.texts[path]).isEqualTo("moja wersja")
+        val copy = library.texts.keys.single { it != path }
+        assertThat(copy).startsWith("szkola/skrypt (wersja z serwera")
+        assertThat(library.texts[copy]).isEqualTo("serwerowa")
+        assertThat(knownVersion("c1")).isEqualTo(5)
+        assertThat(result.conflicts).isEqualTo(1)
+    }
+
+    @Test
+    fun `pierwsze pobranie na puste urzadzenie tworzy plik`() {
+        transport.serverNotes = listOf(serverCode("c1", version = 5, source = "print(9)"))
+
         sync()
 
-        assertThat(library.texts["skrypt.py"]).isEqualTo("print(1)")
-        val fromServer = library.texts.keys.single { it != "skrypt.py" }
-        assertThat(library.texts[fromServer]).isEqualTo("print(2)")
-        assertThat(codeIds.existingIdFor(fromServer)).isEqualTo("c1")
-        // Numer serwera wisi na NOWYM pliku - stary zostaje bez numeru i pójdzie
-        // na serwer jako osobna notatka.
-        assertThat(codeIds.existingIdFor("skrypt.py")).isNotEqualTo("c1")
+        // Pustego urządzenia nie ma przed czym chronić — plik po prostu
+        // powstaje i od razu nosi numer oraz wersję z serwera.
+        val created = library.texts.keys.single()
+        assertThat(library.texts[created]).isEqualTo("print(9)")
+        assertThat(codeIds.existingIdFor(created)).isEqualTo("c1")
+        assertThat(knownVersion("c1")).isEqualTo(5)
     }
 }

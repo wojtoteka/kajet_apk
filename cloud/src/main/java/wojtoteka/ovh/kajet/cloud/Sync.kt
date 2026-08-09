@@ -834,11 +834,16 @@ class Sync(
         /*
           Ścieżki notatek po identyfikatorze — do straży przed nadpisaniem
           plików o nieznanej podstawie (patrz niżej). Spis idzie z Rooma,
-          więc jest tani.
+          więc jest tani. Bez spisu nie ma straży — wtedy nie pobieramy
+          wcale, zamiast nadpisywać w ciemno.
         */
-        val localPathById = runCatching { repository.allNoteIds() }
-            .getOrDefault(emptyList())
-            .associate { (notePath, noteId) -> noteId to notePath }
+        val localPathById = runCatching { repository.allNoteIds() }.getOrNull()
+            ?.associate { (notePath, noteId) -> noteId to notePath }
+            ?: return@withContext StepResult(
+                reason = words.syncFailedSafe,
+                worthRetrying = true,
+                completed = false,
+            )
 
         // Zakładka, którą wolno zapamiętać. Przesuwa się tylko przez notatki
         // załatwione do końca; pierwsza nieudana ją zatrzymuje, żeby następna
@@ -974,8 +979,10 @@ class Sync(
 
                         if (fromServer.kind == KIND_CODE) {
                             val outcome = runCatching { writeCodeFileFromCloud(fromServer, content) }
-                            if (outcome.isSuccess) {
+                            val write = outcome.getOrNull()
+                            if (write != null) {
                                 rememberVersion(fromServer.id, fromServer.version)
+                                if (write == CodeWrite.CONFLICT_COPY) conflicts += 1
                                 fetched += 1
                                 settled(fromServer.updatedAt)
                             } else {
@@ -1431,14 +1438,35 @@ class Sync(
         return "$cleaned.${language?.extensions?.first() ?: "txt"}"
     }
 
-    private suspend fun writeCodeFileFromCloud(fromServer: ServerNote, content: String) {
+    /**
+     * Wynik zapisu pliku z serwera: zwykły zapis albo rozjazd rozstrzygnięty
+     * kopią konfliktu obok — pętla pobierania liczy po tym konflikty.
+     */
+    private enum class CodeWrite { SAVED, CONFLICT_COPY }
+
+    private suspend fun writeCodeFileFromCloud(fromServer: ServerNote, content: String): CodeWrite {
         val code = parseCodeContent(content)
             ?: throw FormatException(words.codeNoteUnknownShape(fromServer.title))
 
         val existingPath = codeIds.pathFor(fromServer.id)
         if (existingPath != null) {
+            /*
+              Plik jest, a wersji nie znamy — podstawa nieznana. Ta sama
+              reguła co przy notatkach (straż w fetchChanges): serwer nie ma
+              prawa po cichu nadpisać takiego pliku. Zgodną treść przyjmujemy
+              za swoją, rozjazd dostaje kopię serwera obok, lokalny plik
+              zostaje nietknięty. Nieczytelny plik zatrzymuje notatkę
+              w pobieraniu — w ciemno nie nadpisujemy.
+            */
+            if (knownVersion(fromServer.id) == 0) {
+                if (repository.readText(existingPath) == code.source) return CodeWrite.SAVED
+                if (!saveCodeVersionAlongside(existingPath, fromServer)) {
+                    throw IllegalStateException(words.conflictCopyFailed)
+                }
+                return CodeWrite.CONFLICT_COPY
+            }
             val written = runCatching { repository.writeTextFromCloud(existingPath, code.source) }
-            if (written.isSuccess) return
+            if (written.isSuccess) return CodeWrite.SAVED
             // Pliku już nie ma pod zapamiętaną ścieżką — zakładamy go od nowa.
             codeIds.remove(existingPath)
         }
@@ -1447,8 +1475,7 @@ class Sync(
           Mapowanie przepadło (reinstalacja, wyczyszczenie danych), ale plik
           o tej nazwie i tej samej treści już leży w bibliotece — to ta sama
           notatka. Wiążemy je z powrotem, zamiast tworzyć obok duplikat pod
-          nowym numerem. Przy różnej treści powstaje osobny plik — obie
-          wersje zostają, nic nie ginie.
+          nowym numerem.
         */
         val parent = folderTargetFor(fromServer.folderId) ?: ""
         val fileName = codeFileName(fromServer.title, code.language)
@@ -1456,7 +1483,26 @@ class Sync(
         val existingText = runCatching { repository.readText(candidate) }.getOrNull()
         if (existingText == code.source) {
             codeIds.bind(candidate, fromServer.id)
-            return
+            return CodeWrite.SAVED
+        }
+
+        /*
+          Plik o tej nazwie jest, treść inna, numeru nie nosi, a wersji
+          notatki nie znamy — to ten sam plik po utracie rejestru. Jak przy
+          notatkach: lokalny plik przejmuje tożsamość, treść serwera ląduje
+          obok jako kopia konfliktu. Kiedyś treść serwera dostawała bezimienne
+          „(2)" wraz z numerem, a lokalny plik jechał potem na serwer jako
+          duplikat.
+        */
+        if (existingText != null &&
+            knownVersion(fromServer.id) == 0 &&
+            codeIds.existingIdFor(candidate) == null
+        ) {
+            if (!saveCodeVersionAlongside(candidate, fromServer)) {
+                throw IllegalStateException(words.conflictCopyFailed)
+            }
+            codeIds.bind(candidate, fromServer.id)
+            return CodeWrite.CONFLICT_COPY
         }
 
         val path = repository.createTextFileFromCloud(
@@ -1465,6 +1511,7 @@ class Sync(
             content = code.source,
         )
         codeIds.bind(path, fromServer.id)
+        return CodeWrite.SAVED
     }
 
     private suspend fun trashCodeFileFromCloud(noteId: String) {
