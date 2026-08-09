@@ -53,6 +53,7 @@ import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.KajetMark
+import wojtoteka.ovh.kajet.core.design.component.InlineNotice
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.cloud.AccountStore
@@ -80,6 +81,16 @@ fun SettingsScreen(
     account: AccountStore,
     onBack: () -> Unit,
     onRebuildIndex: () -> Unit,
+    /*
+      Co się dzieje z odbudową spisu. Postęp i wynik przychodzą tu z zewnątrz,
+      bo robotę prowadzi biblioteka i to ona przeżywa wyjście z ustawień.
+      Napis o postępie stoi obok przycisku, a nie na ekranie biblioteki, do
+      którego trzeba by wrócić, żeby cokolwiek zobaczyć.
+    */
+    rebuildProgress: String?,
+    rebuildDone: Boolean,
+    rebuildProblem: String?,
+    onRebuildNoticeRead: () -> Unit,
     onAccount: () -> Unit,
 ) {
     val settings by settingsStore.settings.collectAsStateWithLifecycle(KajetSettings())
@@ -94,6 +105,13 @@ fun SettingsScreen(
       internetu. Znika przy następnej udanej próbie.
     */
     var linkProblem by remember { mutableStateOf<String?>(null) }
+
+    /*
+      Wejście na ekran zaczyna z czystym kontem. Bez tego napis „Spis notatek
+      odbudowany" z poprzedniej wizyty witałby tu przy każdym następnym
+      wejściu, jakby odbudowa właśnie się wydarzyła.
+    */
+    LaunchedEffect(Unit) { onRebuildNoticeRead() }
 
     // Sprawdzanie aktualizacji z sekcji „O aplikacji": czy właśnie trwa, co
     // wyszło i - gdy wyszło, że jest nowsza wersja - które to wydanie.
@@ -287,7 +305,33 @@ fun SettingsScreen(
                         text = words.rebuildIndex,
                         onClick = onRebuildIndex,
                         icon = KajetIcons.Restore,
+                        // Drugie naciśnięcie w trakcie kasowałoby spis w pół
+                        // odbudowy i zaczynało wszystko od nowa.
+                        enabled = rebuildProgress == null,
                     )
+                }
+                if (rebuildProgress != null) {
+                    InlineNotice(
+                        icon = KajetIcons.Restore,
+                        text = "${words.libRebuilding} $rebuildProgress",
+                        color = Kajet.colors.accent,
+                    )
+                } else if (rebuildProblem != null) {
+                    InlineNotice(
+                        icon = KajetIcons.ErrorMark,
+                        text = rebuildProblem,
+                        color = Kajet.colors.danger,
+                    ) {
+                        SecondaryButton(words.understood, onRebuildNoticeRead)
+                    }
+                } else if (rebuildDone) {
+                    InlineNotice(
+                        icon = KajetIcons.Restore,
+                        text = words.indexRebuilt,
+                        color = Kajet.colors.accent,
+                    ) {
+                        SecondaryButton(words.understood, onRebuildNoticeRead)
+                    }
                 }
                 Text(
                     text = words.rebuildIndexAbout,

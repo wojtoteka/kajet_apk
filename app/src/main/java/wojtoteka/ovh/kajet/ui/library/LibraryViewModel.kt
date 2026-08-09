@@ -359,12 +359,29 @@ class LibraryViewModel(
 
     // Indeks
 
+    /*
+      Czy odbudowa właśnie się udała.
+
+      Postęp znika w tej samej chwili, w której robota się kończy, a przy małej
+      bibliotece trwa ona ułamek sekundy. Bez osobnego znaku ekran ustawień nie
+      miał czego pokazać: człowiek naciskał przycisk i nie dostawał żadnej
+      odpowiedzi, ani że trwa, ani że gotowe.
+    */
+    private val _indexRebuilt = MutableStateFlow(false)
+    val indexRebuilt: StateFlow<Boolean> = _indexRebuilt.asStateFlow()
+
+    fun dismissIndexRebuilt() {
+        _indexRebuilt.value = false
+    }
+
     fun rebuildIndex() = inBackground {
+        _indexRebuilt.value = false
         _progress.value = words.walkingLibrary
         repo.rebuildIndex { done, total ->
             _progress.value = words.checkingProgress(done, total)
         }
         _progress.value = null
+        _indexRebuilt.value = true
     }
 
     private fun inBackground(block: suspend () -> Unit) {

@@ -208,12 +208,25 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         }
 
         composable(Routes.SETTINGS) { entry ->
+            // Odbudowa spisu idzie w bibliotece i tam żyje jej stan. Ustawienia
+            // dostają go tutaj, żeby przycisk miał czym odpowiedzieć.
+            val rebuildProgress by model.progress.collectAsStateWithLifecycle()
+            val rebuildDone by model.indexRebuilt.collectAsStateWithLifecycle()
+            val rebuildProblem by model.error.collectAsStateWithLifecycle()
+
             SettingsScreen(
                 settingsStore = container.settings,
                 repo = container.library,
                 account = container.cloud.account,
                 onBack = { popOnce(navController, entry) },
                 onRebuildIndex = { model.rebuildIndex() },
+                rebuildProgress = rebuildProgress,
+                rebuildDone = rebuildDone,
+                rebuildProblem = rebuildProblem,
+                onRebuildNoticeRead = {
+                    model.dismissIndexRebuilt()
+                    model.dismissError()
+                },
                 onAccount = { navController.navigate(Routes.ACCOUNT) },
             )
         }

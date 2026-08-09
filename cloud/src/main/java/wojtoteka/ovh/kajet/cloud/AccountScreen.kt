@@ -43,6 +43,7 @@ import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
+import wojtoteka.ovh.kajet.core.design.component.InlineNotice
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.marginRule
@@ -485,15 +486,7 @@ private fun Field(
 @Composable
 private fun Notice(text: String, color: androidx.compose.ui.graphics.Color, onClose: (() -> Unit)?) {
     val words = LocalStrings.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .border(1.dp, color, RoundedCornerShape(Kajet.dimens.corner))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(text, style = Kajet.type.body, color = color, modifier = Modifier.weight(1f))
+    InlineNotice(text = text, color = color) {
         // Bez zamykania, gdy komunikat opisuje trwały stan (wygasła sesja) —
         // zniknie sam po ponownym zalogowaniu.
         if (onClose != null) {

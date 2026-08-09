@@ -33,10 +33,14 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import android.annotation.SuppressLint
+import android.view.ViewGroup
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -202,6 +206,15 @@ fun CodeEditor(
                     .weight(0.62f)
                     .fillMaxWidth()
                     .background(colors.sheet)
+                    /*
+                      Przycięcie do granic. Compose sam z siebie nie ucina
+                      niczego, co wystaje poza ramkę, a podgląd strony to widok
+                      Androida, który w trakcie ładowania potrafi na kilka
+                      klatek zmierzyć się większy niż jego miejsce. Bez tej
+                      linii wychodził wtedy na pasek narzędzi i zasłaniał
+                      strzałkę powrotu.
+                    */
+                    .clipToBounds()
                     .imePadding(),
             ) {
                 if (previewVisible && model.language == CodeLanguage.HTML) {
@@ -290,14 +303,32 @@ fun CodeEditor(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun HtmlPreview(code: String) {
+    val sheet = Kajet.colors.sheet.toArgb()
     AndroidView(
         factory = { context ->
             WebView(context).apply {
+                /*
+                  Rozmiar z góry, jeszcze przed pierwszym ładowaniem. Bez tego
+                  widok mierzy się sam, a punktem wyjścia jest dla niego okno,
+                  nie przydzielone miejsce — stąd skok układu w trakcie
+                  ładowania. Granice ustala teraz rodzic i tylko on.
+                */
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                // Zanim strona się namaluje, widać kolor arkusza, a nie białą
+                // płachtę — w ciemnym motywie było to uderzenie w oczy.
+                setBackgroundColor(sheet)
+                // Odnośniki otwierają się w podglądzie. Bez tego pierwsze
+                // kliknięcie wyrzucało z Kajetu do przeglądarki.
+                webViewClient = WebViewClient()
                 // Strony uczniowskie mają prawo używać JavaScriptu.
                 settings.javaScriptEnabled = true
             }
         },
         update = { view ->
+            view.setBackgroundColor(sheet)
             // Przeładowanie tylko przy zmianie treści; zwykła rekompozycja nie
             // ma zrzucać strony do początku.
             if (view.tag != code) {

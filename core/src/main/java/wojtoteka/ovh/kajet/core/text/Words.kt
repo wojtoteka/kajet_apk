@@ -529,6 +529,7 @@ interface Strings {
     val noFolderPicked: String
     val changeFolder: String
     val rebuildIndexAbout: String
+    val indexRebuilt: String
     val conflictCopyFailed: String
     val syncTrashMoveFailed: String
     val syncAttachmentFailed: String
@@ -1643,6 +1644,7 @@ object PolishStrings : Strings {
     override val changeFolder = "Zmień folder"
     override val rebuildIndexAbout = "Odbuduj spis wtedy, gdy notatki trafiły tu z komputera albo " +
         "gdy wyszukiwanie nie znajduje czegoś, co na pewno masz."
+    override val indexRebuilt = "Spis notatek odbudowany."
     override val conflictCopyFailed = "Nie udało się odłożyć drugiej wersji notatki. Kajet spróbuje jeszcze raz."
     override val syncTrashMoveFailed = "Nie udało się przenieść do kosza. Kajet spróbuje jeszcze raz."
     override val syncAttachmentFailed = "Nie udało się przenieść załącznika. Kajet spróbuje jeszcze raz."
@@ -2326,6 +2328,7 @@ object EnglishStrings : Strings {
     override val changeFolder = "Change the folder"
     override val rebuildIndexAbout = "Rebuild the list when you have copied notes in from a computer, " +
         "or when search cannot find something you know is there."
+    override val indexRebuilt = "The list of notes has been rebuilt."
     override val conflictCopyFailed = "Kajet could not put the other version of the note aside. " +
         "It will try again."
     override val syncTrashMoveFailed = "Could not move it to the bin. Kajet will try again."

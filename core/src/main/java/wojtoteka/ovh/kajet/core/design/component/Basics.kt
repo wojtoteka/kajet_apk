@@ -270,6 +270,42 @@ fun NoticeBar(
     }
 }
 
+/*
+  Komunikat postawiony wewnątrz treści, a nie przyklejony do górnej krawędzi
+  ekranu jak NoticeBar. Bez wypełnienia i z obwódką w barwie komunikatu — tak
+  samo jak napisy na ekranie konta, żeby jedna wiadomość nie wyglądała w Kajecie
+  inaczej niż druga. Wypełniony pasek w środku sekcji odcinał się od tła jak
+  obca płyta.
+*/
+@Composable
+fun InlineNotice(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    color: Color = Kajet.colors.muted,
+    action: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, color, RoundedCornerShape(Kajet.dimens.corner))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        }
+        Text(
+            text = text,
+            style = Kajet.type.body,
+            color = color,
+            modifier = Modifier.weight(1f),
+        )
+        action?.invoke(this)
+    }
+}
+
 fun Modifier.gridBackground(color: Color, step: Dp = 24.dp): Modifier = drawBehind {
     val step = step.toPx()
     var x = 0f

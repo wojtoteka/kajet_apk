@@ -1089,8 +1089,12 @@ class LibraryRepository(
             rebuildIndex(progress)
         }
 
+    // requireStore, not store(): this one is asked for by hand, from a button in
+    // settings. A silent return there looks exactly like a dead button — the
+    // person taps it and nothing happens, not even a word about the folder
+    // being gone. The automatic rebuild above stays silent on purpose.
     suspend fun rebuildIndex(progress: ((done: Int, total: Int) -> Unit)? = null) = withContext(io) {
-        val store = store() ?: return@withContext
+        val store = requireStore()
         dao.clear()
 
         // A listing of everything first, so we can show how much is still left.
