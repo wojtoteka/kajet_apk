@@ -242,6 +242,60 @@ class SyncTest {
         assertThat(knownVersion(noteId)).isEqualTo(1)
     }
 
+    // --- Bramka pierwszego pobrania (wpis w kolejce przed pierwszym fetchem) ---
+
+    @Test
+    fun `wpis sprzed pierwszego pobrania nie jedzie z zerowa podstawa`() {
+        // Po reinstalacji: plik jest, wersji nie znamy, a człowiek już pisze.
+        library.notes[path] = document(body = "lokalna po reinstalacji")
+        queue.add(path, noteId)
+        transport.serverNotes = listOf(serverCopy(body = "nowsza na serwerze", version = 7))
+        transport.onSendNote = { note ->
+            if (note.id == noteId) {
+                CloudClient.Result.Ok(SaveResponse(status = "ok", version = 8))
+            } else {
+                CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1))
+            }
+        }
+
+        sync()
+
+        // Serwer NIGDY nie dostał zapisu z zerową podstawą — przy zerze
+        // przyjąłby bezwarunkowo i nowsza wersja przepadłaby bez śladu.
+        assertThat(transport.sentNotes.none { it.id == noteId && it.baseVersion == 0 }).isTrue()
+        // Wpis pojechał w tym samym przebiegu, ale już po pobraniu,
+        // z podstawą zapamiętaną przez straż nieznanej podstawy.
+        assertThat(transport.sentNotes.single { it.id == noteId }.baseVersion).isEqualTo(7)
+        // Lokalny plik nietknięty, treść serwera w kopii obok.
+        assertThat(library.notes[path]!!.text!!.markdown).isEqualTo("lokalna po reinstalacji")
+        val copy = library.notes.values
+            .single { it.id != noteId && it.title.contains("wersja z serwera") }
+        assertThat(copy.text!!.markdown).isEqualTo("nowsza na serwerze")
+        assertThat(knownVersion(noteId)).isEqualTo(8)
+        assertThat(queue.all().none { it.noteId == noteId }).isTrue()
+    }
+
+    @Test
+    fun `bez pelnego pobrania wpis o nieznanej podstawie czeka w kolejce`() {
+        library.notes[path] = document()
+        queue.add(path, noteId)
+        transport.failFetch = true
+
+        sync()
+
+        // Zerwane pobranie: kolejka czeka, nie wysyła w ciemno — i nie liczy
+        // tego jako nieudanej próby, bo to nie wina notatki.
+        assertThat(transport.sentNotes).isEmpty()
+        assertThat(queue.size()).isEqualTo(1)
+        assertThat(queue.all().single().failedAttempts).isEqualTo(0)
+
+        // Sieć wróciła: pobranie przechodzi i wpis jedzie normalnie.
+        transport.failFetch = false
+        sync()
+        assertThat(transport.sentNotes.single().id).isEqualTo(noteId)
+        assertThat(queue.size()).isEqualTo(0)
+    }
+
     // --- Utknięte wpisy ---
 
     @Test

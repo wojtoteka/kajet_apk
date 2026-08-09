@@ -252,12 +252,29 @@ class Sync(
           w połowie spisu) taka wysyłka nadpisywałaby na serwerze notatki,
           których wersji po prostu nie zdążyliśmy zapamiętać.
         */
+        // Pełne pobranie doszło do końca — od teraz brak zapamiętanej wersji
+        // naprawdę znaczy „serwer tej notatki nie zna" i wysyłka z zerową
+        // podstawą przestaje być strzałem w ciemno (patrz sendPending).
+        if (fetched.completed && !versions.getBoolean(KEY_BASELINE_FETCH, false)) {
+            versions.edit().putBoolean(KEY_BASELINE_FETCH, true).apply()
+        }
+
         val settled = if (fetched.completed) reconcileLibrary() else 0
 
-        // Drugi przebieg także po konflikcie z serwerowym koszem: pierwsza
-        // wysyłka zapamiętała wtedy wersję z serwera i ponowna od razu
-        // przywraca notatkę zamiast znowu się odbić.
-        val sentAfter = if (settled > 0 || sent.retryNeeded) sendPending() else StepResult()
+        // Drugi przebieg: po konflikcie z serwerowym koszem (zapamiętana
+        // wersja nagrobka pozwala od razu przywrócić), po nowościach
+        // z uzgadniania i dla wpisów wstrzymanych przed pierwszym pełnym
+        // pobraniem — te jadą dopiero teraz, ze znaną podstawą.
+        val sentAfter = if (settled > 0 || sent.retryNeeded || fetched.retryNeeded) {
+            sendPending()
+        } else {
+            StepResult()
+        }
+
+        // Wpis wstrzymany bramką mógł dopiero w drugim przebiegu odbić się
+        // od serwerowego kosza — wersja nagrobka już zapamiętana, trzeci
+        // przebieg przywraca notatkę zamiast kazać czekać do następnego razu.
+        val sentLast = if (sentAfter.retryNeeded) sendPending() else StepResult()
 
         val stuckNow = queue.stuckCount()
         _stuck.value = stuckNow
@@ -269,13 +286,15 @@ class Sync(
         }
 
         SyncResult(
-            sent = sent.count + sentAfter.count,
+            sent = sent.count + sentAfter.count + sentLast.count,
             fetched = fetched.count,
-            conflicts = sent.conflicts + fetched.conflicts + sentAfter.conflicts,
+            conflicts = sent.conflicts + fetched.conflicts + sentAfter.conflicts +
+                sentLast.conflicts,
             reason = folders.reason ?: sent.reason ?: fetched.reason
-                ?: removals.reason ?: sentAfter.reason,
+                ?: removals.reason ?: sentAfter.reason ?: sentLast.reason,
             worthRetrying = folders.worthRetrying || sent.worthRetrying ||
-                fetched.worthRetrying || removals.worthRetrying || sentAfter.worthRetrying,
+                fetched.worthRetrying || removals.worthRetrying ||
+                sentAfter.worthRetrying || sentLast.worthRetrying,
         )
     }
 
@@ -549,6 +568,7 @@ class Sync(
         var reason: String? = null
         var worthRetrying = false
         var retryNeeded = false
+        var heldBack = false
 
         // Kiedy katalog notatek jest chwilowo nie do odczytania, każdy odczyt
         // poniżej rzuca wyjątkiem. Bez tej zapory cała kolejka szła wtedy do
@@ -637,6 +657,14 @@ class Sync(
                             queue.remove(entry.path)
                             continue
                         }
+                        if (knownVersion(entry.noteId) == 0 && !entry.reconciled &&
+                            !baselineFetched()
+                        ) {
+                            // Kolejka czeka, nie wysyła w ciemno: wpis pojedzie
+                            // w drugim przebiegu, już po pełnym pobraniu.
+                            heldBack = true
+                            continue
+                        }
                         val fileName = entry.path.substringAfterLast('/')
                         val response = client.sendNote(
                             OutgoingNote(
@@ -706,6 +734,15 @@ class Sync(
                             // The note vanished from the tablet, for example into the bin.
                             // There is nothing to send, so we simply drop it from the queue.
                             queue.remove(entry.path)
+                            continue
+                        }
+
+                        if (knownVersion(document.id) == 0 && !entry.reconciled &&
+                            !baselineFetched()
+                        ) {
+                            // Jak wyżej: zero przed pierwszym pełnym pobraniem
+                            // nie znaczy „nowa notatka", tylko „nie wiemy".
+                            heldBack = true
                             continue
                         }
 
@@ -788,7 +825,7 @@ class Sync(
             return@withContext stop.partial
         }
 
-        StepResult(sent, conflicts, reason, worthRetrying, retryNeeded)
+        StepResult(sent, conflicts, reason, worthRetrying, retryNeeded || heldBack)
     }
 
     private suspend fun sendAttachments(noteId: String, path: String) {
@@ -830,6 +867,9 @@ class Sync(
         var failures = 0
         var firstFailure: String? = null
         var sawEnd = false
+        // Straż nieznanej podstawy rozbroiła wpis czekający w kolejce —
+        // wersja już zapamiętana, więc warto od razu ponowić wysyłkę.
+        var resolvedPending = false
 
         /*
           Ścieżki notatek po identyfikatorze — do straży przed nadpisaniem
@@ -900,11 +940,31 @@ class Sync(
 
                     // Świeży zrzut na każdą stronę: wysyłka mogła właśnie
                     // opróżnić część kolejki, a autozapis dołożyć nowe wpisy.
-                    val pendingIds = runCatching { queue.all().map { it.noteId }.toSet() }
-                        .getOrDefault(emptySet())
+                    val pendingByNote = runCatching { queue.all() }.getOrDefault(emptyList())
+                        .groupBy { it.noteId }
 
                     for (fromServer in page.notes) {
-                        if (fromServer.id in pendingIds) {
+                        /*
+                          Notatkę z czekającą wysyłką i ZNANĄ wersją zostawiamy
+                          wysyłce — konflikt rozstrzygnie kopią obok, nie ciche
+                          pobranie. Przy NIEZNANEJ wersji odroczenie nie miało
+                          końca: wpis blokował zapamiętanie wersji, a wysyłka
+                          szła z zerową podstawą, którą serwer przyjmuje
+                          bezwarunkowo — nadpisując nowszą wersję. Taka notatka
+                          przechodzi niżej, do straży nieznanej podstawy, która
+                          zapamiętuje wersję i odblokowuje obie strony.
+                          Czekające kasowania i nagrobki rozstrzyga wysyłka.
+                        */
+                        val pending = pendingByNote[fromServer.id].orEmpty()
+                        val pendingDeletion = pending.any {
+                            it.kind == QueueEntry.KIND_TRASH ||
+                                it.kind == QueueEntry.KIND_PURGE ||
+                                it.kind == QueueEntry.KIND_FOLDER_DELETE
+                        }
+                        if (pending.isNotEmpty() &&
+                            (pendingDeletion || fromServer.deletedAt != null ||
+                                knownVersion(fromServer.id) > 0)
+                        ) {
                             deferred(fromServer)
                             continue
                         }
@@ -964,10 +1024,12 @@ class Sync(
                                     failed(fromServer, null)
                                 samePayload(local, serverDoc) -> {
                                     rememberVersion(fromServer.id, fromServer.version)
+                                    if (pending.isNotEmpty()) resolvedPending = true
                                     settled(fromServer.updatedAt)
                                 }
                                 saveServerCopyAlongside(unknownBase, fromServer, serverDoc) -> {
                                     rememberVersion(fromServer.id, fromServer.version)
+                                    if (pending.isNotEmpty()) resolvedPending = true
                                     conflicts += 1
                                     fetched += 1
                                     settled(fromServer.updatedAt)
@@ -982,6 +1044,7 @@ class Sync(
                             val write = outcome.getOrNull()
                             if (write != null) {
                                 rememberVersion(fromServer.id, fromServer.version)
+                                if (pending.isNotEmpty()) resolvedPending = true
                                 if (write == CodeWrite.CONFLICT_COPY) conflicts += 1
                                 fetched += 1
                                 settled(fromServer.updatedAt)
@@ -1057,6 +1120,7 @@ class Sync(
             reason = firstFailure?.let { first ->
                 if (failures > 1) "$first (takich notatek jest $failures)" else first
             },
+            retryNeeded = resolvedPending,
             completed = sawEnd && failures == 0,
         )
     }
@@ -1548,6 +1612,15 @@ class Sync(
 
     private fun knownVersion(noteId: String): Int = versions.getInt(noteId, 0)
 
+    /**
+     * Czy od zalogowania doszło do końca choć jedno pełne pobranie. Przed nim
+     * wysyłka z baseVersion = 0 to strzał w ciemno: zero może znaczyć „nowa
+     * notatka", ale równie dobrze „nie znamy stanu serwera" — a serwer przy
+     * zerze przyjmuje bezwarunkowo i wysyłka nadpisałaby nowszą wersję.
+     * Znacznik żyje w spisie wersji, więc wylogowanie czyści go razem z nim.
+     */
+    private fun baselineFetched(): Boolean = versions.getBoolean(KEY_BASELINE_FETCH, false)
+
     private fun rememberVersion(noteId: String, version: Int) {
         versions.edit().putInt(noteId, version).apply()
     }
@@ -1635,6 +1708,12 @@ class Sync(
          * zderzy się z żadnym identyfikatorem notatki.
          */
         const val KEY_FULL_FETCH_FOR_CODE = "#pelne-pobranie-dla-kodu"
+
+        /**
+         * Znacznik w spisie wersji: od zalogowania doszło do końca choć jedno
+         * pełne pobranie — patrz [baselineFetched].
+         */
+        const val KEY_BASELINE_FETCH = "#pierwsze-pobranie-za-nami"
 
         /** Znacznik w spisie wersji: folder był już kiedyś uzgodniony z serwerem. */
         const val KEY_FOLDER_PREFIX = "#folder:"
