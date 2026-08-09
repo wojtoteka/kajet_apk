@@ -64,7 +64,6 @@ import wojtoteka.ovh.kajet.cloud.humanSize
 import wojtoteka.ovh.kajet.cloud.openLink
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
-import wojtoteka.ovh.kajet.ink.PenHaptics
 import wojtoteka.ovh.kajet.ui.library.ChoiceRow
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
@@ -313,40 +312,6 @@ fun SettingsScreen(
                         selected = settings.fingerBehavior == option,
                         onClick = { scope.launch { settingsStore.setFingerBehavior(option) } },
                     )
-                }
-            }
-
-            /*
-              Drganie rysika Lenovo. Sekcja jest tylko na urządzeniach z usługą
-              rysika — gdzie indziej nie ma o czym mówić. Uprawnienia nie da
-              się nadać z tabletu i ginie ono przy odinstalowaniu aplikacji,
-              więc zamiast cichej degradacji pokazujemy stan i jedną komendę,
-              która załatwia sprawę.
-            */
-            if (PenHaptics.serviceAvailable(context)) {
-                SettingsSection(
-                    title = words.penHaptics,
-                    description = words.penHapticsAbout,
-                ) {
-                    Text(
-                        text = if (PenHaptics.permitted(context)) {
-                            words.penHapticsOn
-                        } else {
-                            words.penHapticsOff
-                        },
-                        style = Kajet.type.body,
-                        color = Kajet.colors.muted,
-                        modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
-                    )
-                    if (!PenHaptics.permitted(context)) {
-                        Text(
-                            text = "adb shell pm grant ${context.packageName} " +
-                                "android.permission.WRITE_SECURE_SETTINGS",
-                            style = Kajet.type.code,
-                            color = Kajet.colors.text,
-                            modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
-                        )
-                    }
                 }
             }
 

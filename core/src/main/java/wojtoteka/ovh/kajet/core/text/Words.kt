@@ -541,10 +541,6 @@ interface Strings {
     val stylusAndFingerAbout: String
     val fingerScrollsAbout: String
     val fingerDrawsAbout: String
-    val penHaptics: String
-    val penHapticsAbout: String
-    val penHapticsOn: String
-    val penHapticsOff: String
     val appearanceAbout: String
     val newHandwrittenNote: String
     val newHandwrittenNoteAbout: String
@@ -1618,13 +1614,7 @@ object PolishStrings : Strings {
         "niezależnie od ustawienia poniżej."
     override val fingerScrollsAbout = "Palcem przesuwasz stronę, rysikiem piszesz. Tak jest najwygodniej."
     override val fingerDrawsAbout = "Palcem też rysujesz. Przydaje się, kiedy nie masz przy sobie rysika."
-    override val penHaptics = "Drganie rysika"
-    override val penHapticsAbout = "Silniczek w rysiku Lenovo daje odgłos pisania. Kajet mówi mu, " +
-        "czym piszesz — piórem, ołówkiem czy gumką."
-    override val penHapticsOn = "Działa. Rysik drga przy pisaniu w notatkach odręcznych."
-    override val penHapticsOff = "Potrzebne jest jednorazowe pozwolenie, którego nie da się nadać " +
-        "z tabletu. Podłącz tablet do komputera z adb i uruchom:"
-    override val appearanceAbout = "Motyw jasny i ciemny są rysowane osobno, a nie odwracane kolorami."
+    override val appearanceAbout = "Wybierz, czy Kajet ma być jasny, czy ciemny."
     override val newHandwrittenNote = "Nowa notatka odręczna"
     override val newHandwrittenNoteAbout = "Te ustawienia podpowiadają się przy tworzeniu notatki. " +
         "Zawsze możesz je zmienić."
@@ -2308,13 +2298,7 @@ object EnglishStrings : Strings {
     override val fingerScrollsAbout = "Your finger moves the page, the stylus writes. That is the " +
         "comfortable way round."
     override val fingerDrawsAbout = "Your finger draws too. Handy when you have no stylus with you."
-    override val penHaptics = "Pen vibration"
-    override val penHapticsAbout = "The motor inside the Lenovo pen gives writing its feel. Kajet " +
-        "tells it what you are writing with — a pen, a pencil or the eraser."
-    override val penHapticsOn = "Working. The pen vibrates while writing in handwritten notes."
-    override val penHapticsOff = "A one-time permission is needed and it cannot be granted from the " +
-        "tablet. Connect the tablet to a computer with adb and run:"
-    override val appearanceAbout = "The light and dark themes are drawn separately, not inverted."
+    override val appearanceAbout = "Choose whether Kajet is light or dark."
     override val newHandwrittenNote = "New handwritten note"
     override val newHandwrittenNoteAbout = "These settings are suggested when you create a note. You can " +
         "always change them."

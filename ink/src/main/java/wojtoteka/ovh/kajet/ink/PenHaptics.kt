@@ -1,8 +1,6 @@
 package wojtoteka.ovh.kajet.ink
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -187,19 +185,6 @@ object PenHaptics {
         penKind == InkTool.HIGHLIGHTER -> PenProfile(CHISEL_MARKER, 0.7f)
         else -> PenProfile(BALL_PEN, 1f)
     }
-
-    /** Czy to urządzenie w ogóle ma usługę rysika Lenovo. */
-    fun serviceAvailable(context: Context): Boolean =
-        runCatching { context.getSystemService(SERVICE) != null }.getOrDefault(false)
-
-    /**
-     * Czy Kajet dostał uprawnienie do sterowania drganiem. Bez niego cała
-     * reszta po cichu nie robi nic — ekran ustawień ma o tym powiedzieć
-     * głośno, z komendą do nadania, zamiast zostawić zgadywanie.
-     */
-    fun permitted(context: Context): Boolean =
-        context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
-            PackageManager.PERMISSION_GRANTED
 
     /**
      * Wejście do notatki odręcznej (także okna rysowania w notatce tekstowej).
