@@ -315,7 +315,21 @@ class MindMapViewModel(
         // Edytor WWW ucina przy 500 znakach — tu tak samo, żeby pliki się zgadzały.
         val capped = text.take(500)
         changeWithoutHistory { old ->
-            old.copy(nodes = old.nodes.map { if (it.id == id) it.copy(text = capped) else it })
+            old.copy(
+                nodes = old.nodes.map { node ->
+                    if (node.id != id) return@map node
+                    /*
+                     * Węzeł przycina to, co się w nim nie zmieściło — dłuższe
+                     * hasło znikało bez śladu, że cokolwiek tam jeszcze jest.
+                     * Dlatego po zmianie napisu pudełko ROŚNIE do rozmiaru,
+                     * w którym całość się mieści. Nigdy nie maleje: od
+                     * zmniejszania jest uchwyt w rogu.
+                     */
+                    val withText = node.copy(text = capped)
+                    val (width, height) = MindMapSizes.grown(withText)
+                    withText.copy(width = width, height = height)
+                },
+            )
         }
     }
 
