@@ -1,5 +1,7 @@
 package wojtoteka.ovh.kajet.core.text
 
+import wojtoteka.ovh.kajet.core.ai.AiNoteKind
+
 /**
  * Wszystkie napisy Kajetu w jednym miejscu.
  *
@@ -611,7 +613,6 @@ interface Strings {
     val cannotEditAsTextAbout: String
     val fileDidNotOpen: String
     val fileDidNotOpenAbout: String
-    val couldNotImportShare: String
     val openInOtherApp: String
     val previousPage: String
     val nextPage: String
@@ -679,6 +680,8 @@ interface Strings {
     val aiConsentMissing: String
     val aiConsentWithdraw: String
     val aiConsentWithdrawn: String
+    val aiConsentFailed: String
+    val aiPullFailed: String
 }
 
 /*
@@ -1228,6 +1231,58 @@ fun Strings.andMoreNotes(first: String, count: Int): String = if (english) {
     "$first This affects $count notes."
 } else {
     "$first Dotyczy to $count notatek."
+}
+
+fun Strings.aiHint(kind: AiNoteKind): String {
+    val forNote = aiHint
+    return when (kind) {
+        AiNoteKind.TEXT -> forNote
+        AiNoteKind.CODE -> if (english) "What should change in this file?" else "Co zmienić w tym pliku?"
+        AiNoteKind.MINDMAP -> if (english) "What should change on this map?" else "Co zmienić na tej mapie?"
+    }
+}
+
+fun Strings.aiWorking(kind: AiNoteKind): String {
+    val forNote = aiWorking
+    return when (kind) {
+        AiNoteKind.TEXT -> forNote
+        AiNoteKind.CODE -> if (english) "KajetAI is working on the file…" else "KajetAI pracuje nad plikiem…"
+        AiNoteKind.MINDMAP -> if (english) "KajetAI is working on the map…" else "KajetAI pracuje nad mapą…"
+    }
+}
+
+fun Strings.aiUndoFailed(kind: AiNoteKind): String {
+    val forNote = aiUndoFailed
+    return when (kind) {
+        AiNoteKind.TEXT -> forNote
+        AiNoteKind.CODE -> if (english) {
+            "Could not undo it. The file stayed as KajetAI left it."
+        } else {
+            "Nie udało się cofnąć. Plik został taki, jak go zmienił KajetAI."
+        }
+        AiNoteKind.MINDMAP -> if (english) {
+            "Could not undo it. The map stayed as KajetAI left it."
+        } else {
+            "Nie udało się cofnąć. Mapa została taka, jak ją zmienił KajetAI."
+        }
+    }
+}
+
+fun Strings.aiHistoryEmpty(kind: AiNoteKind): String {
+    val forNote = aiHistoryEmpty
+    return when (kind) {
+        AiNoteKind.TEXT -> forNote
+        AiNoteKind.CODE -> if (english) {
+            "Nothing has been asked about this file yet."
+        } else {
+            "Przy tym pliku jeszcze o nic nie proszono."
+        }
+        AiNoteKind.MINDMAP -> if (english) {
+            "Nothing has been asked about this map yet."
+        } else {
+            "Przy tej mapie jeszcze o nic nie proszono."
+        }
+    }
 }
 
 object PolishStrings : Strings {
@@ -1863,7 +1918,6 @@ object PolishStrings : Strings {
     override val fileDidNotOpen = "Plik się nie otworzył"
     override val fileDidNotOpenAbout =
         "Nie udało się odczytać tego pliku. Sprawdź, czy nadal jest w folderze."
-    override val couldNotImportShare = "Nie udało się wziąć tego pliku do Kajetu."
     override val openInOtherApp = "Otwórz w innej aplikacji"
     override val previousPage = "Poprzednia"
     override val nextPage = "Następna"
@@ -1918,8 +1972,8 @@ object PolishStrings : Strings {
     override val aiHistoryEmpty = "Przy tej notatce jeszcze o nic nie proszono."
     override val aiForgetHistory = "Wyczyść rozmowę"
     override val aiNoteChangedElsewhere =
-        "Notatka zmieniła się w międzyczasie. Odśwież ją i poproś jeszcze raz."
-    override val aiSaveFirst = "Notatka nie doszła jeszcze do chmury, a KajetAI pracuje na tym, " +
+        "Treść zmieniła się w międzyczasie. Odśwież ją i poproś jeszcze raz."
+    override val aiSaveFirst = "Treść nie doszła jeszcze do chmury, a KajetAI pracuje na tym, " +
         "co tam jest. Sprawdź internet i poproś jeszcze raz."
     override val aiOffline = "KajetAI potrzebuje internetu."
     override val aiConsentTitle = "Zanim poprosisz KajetAI"
@@ -1942,6 +1996,11 @@ object PolishStrings : Strings {
         "go użyjesz."
     override val aiConsentWithdraw = "Wycofaj zgodę"
     override val aiConsentWithdrawn = "Zgoda wycofana. Rozmowy z KajetAI zostały skasowane."
+    override val aiConsentFailed =
+        "Nie udało się zapisać zgody. Sprawdź internet i spróbuj jeszcze raz."
+    override val aiPullFailed =
+        "KajetAI zmienił treść w chmurze, ale nie udało się jej ściągnąć. " +
+            "Sprawdź internet i poproś jeszcze raz."
 }
 
 object EnglishStrings : Strings {
@@ -2576,7 +2635,6 @@ object EnglishStrings : Strings {
     override val fileDidNotOpen = "The file did not open"
     override val fileDidNotOpenAbout =
         "Kajet could not read this file. Check that it is still in its folder."
-    override val couldNotImportShare = "Kajet could not take this file into the library."
     override val openInOtherApp = "Open in another app"
     override val previousPage = "Previous"
     override val nextPage = "Next"
@@ -2630,9 +2688,9 @@ object EnglishStrings : Strings {
     override val aiHistoryEmpty = "Nothing has been asked about this note yet."
     override val aiForgetHistory = "Clear the conversation"
     override val aiNoteChangedElsewhere =
-        "The note changed in the meantime. Refresh it and ask again."
-    override val aiSaveFirst = "The note has not reached the cloud yet, and KajetAI works on what " +
-        "is there. Check your connection and ask again."
+        "The content changed in the meantime. Refresh it and ask again."
+    override val aiSaveFirst = "The content has not reached the cloud yet, and KajetAI works on " +
+        "what is there. Check your connection and ask again."
     override val aiOffline = "KajetAI needs an internet connection."
     override val aiConsentTitle = "Before you ask KajetAI"
     override val aiConsentWhatHappens =
@@ -2654,4 +2712,9 @@ object EnglishStrings : Strings {
         "time you use it."
     override val aiConsentWithdraw = "Withdraw consent"
     override val aiConsentWithdrawn = "Consent withdrawn. Your conversations with KajetAI have been deleted."
+    override val aiConsentFailed =
+        "Consent could not be saved. Check your connection and try again."
+    override val aiPullFailed =
+        "KajetAI changed the content in the cloud, but it could not be downloaded. " +
+            "Check your connection and ask again."
 }
