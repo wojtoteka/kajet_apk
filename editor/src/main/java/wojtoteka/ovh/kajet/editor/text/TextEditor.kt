@@ -53,7 +53,6 @@ import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.ColourDot
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.ColourPickerDialog
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.SegmentedChoice
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -378,7 +377,7 @@ fun TextEditor(
                 ) {
                     Icon(KajetIcons.ErrorMark, null, tint = colors.danger, modifier = Modifier.size(18.dp))
                     Text(error.orEmpty(), style = Kajet.type.body, color = colors.text, modifier = Modifier.weight(1f))
-                    SecondaryButton(words.understood, model::dismissError)
+                    BarTextAction(words.understood, model::dismissError)
                 }
                 HorizontalRule()
             }
@@ -749,7 +748,10 @@ private fun FormatBar(
 
         if (fontPicker) {
             Row(
-                Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SegmentedChoice(
@@ -769,7 +771,10 @@ private fun FormatBar(
         // w której powiększenie słowa skalowało całą stronę.
         if (notePicker) {
             Row(
-                Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -778,6 +783,7 @@ private fun FormatBar(
                     style = Kajet.type.label,
                     color = Kajet.colors.muted,
                     modifier = Modifier.padding(end = 8.dp),
+                    maxLines = 1,
                 )
                 FormatGlyph("−", words.smallerText, { onNoteSize(noteSize - 1f) })
                 Text(
@@ -787,7 +793,7 @@ private fun FormatBar(
                     modifier = Modifier.width(24.dp),
                 )
                 FormatGlyph("+", words.largerText, { onNoteSize(noteSize + 1f) })
-                SecondaryButton(words.defaultSize, { onNoteSize(TextContent.DEFAULT_SIZE) })
+                BarTextAction(words.defaultSize) { onNoteSize(TextContent.DEFAULT_SIZE) }
 
                 Divider()
 
@@ -798,6 +804,7 @@ private fun FormatBar(
                     style = Kajet.type.label,
                     color = Kajet.colors.muted,
                     modifier = Modifier.padding(start = 4.dp, end = 4.dp),
+                    maxLines = 1,
                 )
                 ColourDot(
                     color = if (appearance.textColor != 0) {
@@ -811,7 +818,7 @@ private fun FormatBar(
                 // Wyjście dla notatek, którym barwę całej strony nadano
                 // wcześniej przez pomyłkę.
                 if (appearance.textColor != 0) {
-                    SecondaryButton(words.defaultColour, { onTextColor(0) })
+                    BarTextAction(words.defaultColour) { onTextColor(0) }
                 }
             }
         }
@@ -945,6 +952,38 @@ private fun Divider() {
             .height(24.dp)
             .background(Kajet.colors.line),
     )
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  rzędzie FormatBar odcinał się od tła desk i na telefonie łamał etykiety
+  („Domyślna", „Domyślny kolor", „Rozumiem"). Tu ten sam krój i gęstość
+  co etykiety paska, bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable
