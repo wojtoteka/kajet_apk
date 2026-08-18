@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.fontFamilyFor
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -94,10 +97,20 @@ private fun TextBoxOnSheet(
     val words = LocalStrings.current
     val density = LocalDensity.current
     val context = LocalContext.current
-    val left = (box.x - offsetX) * zoom
-    val top = (box.y + pageTop - offsetY) * zoom
-    val width = box.width * zoom
-    val height = box.height * zoom
+    val screen = TextBoxLayout.screenRect(
+        x = box.x,
+        y = box.y,
+        width = box.width,
+        height = box.height,
+        pageTop = pageTop,
+        offsetX = offsetX,
+        offsetY = offsetY,
+        zoom = zoom,
+    )
+    val left = screen.left
+    val top = screen.top
+    val width = screen.width
+    val height = screen.height
     val focus = remember { FocusRequester() }
 
     /*
@@ -143,6 +156,17 @@ private fun TextBoxOnSheet(
             val style = TextStyle(
                 fontFamily = fontFamilyFor(box.font),
                 fontSize = with(density) { (box.fontSize * zoom).toSp() },
+                /*
+                  Wysokość wiersza w em, nie w stałych sp z kroju body/code.
+
+                  Material scala nieustawione pola z LocalTextStyle — body
+                  ma lineHeight = 24.sp, code 22.sp. copy zostawia tę ramkę,
+                  a fontSize maleje z zoomem. Compose układa glify w 24.sp
+                  od góry, a pole przycina resztę: przy oddalaniu litery
+                  znikają. em trzyma 1.3× fontSize na każdym zoomie, także
+                  w bloku CODE (ten sam kroj).
+                */
+                lineHeight = TextBoxLayout.LINE_RATIO.em,
                 color = Color(box.color),
                 fontWeight = if (box.bold) FontWeight.SemiBold else FontWeight.Normal,
                 fontStyle = if (box.italic) FontStyle.Italic else FontStyle.Normal,
@@ -153,6 +177,13 @@ private fun TextBoxOnSheet(
                     NoteAlign.RIGHT -> TextAlign.End
                 },
             )
+            // Wyściółka w dp×zoom, nie sztywne 4.dp: przy oddalaniu stała
+            // krawędź zjadała glify, a ramka i tekst rozjeżdżały się.
+            val pad = TextBoxLayout.PAD_DP.dp * zoom
+            val field = Modifier
+                .fillMaxSize()
+                .clipToBounds()
+                .padding(pad)
 
             if (edited) {
                 BasicTextField(
@@ -160,18 +191,16 @@ private fun TextBoxOnSheet(
                     onValueChange = { onChange(box.copy(text = it), false) },
                     textStyle = style,
                     cursorBrush = SolidColor(Kajet.colors.accent),
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .focusRequester(focus),
+                    modifier = field.focusRequester(focus),
                 )
                 LaunchedEffect(box.id) { runCatching { focus.requestFocus() } }
             } else if (box.text.isNotEmpty()) {
-                Text(text = box.text, style = style, modifier = Modifier.padding(4.dp))
+                Text(text = box.text, style = style, modifier = field)
             } else {
                 Text(
                     text = words.textBox,
                     style = style.copy(color = Kajet.colors.muted),
-                    modifier = Modifier.padding(4.dp),
+                    modifier = field,
                 )
             }
 
