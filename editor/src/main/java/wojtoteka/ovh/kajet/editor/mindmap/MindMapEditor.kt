@@ -29,8 +29,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -55,6 +58,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -120,6 +125,25 @@ fun MindMapEditor(
     var offsetY by remember { mutableFloatStateOf(map?.viewY ?: 0f) }
     var zoom by remember { mutableFloatStateOf(map?.zoom ?: 1f) }
 
+    /*
+      Zapamiętane przesunięcie i przybliżenie wracają dopiero TUTAJ.
+
+      Notatka wczytuje się z dysku po pierwszym złożeniu ekranu, więc przy
+      `remember` wyżej `map` jest jeszcze puste i zostawały zera. Mapa otwierała
+      się przez to zawsze w lewym górnym rogu i na 100%, choć `rememberView`
+      zapisuje jedno i drugie przy każdym zejściu w tło. Raz na otwarcie —
+      dalsze zmiany treści nie mają szarpać widokiem spod ręki.
+    */
+    var viewRestored by remember { mutableStateOf(false) }
+    LaunchedEffect(map != null) {
+        val loaded = map ?: return@LaunchedEffect
+        if (viewRestored) return@LaunchedEffect
+        viewRestored = true
+        offsetX = loaded.viewX
+        offsetY = loaded.viewY
+        zoom = loaded.zoom.coerceIn(0.25f, 4f)
+    }
+
     // Rozmiar planszy w pikselach: potrzebny, żeby zmieścić całą mapę w oknie
     // i żeby przyciski przybliżenia trzymały środek ekranu w miejscu.
     var boardSize by remember { mutableStateOf(IntSize.Zero) }
@@ -135,6 +159,43 @@ fun MindMapEditor(
             offsetY = centreY - boardSize.height / (2f * next)
         }
         zoom = next
+    }
+
+    /*
+      Wysokość panelu węzła. Liczona TUTAJ, a nie w samym panelu, bo plansza
+      musi wiedzieć, ile miejsca u dołu jest zajęte.
+    */
+    val panelHeight = if (narrow) {
+        (LocalConfiguration.current.screenHeightDp * 0.45f).dp
+    } else {
+        460.dp
+    }
+
+    /*
+      Zaznaczony węzeł ma zostać widoczny.
+
+      Na telefonie panel edycji wisi na dole całą szerokością i zasłania dolną
+      połowę planszy — czyli często ten węzeł, którego właśnie dotknięto.
+      Po zaznaczeniu plansza zjeżdża tak, żeby węzeł wypadł na środku tego, co
+      z niej zostało. Gdy widać go w całości, nic się nie dzieje: przesuwanie
+      mapy przy każdym dotknięciu byłoby gorsze od zasłoniętego węzła.
+    */
+    val density = LocalDensity.current
+    LaunchedEffect(selected, narrow, boardSize) {
+        if (!narrow) return@LaunchedEffect
+        val id = selected ?: return@LaunchedEffect
+        val node = map?.nodes?.firstOrNull { it.id == id } ?: return@LaunchedEffect
+        if (boardSize.height == 0) return@LaunchedEffect
+
+        val free = boardSize.height - with(density) { panelHeight.toPx() }
+        if (free <= 0f) return@LaunchedEffect
+
+        val top = (node.y - offsetY) * zoom
+        val bottom = top + node.height * zoom
+        if (top >= 0f && bottom <= free) return@LaunchedEffect
+
+        val target = node.y - ((free - node.height * zoom) / 2f).coerceAtLeast(0f) / zoom
+        animate(initialValue = offsetY, targetValue = target) { value, _ -> offsetY = value }
     }
 
     val owner = LocalLifecycleOwner.current
@@ -159,7 +220,9 @@ fun MindMapEditor(
         val rail: @Composable () -> Unit = {
         Column(
             Modifier
-                .width(Kajet.dimens.railWidth)
+                // Węższy na telefonie, jak w bibliotece i edytorze tekstu:
+                // 56 dp to tam ponad 15% szerokości ekranu.
+                .width(if (narrow) 48.dp else Kajet.dimens.railWidth)
                 .fillMaxHeight()
                 .background(colors.desk)
                 .marginRule(colors.line, atEnd = !toolbarOnRight)
@@ -251,7 +314,24 @@ fun MindMapEditor(
 
         if (!toolbarOnRight) rail()
 
-        Box(Modifier.weight(1f).fillMaxHeight().onSizeChanged { boardSize = it }) {
+        /*
+          Przycięcie do granic planszy.
+
+          Compose nie ucina niczego z siebie, a węzły stoją na przesunięciach
+          liczonych od położenia mapy — po przesunięciu w prawo wychodzą one na
+          minus i węzeł maluje się na pasku narzędzi. Plansza jest w rzędzie ZA
+          paskiem, więc rysuje się na wierzchu i przykrywała mu ikony.
+
+          Ta sama pułapka co przy podglądzie strony w edytorze kodu
+          (CodeEditor.kt) i przy rysowaniu kresek (StrokeCanvas.onDraw).
+        */
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clipToBounds()
+                .onSizeChanged { boardSize = it },
+        ) {
             if (map != null) {
                 // Plansza. Dwa palce przesuwają i skalują, jeden palec w pustym
                 // miejscu odznacza węzeł.
@@ -367,6 +447,7 @@ fun MindMapEditor(
                             } else {
                                 0
                             },
+                            narrow = narrow,
                             onSelect = { model.select(node.id) },
                             onEdit = { model.edit(node.id) },
                             onText = { model.setText(node.id, it) },
@@ -460,20 +541,35 @@ fun MindMapEditor(
                     }
                 }
 
-                // Dyskretny rachunek mapy w rogu planszy.
-                Text(
-                    text = words.mapTally(map.nodes.size, map.edges.size),
-                    style = Kajet.type.meta,
-                    color = colors.muted,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                )
+                /*
+                  Dyskretny rachunek mapy w rogu planszy.
+
+                  Na telefonie go nie ma: plansza ma tam nieco ponad 300 dp
+                  szerokości, a sam pasek z tytułem sięga prawie do końca, więc
+                  rachunek lądował na nim.
+                */
+                if (!narrow) {
+                    Text(
+                        text = words.mapTally(map.nodes.size, map.edges.size),
+                        style = Kajet.type.meta,
+                        color = colors.muted,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                    )
+                }
 
                 // Przybliżenie przyciskami, z podglądem procentu. Środek ekranu
                 // stoi w miejscu, więc mapa nie ucieka spod palca.
                 Row(
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(12.dp)
+                        // Otwarty panel węzła zabiera dół planszy razem
+                        // z przyciskami przybliżenia — wtedy wchodzą nad niego.
+                        .padding(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = 12.dp,
+                            bottom = if (narrow && selected != null) panelHeight + 12.dp else 12.dp,
+                        )
                         .background(colors.sheet.copy(alpha = 0.94f), RoundedCornerShape(Kajet.dimens.corner))
                         .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner))
                         .padding(horizontal = 4.dp),
@@ -510,6 +606,7 @@ fun MindMapEditor(
                             connections = model.nodeConnections(id),
                             recentColors = recentColors,
                             narrow = narrow,
+                            panelHeight = panelHeight,
                             // Na wąskim ekranie panel wisi na dole całą szerokością,
                             // żeby nie zasłaniał planszy stojąc na jej środku.
                             modifier = if (narrow) {
@@ -570,7 +667,16 @@ fun MindMapEditor(
                     singleLine = true,
                     textStyle = Kajet.type.titleSmall.copy(color = colors.text),
                     cursorBrush = SolidColor(colors.accent),
-                    modifier = Modifier.widthIn(min = 80.dp, max = 280.dp),
+                    /*
+                      Waga bez wypełniania. Tytuł ma się mierzyć PO wskaźniku
+                      zapisu, nie przed nim: bez tego zjadał całą szerokość
+                      paska, a na wskaźnik zostawało zero i „Zapisane 12:01"
+                      łamało się po jednej literze. Przy krótkim tytule pasek
+                      dalej zwija się do jego długości.
+                    */
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .widthIn(min = 80.dp, max = if (narrow) 160.dp else 280.dp),
                     decorationBox = { field ->
                         if (document?.title.isNullOrEmpty()) {
                             Text(words.unnamed, style = Kajet.type.titleSmall, color = colors.muted)
@@ -639,6 +745,7 @@ private fun NodeOnBoard(
     connectTarget: Boolean,
     hasChildren: Boolean,
     hiddenCount: Int,
+    narrow: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onText: (String) -> Unit,
@@ -729,7 +836,30 @@ private fun NodeOnBoard(
                         Modifier
                     },
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                /*
+                  Wyściółka w jednostkach mapy, nie w dp.
+
+                  Rozmiar węzła liczy MindMapSizes.fit, zakładając PAD_X = 20
+                  jednostek mapy — a jednostka mapy to piksel urządzenia. Sztywne
+                  10.dp na telefonie o gęstości 2,6 to 52 piksele zamiast 20,
+                  czyli o 32 piksele mniej miejsca na hasło, niż przewidział
+                  rachunek. Wiersz, który miał się zmieścić, schodził wtedy do
+                  następnego i znikał pod dolną krawędzią węzła.
+
+                  Na szerokim ekranie zostaje 10.dp: tablet wygląda jak dotąd.
+                */
+                .padding(
+                    horizontal = if (narrow) {
+                        with(density) { (MindMapSizes.PAD_X / 2f * zoom).toDp() }
+                    } else {
+                        10.dp
+                    },
+                    vertical = if (narrow) {
+                        with(density) { (MindMapSizes.PAD_Y / 2f * zoom).toDp() }
+                    } else {
+                        6.dp
+                    },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             val style = Kajet.type.body.copy(
@@ -758,6 +888,9 @@ private fun NodeOnBoard(
                 Text(
                     text = node.text.ifEmpty { if (node.ink.isEmpty()) words.tapTwiceToType else "" },
                     style = if (node.text.isEmpty()) style.copy(color = colors.muted) else style,
+                    // Hasło dłuższe niż węzeł kończy się wielokropkiem, a nie
+                    // urwaniem w pół litery — widać wtedy, że dalej coś jest.
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -879,6 +1012,8 @@ private fun NodePanel(
     connections: List<Pair<MindEdge, MindNode>>,
     recentColors: List<Int>,
     narrow: Boolean,
+    /** Liczona przez planszę, bo ona odsuwa spod panelu zaznaczony węzeł. */
+    panelHeight: Dp,
     modifier: Modifier,
     onText: (String) -> Unit,
     onShape: (NodeShape) -> Unit,
@@ -904,11 +1039,6 @@ private fun NodePanel(
 
     // Na telefonie panel wisi na dole całą szerokością i nie przerasta
     // połowy ekranu, na tablecie stoi jak dotąd w rogu planszy.
-    val panelHeight = if (narrow) {
-        (LocalConfiguration.current.screenHeightDp * 0.45f).dp
-    } else {
-        460.dp
-    }
     Column(
         modifier
             .then(if (narrow) Modifier.fillMaxWidth() else Modifier.width(320.dp))
@@ -1035,7 +1165,7 @@ private fun NodePanel(
                         style = Kajet.type.body,
                         color = colors.text,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     IconAction(

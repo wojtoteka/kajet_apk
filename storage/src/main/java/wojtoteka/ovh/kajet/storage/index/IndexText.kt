@@ -41,9 +41,19 @@ object IndexText {
             .lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("![") }
-            .map { it.trimStart('#', '>', '-', '*', ' ') }
-            // The note list should carry content, not asterisks and colour marks.
-            .map { TextMarkers.plain(it) }
+            // Linia pozioma i płot bloku kodu to sama składnia — w spisie
+            // wyglądały jak `---` i ```` ```python ```` wpisane w treść.
+            .filter { !TextMarkers.horizontalRule.matches(it) && !it.startsWith("```") }
+            /*
+              Najpierw składnia początku wiersza, POTEM formaty.
+              Odwrotna kolejność zjadała notatki zaczynające się od pogrubienia:
+              obcinanie znaków (`trimStart`) zdejmowało dwie gwiazdki otwierające
+              z `**Prompt do generatora obrazów:** A surreal…`, przez co para
+              domykająca nie miała już z czym się zejść i zostawała w spisie jako
+              gołe `**`. To samo psuło kursywę na początku wiersza.
+            */
+            .map { TextMarkers.plain(it.replace(TextMarkers.leadingSyntax, "")) }
+            .map { it.trim() }
             .filter { it.isNotEmpty() }
             .joinToString(" ")
 

@@ -10,6 +10,25 @@ object TextMarkers {
 
     val highlightMarker = Regex("""==([^=]+)==""")
 
+    /**
+     * Znaczniki na początku wiersza, które są składnią, a nie treścią:
+     * `# `, `> `, `- `, `- [ ] `, `1. `.
+     *
+     * Spacja po myślniku czy gwiazdce jest tu OBOWIĄZKOWA i to jest cały sens
+     * tego wyrażenia. Wcześniej podgląd notatki obcinał znaki z początku
+     * wiersza po jednym (`trimStart('#', '>', '-', '*', ' ')`), więc z zapisu
+     * `**Prompt:** treść` znikały dwie pierwsze gwiazdki, a domykająca para
+     * zostawała w spisie jako gołe `**`.
+     *
+     * To samo wyrażenie stoi w `note-title.ts` na serwerze (LEADING_SYNTAX)
+     * i musi liczyć to samo — inaczej te same notatki przetytułowywałyby się
+     * nawzajem przy synchronizacji.
+     */
+    val leadingSyntax = Regex("""^\s*(#{1,6}\s+|>\s?|[-*+]\s+(\[[ xX]]\s+)?|\d+[.)]\s+)""")
+
+    /** Linia pozioma: `---`, `***`, `___`. To nie jest treść. */
+    val horizontalRule = Regex("""^(-{3,}|\*{3,}|_{3,})$""")
+
     /*
       Otwarcie i domknięcie zdejmowane OSOBNO, nie parą: stare notatki miewają
       znaczniki zagnieżdżone jeden w drugim albo osierocone domknięcia, a para

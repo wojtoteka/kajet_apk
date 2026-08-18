@@ -40,11 +40,9 @@ object NoteTitles {
      */
     private const val SETTLED_LENGTH = 12
 
-    /**
-     * Znaczniki na początku wiersza, które są składnią, a nie treścią:
-     * `# `, `> `, `- `, `- [ ] `, `1. `.
-     */
-    private val leadingSyntax = Regex("""^\s*(#{1,6}\s+|>\s?|[-*+]\s+(\[[ xX]]\s+)?|\d+[.)]\s+)""")
+    // Wspólne z podglądem notatki w spisie (IndexText) — jeden zapis składni
+    // początku wiersza na całą aplikację.
+    private val leadingSyntax = TextMarkers.leadingSyntax
 
     private val spanOpening = Regex("""<span style="[^"]*">""", RegexOption.IGNORE_CASE)
     private val spanClosing = Regex("""</span>""", RegexOption.IGNORE_CASE)
@@ -56,7 +54,7 @@ object NoteTitles {
     private val strike = Regex("""~~([^~]+)~~""")
     private val mark = Regex("""==([^=]+)==""")
     private val italic = Regex("""\*([^*]+)\*""")
-    private val horizontalRule = Regex("""^(-{3,}|\*{3,}|_{3,})$""")
+    private val horizontalRule = TextMarkers.horizontalRule
 
     /**
      * Obcięcie na ostatniej spacji przed granicą, a nie w połowie słowa.

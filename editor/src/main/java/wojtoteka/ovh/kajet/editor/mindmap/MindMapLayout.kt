@@ -298,9 +298,16 @@ object MindMapSizes {
 
     /** `line-height: 1.3` z edytora WWW. */
     private const val LINE_RATIO = 1.3f
-    /** Wyściółka węzła, obustronnie. */
-    private const val PAD_X = 20f
-    private const val PAD_Y = 12f
+    /**
+     * Wyściółka węzła, obustronnie — w jednostkach mapy.
+     *
+     * To jest `padding: 6px 10px` z węzła w edytorze WWW (measureNodeText.ts).
+     * Widok węzła MUSI odkładać dokładnie tyle miejsca, bo inaczej rachunek
+     * wysokości nie zgadza się z tym, co naprawdę widać, i ostatni wiersz
+     * hasła znika bez śladu.
+     */
+    const val PAD_X = 20f
+    const val PAD_Y = 12f
 
     private const val NARROW = "iljI.,;:'!|[]()ft"
     private const val WIDE = "mwMW@%"

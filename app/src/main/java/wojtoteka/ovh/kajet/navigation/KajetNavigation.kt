@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
@@ -167,6 +168,9 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                     settings = container.settings,
                     registry = container.runners,
                     path = path,
+                    // Na telefonie wiersz kodu i tak się nie mieści, więc od
+                    // początku go zawijamy. Przycisk w pasku dalej rządzi.
+                    wrapByDefault = LocalConfiguration.current.screenWidthDp < 600,
                 ),
             )
 

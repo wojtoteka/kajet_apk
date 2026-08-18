@@ -36,6 +36,15 @@ class CodeViewModel(
     private val settings: SettingsStore,
     private val registry: RunnerRegistry,
     val path: String,
+    /**
+     * Czy zawijanie wierszy ma być włączone od początku.
+     *
+     * Na telefonie tak. Wiersz kodu nie mieści się tam w szerokości ekranu,
+     * a przewijanie w bok nie daje po sobie żadnego znaku — było widać
+     * `std::cout << "Cześć" << std:` i nic więcej, bez śladu, że dalej coś
+     * jeszcze jest. Na tablecie wiersz się mieści, więc zostaje jak było.
+     */
+    wrapByDefault: Boolean = false,
 ) : ViewModel(), AiHooks {
 
     val language: CodeLanguage = CodeLanguage.fromExtension(path.substringAfterLast('/'))
@@ -81,7 +90,7 @@ class CodeViewModel(
     private val _matches = MutableStateFlow<List<IntRange>>(emptyList())
     val matches: StateFlow<List<IntRange>> = _matches.asStateFlow()
 
-    private val _wordWrap = MutableStateFlow(false)
+    private val _wordWrap = MutableStateFlow(wrapByDefault)
     val wordWrap: StateFlow<Boolean> = _wordWrap.asStateFlow()
 
     /**
@@ -335,9 +344,10 @@ class CodeViewModel(
         private val settings: SettingsStore,
         private val registry: RunnerRegistry,
         private val path: String,
+        private val wrapByDefault: Boolean = false,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CodeViewModel(repo, settings, registry, path) as T
+            CodeViewModel(repo, settings, registry, path, wrapByDefault) as T
     }
 }

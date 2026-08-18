@@ -72,10 +72,14 @@ interface IndexDao {
     @Query("SELECT * FROM entries WHERE documentId = :id LIMIT 1")
     suspend fun findById(id: String): IndexEntry?
 
+    /**
+     * Ulubione: notatki i pliki, bo gwiazdkę da się postawić i na jednym,
+     * i na drugim. Foldery zostają poza spisem — one gwiazdki nie noszą.
+     */
     @Query(
         """
         SELECT * FROM entries
-        WHERE favorite = 1 AND type = 'NOTE'
+        WHERE favorite = 1 AND type != 'FOLDER'
         ORDER BY updatedAt DESC
         """,
     )
@@ -229,7 +233,12 @@ interface IndexDao {
     entities = [IndexEntry::class, ContentFts::class],
     // Version 3 renames the tables and columns to English. The index is thrown
     // away and rebuilt, so there is nothing to migrate.
-    version = 3,
+    //
+    // Wersja 4 nie zmienia kształtu tabel — wymusza odbudowę, bo podglądy
+    // notatek zapisane starą wersją IndexText mają w treści gołe `**`.
+    // Podgląd powstaje przy zapisie do spisu, więc bez odbudowy poprawka
+    // objęłaby wyłącznie notatki tknięte po aktualizacji.
+    version = 4,
     exportSchema = true,
 )
 abstract class IndexDatabase : RoomDatabase() {
