@@ -40,7 +40,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
@@ -492,7 +494,8 @@ fun HandwritingEditor(
                     onColor = { model.rememberColor(it) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .fillMaxWidth(),
                 )
             }
 
@@ -983,19 +986,43 @@ private fun SelectionPanel(
     onDeselect: () -> Unit,
 ) {
     val words = LocalStrings.current
+    val shape = RoundedCornerShape(Kajet.dimens.corner)
     Row(
         modifier
-            .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
-            .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner))
-            // Na wąskim ekranie przyciski nie mieszczą się obok tekstu.
+            .clip(shape)
+            .background(Kajet.colors.sheet, shape)
+            .border(1.dp, Kajet.colors.line, shape)
+            // Na wąskim ekranie napis i akcja nie mieszczą się obok siebie.
+            .height(44.dp)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(words.selectedStrokes(count), style = Kajet.type.label, color = Kajet.colors.text)
-        SecondaryButton(words.delete, onDelete, icon = KajetIcons.Bin, color = Kajet.colors.danger)
-        IconAction(KajetIcons.Close, words.deselect, onDeselect)
+        /*
+          Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę —
+          w ciasnej karcie 44 dp odcinał się jak niedopasowany przycisk.
+          Ten sam krój co licznik zaznaczenia, bez ramki.
+        */
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .clickable(
+                    onClick = onDelete,
+                    onClickLabel = words.delete,
+                    role = Role.Button,
+                )
+                .padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = words.delete,
+                style = Kajet.type.label,
+                color = Kajet.colors.danger,
+            )
+        }
+        IconAction(KajetIcons.Close, words.deselect, onDeselect, touchTarget = 44.dp)
     }
 }
 
@@ -1318,15 +1345,28 @@ private fun TextBoxFormatBar(
     var textColourPicker by remember { mutableStateOf(false) }
     var backgroundPicker by remember { mutableStateOf(false) }
     var fontPicker by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(Kajet.dimens.corner)
+    // 44 dp jak IconToggle i ColourDot. Domyślne 48 dp (IconAction /
+    // SecondaryButton) wystawało z karty na telefonie.
+    val compact = 44.dp
 
     Column(
         modifier
-            .background(Kajet.colors.sheet, RoundedCornerShape(Kajet.dimens.corner))
-            .border(1.dp, Kajet.colors.line, RoundedCornerShape(Kajet.dimens.corner))
+            .clip(shape)
+            .background(Kajet.colors.sheet, shape)
+            .border(1.dp, Kajet.colors.line, shape)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        /*
+          Na ~360 dp suma ikon przekracza szerokość karty i Compose przycina
+          rząd — ostatnie wyrównania i obwódka karty znikały za krawędzią.
+          Przewijanie w bok jak w NarrowToolRow i szynie mapy myśli.
+        */
         Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -1335,11 +1375,12 @@ private fun TextBoxFormatBar(
                 description = "${words.fontFamily}: ${box.font.label(words)}",
                 onClick = { fontPicker = !fontPicker },
                 selected = fontPicker,
+                touchTarget = compact,
             )
 
             IconAction(KajetIcons.Minus, words.smallerText, {
                 onChange { it.copy(fontSize = (it.fontSize - 2f).coerceAtLeast(6f)) }
-            })
+            }, touchTarget = compact)
             Text(
                 text = "${box.fontSize.roundToInt()}",
                 style = Kajet.type.label,
@@ -1348,7 +1389,7 @@ private fun TextBoxFormatBar(
             )
             IconAction(KajetIcons.Plus, words.largerText, {
                 onChange { it.copy(fontSize = (it.fontSize + 2f).coerceAtMost(96f)) }
-            })
+            }, touchTarget = compact)
 
             VerticalDivider()
 
@@ -1383,6 +1424,7 @@ private fun TextBoxFormatBar(
                     description = align.label(words),
                     onClick = { onChange { it.copy(align = align) } },
                     selected = box.align == align,
+                    touchTarget = compact,
                 )
             }
 
@@ -1398,6 +1440,7 @@ private fun TextBoxFormatBar(
                 description = if (box.background == 0) words.addBoxBackground else words.changeBoxBackground,
                 onClick = { backgroundPicker = true },
                 selected = box.background != 0,
+                touchTarget = compact,
             )
         }
 
@@ -1409,6 +1452,7 @@ private fun TextBoxFormatBar(
                 // Menu zostaje otwarte: krój porównuje się na żywo,
                 // zamyka się je samemu tym samym przyciskiem „abc".
                 onSelect = { font -> onChange { it.copy(font = font) } },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
