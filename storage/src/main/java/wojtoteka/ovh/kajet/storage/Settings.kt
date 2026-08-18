@@ -129,6 +129,19 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class SettingsStore(private val context: Context) {
 
+    companion object {
+        /**
+         * Osobny plik na adres drzewa SAF. Auto Backup go pomija
+         * (`kajet_saf.xml`) — uprawnienie i tak nie wraca, a sam adres
+         * pozwala pominąć wybór folderu i pokazać pustą bibliotekę.
+         */
+        const val SAF_PREFS = "kajet_saf"
+        const val SAF_URI_KEY = "katalog_biblioteki"
+    }
+
+    private val safPrefs
+        get() = context.getSharedPreferences(SAF_PREFS, Context.MODE_PRIVATE)
+
     private object Keys {
         val folder = stringPreferencesKey("katalog_biblioteki")
         val finger = stringPreferencesKey("zachowanie_palca")
@@ -184,7 +197,7 @@ class SettingsStore(private val context: Context) {
         emit(emptyPreferences())
     }.map { data ->
         KajetSettings(
-            libraryFolder = data[Keys.folder],
+            libraryFolder = storedFolderUri(data),
             fingerBehavior = data[Keys.finger]?.let(::fingerBehaviorFrom) ?: defaultFinger,
             theme = data[Keys.theme]?.let(::themeChoiceFrom) ?: ThemeChoice.SYSTEM,
             defaultPageMode = data[Keys.pageMode]?.let { name ->
@@ -307,8 +320,33 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /**
+     * Adres folderu idzie do [SAF_PREFS], poza kopią zapasową. Klucz w
+     * DataStore zostawiamy pusty, żeby stary zapis nie wrócił przy restore.
+     */
     suspend fun setLibraryFolder(uri: String) {
-        context.dataStore.edit { it[Keys.folder] = uri }
+        safPrefs.edit().putString(SAF_URI_KEY, uri).commit()
+        context.dataStore.edit { it.remove(Keys.folder) }
+    }
+
+    /**
+     * Przenosi adres z DataStore (kiedyś backupowany) do pliku pomijanego
+     * przez kopię zapasową. Nie wołać z wnętrza [settings] — `edit` w trakcie
+     * odczytu tego samego magazynu potrafi się zaciąć.
+     */
+    suspend fun migrateLibraryFolderOutOfBackup() {
+        context.dataStore.edit { data ->
+            val leftover = data[Keys.folder] ?: return@edit
+            if (safPrefs.getString(SAF_URI_KEY, null).isNullOrBlank()) {
+                safPrefs.edit().putString(SAF_URI_KEY, leftover).commit()
+            }
+            data.remove(Keys.folder)
+        }
+    }
+
+    private fun storedFolderUri(data: Preferences): String? {
+        val fromSaf = safPrefs.getString(SAF_URI_KEY, null)?.takeIf { it.isNotBlank() }
+        return fromSaf ?: data[Keys.folder]
     }
 
     suspend fun setFingerBehavior(value: FingerBehavior) {

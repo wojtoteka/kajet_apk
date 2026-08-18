@@ -37,7 +37,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -105,6 +108,15 @@ fun SettingsScreen(
       internetu. Znika przy następnej udanej próbie.
     */
     var linkProblem by remember { mutableStateOf<String?>(null) }
+    var folderProblem by remember { mutableStateOf<String?>(null) }
+    var folderHasGrant by remember { mutableStateOf(true) }
+
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner, settings.libraryFolder) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            folderHasGrant = repo.hasPersistedAccess(settings.libraryFolder)
+        }
+    }
 
     /*
       Wejście na ekran zaczyna z czystym kontem. Bez tego napis „Spis notatek
@@ -155,7 +167,15 @@ fun SettingsScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
-                repo.setLibraryFolder(uri)
+                folderProblem = null
+                val kept = runCatching { repo.setLibraryFolder(uri) }
+                if (kept.isFailure) {
+                    folderHasGrant = false
+                    folderProblem = kept.exceptionOrNull()?.message
+                        ?: words.couldNotKeepFolderAccess
+                    return@launch
+                }
+                folderHasGrant = true
                 onRebuildIndex()
             }
         }
@@ -310,6 +330,20 @@ fun SettingsScreen(
                     color = Kajet.colors.muted,
                     modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
                 )
+                if (!folderHasGrant && !settings.libraryFolder.isNullOrBlank()) {
+                    InlineNotice(
+                        icon = KajetIcons.ErrorMark,
+                        text = words.folderAccessLostAbout,
+                        color = Kajet.colors.danger,
+                    )
+                }
+                folderProblem?.let { problem ->
+                    InlineNotice(
+                        icon = KajetIcons.ErrorMark,
+                        text = problem,
+                        color = Kajet.colors.danger,
+                    )
+                }
                 // Zawijanie jak w oknie eksportu: przy dużej czcionce dwa
                 // przyciski w sztywnym wierszu ściskały jeden drugiego do zera.
                 FlowRow(
@@ -317,7 +351,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     SecondaryButton(
-                        text = words.changeFolder,
+                        text = if (folderHasGrant) words.changeFolder else words.pickNotesFolder,
                         onClick = { folderPicker.launch(null) },
                         icon = KajetIcons.Folder,
                     )

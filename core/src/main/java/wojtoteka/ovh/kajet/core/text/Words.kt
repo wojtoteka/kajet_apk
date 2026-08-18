@@ -585,6 +585,9 @@ interface Strings {
     val whereToKeepNotesWhy: String
     val pickNotesFolder: String
     val pickNotesFolderAbout: String
+    val folderAccessLost: String
+    val folderAccessLostAbout: String
+    val couldNotKeepFolderAccess: String
 
     // --- Otwieranie i awarie ---
     val starting: String
@@ -1825,6 +1828,11 @@ object PolishStrings : Strings {
     override val pickNotesFolder = "Wskaż folder na notatki"
     override val pickNotesFolderAbout = "Otworzy się okno systemu Android. Wybierz folder i naciśnij " +
         "przycisk potwierdzenia. Możesz zmienić to później w ustawieniach."
+    override val folderAccessLost = "Wskaż folder z notatkami jeszcze raz"
+    override val folderAccessLostAbout = "Notatki leżą tam, gdzie były. Po reinstalacji albo kopii " +
+        "zapasowej Android nie oddaje dostępu do folderu sam — trzeba go wskazać ponownie. " +
+        "Plików to nie kasuje."
+    override val couldNotKeepFolderAccess = "Android nie zapisał dostępu do folderu. Wskaż go jeszcze raz."
 
     override val starting = "Kajet się otwiera…"
     override val startingSlow = "Trwa to dłużej niż zwykle. Notatki leżą bezpiecznie na " +
@@ -2532,6 +2540,11 @@ object EnglishStrings : Strings {
     override val pickNotesFolder = "Pick a folder for your notes"
     override val pickNotesFolderAbout = "An Android window will open. Choose a folder and press the " +
         "confirm button. You can change this later in settings."
+    override val folderAccessLost = "Pick the notes folder again"
+    override val folderAccessLostAbout = "Your notes are still where they were. After a reinstall or " +
+        "a backup restore, Android does not give folder access back on its own — you have to " +
+        "point at the folder again. That does not delete any files."
+    override val couldNotKeepFolderAccess = "Android did not keep access to the folder. Pick it again."
 
     override val starting = "Kajet is opening…"
     override val startingSlow = "This is taking longer than usual. Your notes are safe on the " +

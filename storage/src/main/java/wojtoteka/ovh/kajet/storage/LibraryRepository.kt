@@ -1,7 +1,6 @@
 package wojtoteka.ovh.kajet.storage
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
@@ -149,22 +148,46 @@ class LibraryRepository(
 
     private var cache: Pair<String, LibraryStore>? = null
 
-    val folderSelected: Flow<Boolean> = settings.settings.map { !it.libraryFolder.isNullOrBlank() }
+    val folderSelected: Flow<Boolean> = settings.settings.map { current ->
+        hasPersistedAccess(current.libraryFolder)
+    }
+
+    init {
+        backgroundScope.launch {
+            settings.migrateLibraryFolderOutOfBackup()
+        }
+    }
 
     suspend fun setLibraryFolder(uri: Uri) {
-        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
+        SafAccess.takePersistable(context.contentResolver, uri)
         cache = null
         settings.setLibraryFolder(uri.toString())
         refresh()
     }
 
-    suspend fun hasAccess(): Boolean = store()?.root?.canWrite() == true
+    /**
+     * Czy system wciąż honoruje trwałe uprawnienie do zapisanego drzewa.
+     * Sam niepusty adres w ustawieniach tego nie gwarantuje — po restore
+     * kopii zapasowej adres wraca, a [ContentResolver.getPersistedUriPermissions]
+     * jest puste.
+     */
+    fun hasPersistedAccess(folderUri: String?): Boolean =
+        SafAccess.hasPersistedGrant(context.contentResolver, folderUri)
+
+    suspend fun hasAccess(): Boolean {
+        val folder = settings.settings.first().libraryFolder
+        if (!hasPersistedAccess(folder)) return false
+        return store()?.root?.canWrite() == true
+    }
 
     override suspend fun hasStore(): Boolean = store() != null
 
     suspend fun store(): LibraryStore? = withContext(io) {
         val uri = settings.settings.first().libraryFolder ?: return@withContext null
+        if (!hasPersistedAccess(uri)) {
+            cache = null
+            return@withContext null
+        }
         cache?.let { (remembered, store) -> if (remembered == uri) return@withContext store }
 
         val root = DocumentFile.fromTreeUri(context, Uri.parse(uri)) ?: return@withContext null

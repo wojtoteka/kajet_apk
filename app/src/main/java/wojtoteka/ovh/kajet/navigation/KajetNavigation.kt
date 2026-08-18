@@ -14,7 +14,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -88,7 +90,12 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
       biblioteki wprost (niżej), więc przeliczanie tego jest niepotrzebne.
     */
     val start = rememberSaveable {
-        if (settings.libraryFolder.isNullOrBlank()) Routes.START else Routes.LIBRARY
+        // Nie wystarczy niepusty adres: po Auto Backup wraca bez uprawnienia SAF.
+        if (container.library.hasPersistedAccess(settings.libraryFolder)) {
+            Routes.LIBRARY
+        } else {
+            Routes.START
+        }
     }
 
     /*
@@ -109,7 +116,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     // Deep link from the website after device approval → open account screen.
     LaunchedEffect(authUri, backStack?.destination?.route) {
         if (authUri == null) return@LaunchedEffect
-        if (settings.libraryFolder.isNullOrBlank()) return@LaunchedEffect
+        if (!container.library.hasPersistedAccess(settings.libraryFolder)) return@LaunchedEffect
         if (backStack?.destination?.route == Routes.ACCOUNT) return@LaunchedEffect
         navController.navigate(Routes.ACCOUNT) {
             launchSingleTop = true
@@ -119,10 +126,20 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     NavHost(navController = navController, startDestination = start) {
 
         composable(Routes.START) {
+            val words = LocalStrings.current
+            var pickProblem by remember { mutableStateOf<String?>(null) }
             FolderPickerScreen(
+                lostGrant = !settings.libraryFolder.isNullOrBlank(),
+                pickProblem = pickProblem,
                 onPicked = { uri ->
                     scope.launch {
-                        container.library.setLibraryFolder(uri)
+                        pickProblem = null
+                        val kept = runCatching { container.library.setLibraryFolder(uri) }
+                        if (kept.isFailure) {
+                            pickProblem = kept.exceptionOrNull()?.message
+                                ?: words.couldNotKeepFolderAccess
+                            return@launch
+                        }
                         model.rebuildIndex()
                         navController.navigate(Routes.LIBRARY) {
                             popUpTo(Routes.START) { inclusive = true }
@@ -270,6 +287,27 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                     popOnce(navController, entry)
                 },
             )
+        }
+    }
+
+    /*
+      Po kopii zapasowej albo reinstalacji adres folderu potrafi wrócić bez
+      trwałego uprawnienia SAF. Wtedy biblioteka wygląda na pustą. Zanim
+      cokolwiek pokażemy ze spisu, wracamy do wyboru folderu.
+    */
+    val owner = LocalLifecycleOwner.current
+    val route = backStack?.destination?.route
+    LaunchedEffect(owner, settings.libraryFolder, route) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (container.library.hasPersistedAccess(settings.libraryFolder)) return@repeatOnLifecycle
+            if (route == null || route == Routes.START) return@repeatOnLifecycle
+            Log.w("Kajet", "Brak trwałego dostępu do folderu — wracam do wyboru katalogu")
+            runCatching {
+                navController.navigate(Routes.START) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         }
     }
 }

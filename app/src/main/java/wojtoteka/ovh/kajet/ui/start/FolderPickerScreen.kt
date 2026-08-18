@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
+import wojtoteka.ovh.kajet.core.design.component.InlineNotice
 import wojtoteka.ovh.kajet.core.design.component.KajetMark
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -37,6 +38,8 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 @Composable
 fun FolderPickerScreen(
     onPicked: (Uri) -> Unit,
+    lostGrant: Boolean = false,
+    pickProblem: String? = null,
 ) {
     val words = LocalStrings.current
     val picker = rememberLauncherForActivityResult(
@@ -71,28 +74,30 @@ fun FolderPickerScreen(
                 .padding(start = 40.dp, end = 32.dp, top = 56.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            SectionLabel(words.firstRun)
+            SectionLabel(if (lostGrant) words.notesFolder else words.firstRun)
 
             Text(
-                text = words.whereToKeepNotes,
+                text = if (lostGrant) words.folderAccessLost else words.whereToKeepNotes,
                 style = Kajet.type.display,
                 color = Kajet.colors.text,
                 modifier = Modifier.widthIn(max = 560.dp),
             )
 
             Text(
-                text = words.whereToKeepNotesAbout,
+                text = if (lostGrant) words.folderAccessLostAbout else words.whereToKeepNotesAbout,
                 style = Kajet.type.bodyLarge,
                 color = Kajet.colors.text,
                 modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
             )
 
-            Text(
-                text = words.whereToKeepNotesWhy,
-                style = Kajet.type.body,
-                color = Kajet.colors.muted,
-                modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
-            )
+            if (!lostGrant) {
+                Text(
+                    text = words.whereToKeepNotesWhy,
+                    style = Kajet.type.body,
+                    color = Kajet.colors.muted,
+                    modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
+                )
+            }
 
             Box(Modifier.height(8.dp))
 
@@ -101,6 +106,14 @@ fun FolderPickerScreen(
                 onClick = { picker.launch(documentsHint()) },
                 icon = KajetIcons.Folder,
             )
+
+            if (pickProblem != null) {
+                InlineNotice(
+                    icon = KajetIcons.ErrorMark,
+                    text = pickProblem,
+                    color = Kajet.colors.danger,
+                )
+            }
 
             Text(
                 text = words.pickNotesFolderAbout,
