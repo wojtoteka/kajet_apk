@@ -1,7 +1,12 @@
 package wojtoteka.ovh.kajet.ui.note
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -9,12 +14,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.editor.SaveState
@@ -50,7 +57,14 @@ fun remoteDeletionGuard(
     if (deleted && unsaved && !postponed) {
         KajetDialog(words.noteDeletedElsewhere, onClose = { postponed = true }) {
             Text(message, style = Kajet.type.body, color = Kajet.colors.text)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Dwa SecondaryButton 48 dp w jednym rzędzie nie mieszczą się
+            // na telefonie. Zapis zostaje PrimaryButton; odrzucenie jest
+            // akcją tekstową jak „Wyczyść" w konsoli i schodzi pod spód —
+            // treść nie znika bez tego wyboru.
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 PrimaryButton(saveLabel, {
                     if (!busy) {
                         busy = true
@@ -63,10 +77,10 @@ fun remoteDeletionGuard(
                         }
                     }
                 })
-                SecondaryButton(words.discardChanges, {
+                DiscardAction(words.discardChanges) {
                     onDiscard()
                     onBack()
-                })
+                }
             }
         }
     }
@@ -97,4 +111,20 @@ fun remoteDeletionGuard(model: NoteViewModel, onBack: () -> Unit): () -> Unit {
         onDiscard = model::discardChanges,
         onBack = onBack,
     )
+}
+
+@Composable
+private fun DiscardAction(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(44.dp)
+            .clickable(onClick = onClick, onClickLabel = label, role = Role.Button)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = Kajet.type.label, color = Kajet.colors.muted)
+    }
 }
