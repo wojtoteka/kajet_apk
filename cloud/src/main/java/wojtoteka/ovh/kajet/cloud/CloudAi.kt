@@ -38,14 +38,15 @@ class CloudAi(
 
     fun consented(): Boolean = account.aiConsented()
 
-    suspend fun setConsent(consented: Boolean): Boolean =
-        when (client.aiSetConsent(consented)) {
-            is CloudClient.Result.Ok -> {
-                account.rememberAiConsent(consented)
-                true
-            }
-            is CloudClient.Result.Error -> false
+    suspend fun setConsent(consented: Boolean): Boolean {
+        val response = runCatching { client.aiSetConsent(consented) }.getOrNull()
+        return if (response is CloudClient.Result.Ok) {
+            account.rememberAiConsent(consented)
+            true
+        } else {
+            false
         }
+    }
 
     suspend fun ask(noteId: String, instruction: String): Outcome {
         if (!available()) return Outcome.Refused(words.notSignedIn)
@@ -62,11 +63,12 @@ class CloudAi(
 
             is CloudClient.Result.Ok -> when (response.data.status) {
                 "zmieniono" -> {
-                    // 3. Wynik z powrotem na urządzenie. Notatka na serwerze
-                    //    jest już zmieniona, więc nawet gdy to się teraz nie
-                    //    uda, zmiana nie przepadła - dojdzie przy najbliższej
-                    //    synchronizacji.
-                    runCatching { sync.synchronise() }
+                    // 3. Wynik z powrotem na urządzenie. Gdyby ściągnięcie
+                    //    padło po cichu, ekran pokazałby sukces przy starej
+                    //    treści - stąd osobna odmowa, nie przełknięcie błędu.
+                    if (!runCatching { sync.synchronise() }.isSuccess) {
+                        return Outcome.Refused(words.aiPullFailed)
+                    }
                     Outcome.Changed(response.data.opis, response.data.version)
                 }
                 "pytanie" -> Outcome.Question(response.data.pytanie)

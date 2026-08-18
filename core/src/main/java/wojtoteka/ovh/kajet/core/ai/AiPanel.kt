@@ -35,6 +35,10 @@ import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.ToolPanel
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.aiHint
+import wojtoteka.ovh.kajet.core.text.aiHistoryEmpty
+import wojtoteka.ovh.kajet.core.text.aiUndoFailed
+import wojtoteka.ovh.kajet.core.text.aiWorking
 
 /*
   Panel asystenta - jeden dla notatki tekstowej, mapy myśli i kodu.
@@ -93,7 +97,7 @@ fun AiPanel(
         val working = stage is Stage.Working
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionLabel(words.aiHint)
+            SectionLabel(words.aiHint(kind))
             BasicTextField(
                 value = instruction,
                 onValueChange = { instruction = it },
@@ -143,7 +147,7 @@ fun AiPanel(
                             stage = if (hooks.undoAi()) {
                                 Stage.Undone
                             } else {
-                                Stage.Failed(words.aiUndoFailed)
+                                Stage.Failed(words.aiUndoFailed(kind))
                             }
                         }
                     },
@@ -163,7 +167,7 @@ fun AiPanel(
                 )
                 // Wywołanie potrafi trwać kilkadziesiąt sekund - bez tego
                 // zdania ekran wygląda na zawieszony.
-                Text(words.aiWorking, style = Kajet.type.body, color = Kajet.colors.muted)
+                Text(words.aiWorking(kind), style = Kajet.type.body, color = Kajet.colors.muted)
             }
 
             is Stage.Done -> Message(current.summary, Kajet.colors.accent)
@@ -200,7 +204,7 @@ fun AiPanel(
 
         if (historyShown) {
             if (turns.isEmpty()) {
-                Text(words.aiHistoryEmpty, style = Kajet.type.body, color = Kajet.colors.muted)
+                Text(words.aiHistoryEmpty(kind), style = Kajet.type.body, color = Kajet.colors.muted)
             } else {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
