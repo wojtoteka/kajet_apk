@@ -303,7 +303,11 @@ class LibraryViewModel(
 
     fun toggleSelected(item: LibraryItem) {
         val paths = _selected.value
-        _selected.value = if (item.path in paths) paths - item.path else paths + item.path
+        val next = if (item.path in paths) paths - item.path else paths + item.path
+        _selected.value = next
+        // Ostatni odznaczony wpis kończy tryb: pasek działań ma zniknąć
+        // razem z pustym zaznaczeniem, a nie zostać z licznikiem zero.
+        if (next.isEmpty()) stopSelecting()
     }
 
     fun selectAll(items: List<LibraryItem>) {

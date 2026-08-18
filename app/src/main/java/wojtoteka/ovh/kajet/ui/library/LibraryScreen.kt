@@ -572,10 +572,12 @@ private fun FolderView(
     val selecting by model.selecting.collectAsStateWithLifecycle()
     val selected by model.selected.collectAsStateWithLifecycle()
 
-    // Przycisk wstecz i wychodzenie z folderu w trakcie zaznaczania nie mają
-    // sensu — pasek zaznaczania zastępuje cały nagłówek.
+    // Pasek działań stoi tylko przy niepustym zaznaczeniu. Samo wejście
+    // w tryb („Zaznacz") zostawia zwykły nagłówek — inaczej nad spisem
+    // wisiałby pusty pasek „zaznaczono zero" z przyciskami bez roboty.
+    val showBulkBar = selecting && selected.isNotEmpty()
     Column(Modifier.fillMaxSize()) {
-        if (selecting) {
+        if (showBulkBar) {
             SelectionBar(
                 count = selected.size,
                 onSelectAll = { model.selectAll(items) },
@@ -589,11 +591,14 @@ private fun FolderView(
                 path = path,
                 showPath = showPath,
                 anyItems = items.isNotEmpty(),
+                selecting = selecting,
                 onUp = model::goUp,
                 onNewFolder = onNewFolder,
                 onNewNote = onNewNote,
                 onNewFile = onNewFile,
-                onSelectMany = { model.startSelecting() },
+                onSelectMany = {
+                    if (selecting) model.stopSelecting() else model.startSelecting()
+                },
             )
         }
         HorizontalRule()
@@ -650,6 +655,7 @@ private fun FolderHeader(
     path: String,
     showPath: Boolean,
     anyItems: Boolean,
+    selecting: Boolean,
     onUp: () -> Unit,
     onNewFolder: () -> Unit,
     onNewNote: () -> Unit,
@@ -699,15 +705,11 @@ private fun FolderHeader(
                     PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
                     SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
                     SecondaryButton(words.codeShort, onNewFile, icon = KajetIcons.CodeFile)
-                    // Długie przytrzymanie wiersza robi to samo, ale o tym
-                    // trzeba wiedzieć. Przycisk widać.
-                    if (anyItems) {
-                        SecondaryButton(
-                            text = words.selectMany,
-                            onClick = onSelectMany,
-                            icon = KajetIcons.Confirm,
-                        )
-                    }
+                    SelectManyHeaderButton(
+                        anyItems = anyItems,
+                        selecting = selecting,
+                        onSelectMany = onSelectMany,
+                    )
                 }
             }
         } else {
@@ -746,21 +748,48 @@ private fun FolderHeader(
                 PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
                 SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
                 SecondaryButton(words.libKindCode, onNewFile, icon = KajetIcons.CodeFile)
-                if (anyItems) {
-                    SecondaryButton(
-                        text = words.selectMany,
-                        onClick = onSelectMany,
-                        icon = KajetIcons.Confirm,
-                    )
-                }
+                SelectManyHeaderButton(
+                    anyItems = anyItems,
+                    selecting = selecting,
+                    onSelectMany = onSelectMany,
+                )
             }
         }
+    }
+}
+
+/** Wejście w zaznaczanie zostaje przyciskiem nagłówka, nie pustym paskiem działań. */
+@Composable
+private fun SelectManyHeaderButton(
+    anyItems: Boolean,
+    selecting: Boolean,
+    onSelectMany: () -> Unit,
+) {
+    val words = LocalStrings.current
+    // Długie przytrzymanie wiersza robi to samo, ale o tym trzeba wiedzieć.
+    // Przycisk widać. Gdy tryb już stoi, a nic nie wskazano, ten sam
+    // przycisk zamyka go — paska działań przy zerze nie ma.
+    if (selecting) {
+        SecondaryButton(
+            text = words.selectionDone,
+            onClick = onSelectMany,
+            icon = KajetIcons.Close,
+        )
+    } else if (anyItems) {
+        SecondaryButton(
+            text = words.selectMany,
+            onClick = onSelectMany,
+            icon = KajetIcons.Confirm,
+        )
     }
 }
 
 /**
  * Pasek trybu zaznaczania. Stoi w miejscu nagłówka folderu, bo przez tę chwilę
  * spis służy do jednego: wskazania wpisów i zrobienia z nimi czegoś naraz.
+ *
+ * Wchodzi na ekran dopiero przy co najmniej jednym wskazanym wpisie. Przy
+ * zerze zostaje zwykły nagłówek folderu.
  *
  * Działania zawijają się do następnego wiersza, bo przy dużym piśmie cztery
  * przyciski w jednym rzędzie ściskały jeden drugiego do zera.
@@ -807,21 +836,16 @@ private fun SelectionBar(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
-            // Bez zaznaczenia nie ma czego przenosić ani wyrzucać, ale
-            // przyciski zostają na widoku — inaczej pasek skakałby przy
-            // pierwszym dotknięciu wiersza.
             SecondaryButton(
                 text = words.menuMoveToFolder,
                 onClick = onMove,
                 icon = KajetIcons.Move,
-                enabled = count > 0,
             )
             SecondaryButton(
                 text = words.moveToTrash,
                 onClick = onTrash,
                 icon = KajetIcons.Bin,
                 color = Kajet.colors.danger,
-                enabled = count > 0,
             )
         }
     }
