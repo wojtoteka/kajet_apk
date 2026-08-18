@@ -45,6 +45,12 @@ class CodeViewModel(
      * jeszcze jest. Na tablecie wiersz się mieści, więc zostaje jak było.
      */
     wrapByDefault: Boolean = false,
+    /**
+     * Pomoc przy pisaniu ze snapshotu, który Kajet już ma (ekran startowy
+     * czeka na DataStore). Gdyby tu wstawić `true` i dograć ustawienie w tle,
+     * pierwsze znaki poszłyby z domykaniem nawiasów, choć ktoś to zgasił.
+     */
+    assistEnabled: Boolean = true,
 ) : ViewModel(), AiHooks {
 
     val language: CodeLanguage = CodeLanguage.fromExtension(path.substringAfterLast('/'))
@@ -97,7 +103,7 @@ class CodeViewModel(
      * Pomoc przy pisaniu (domykanie nawiasów i znaczników). Ustawienie konta na
      * urządzeniu — kto woli pisać wszystko sam, gasi ją w ustawieniach.
      */
-    private val _assist = MutableStateFlow(true)
+    private val _assist = MutableStateFlow(assistEnabled)
     val assist: StateFlow<Boolean> = _assist.asStateFlow()
 
     /** Pasek narzędzi po prawej stronie — ustawienie dla leworęcznych. */
@@ -345,9 +351,10 @@ class CodeViewModel(
         private val registry: RunnerRegistry,
         private val path: String,
         private val wrapByDefault: Boolean = false,
+        private val assistEnabled: Boolean = true,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CodeViewModel(repo, settings, registry, path, wrapByDefault) as T
+            CodeViewModel(repo, settings, registry, path, wrapByDefault, assistEnabled) as T
     }
 }

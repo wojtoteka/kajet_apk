@@ -193,6 +193,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                     // Na telefonie wiersz kodu i tak się nie mieści, więc od
                     // początku go zawijamy. Przycisk w pasku dalej rządzi.
                     wrapByDefault = LocalConfiguration.current.screenWidthDp < 600,
+                    assistEnabled = settings.codeAssist,
                 ),
             )
 
