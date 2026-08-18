@@ -18,6 +18,7 @@ import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.ink.DrawingToImage
+import wojtoteka.ovh.kajet.ink.PaperStrokes
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 
@@ -157,7 +158,15 @@ class TextNoteViewModel(
         viewModelScope.launch {
             _busy.value = words.savingDrawing
             try {
-                val png = DrawingToImage.png(strokes, width, height)
+                // PNG siada na jasnym papierze markdowna, więc tło jest białe,
+                // a tusz z ciemnej kartki idzie na grafit — inaczej kremowa
+                // kreska znika. Źródło kresek zostaje w barwach edytora.
+                val png = DrawingToImage.png(
+                    strokes = PaperStrokes.of(strokes),
+                    width = width,
+                    height = height,
+                    backgroundColor = PaperStrokes.PAGE,
+                )
                 val imageName =
                     repo.writeAttachment(path, "rysunek-${System.currentTimeMillis()}.png", png, "image/png")
                 val sourceName = imageName.removeSuffix(".png") + ".strokes.json"
