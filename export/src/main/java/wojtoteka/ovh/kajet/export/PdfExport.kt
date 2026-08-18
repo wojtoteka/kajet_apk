@@ -11,18 +11,29 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.text.Layout
+import android.text.Spannable
+import android.text.SpannableStringBuilder
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
+import android.text.style.UnderlineSpan
+import androidx.compose.ui.graphics.toArgb
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import wojtoteka.ovh.kajet.core.design.KajetLightColors
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.MindMapContent
+import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
-import wojtoteka.ovh.kajet.core.model.TextMarkers
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.ink.ShapeGeometry
 import wojtoteka.ovh.kajet.ink.ShapePainter
@@ -31,6 +42,7 @@ import wojtoteka.ovh.kajet.ink.Strokes
 import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 object PdfExport {
 
@@ -48,7 +60,7 @@ object PdfExport {
             when {
                 document.handwriting != null -> handwrittenPages(pdf, document, attachment, withBackground)
                 document.mindMap != null -> mindMapPage(pdf, document.mindMap!!, document.title)
-                document.text != null -> textPages(pdf, document)
+                document.text != null -> textPages(pdf, document, attachment)
             }
             if (pdf.pages.isEmpty()) emptyPage(pdf, document.title)
             pdf.writeTo(output)
@@ -196,17 +208,23 @@ object PdfExport {
         canvas.drawPath(path, paint)
     }
 
-    private fun textPages(pdf: PdfDocument, document: NoteDocument) {
+    private fun textPages(
+        pdf: PdfDocument,
+        document: NoteDocument,
+        attachment: (String) -> ByteArray?,
+    ) {
         val content = document.text?.markdown.orEmpty()
         val leftMargin = 64f
         val topMargin = 72f
         val width = A4_WIDTH - 2 * leftMargin
+        val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
         var y = topMargin
         var page = pdf.startPage(
             PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create(),
         )
         page.canvas.drawColor(PaperInk.PAPER)
+        var fence: String? = null
 
         fun nextPage() {
             pageNumber(page.canvas, pdf.pages.size + 1)
@@ -218,37 +236,88 @@ object PdfExport {
             y = topMargin
         }
 
-        drawText(page.canvas, document.title, leftMargin, y, width, 22f, Color.BLACK, true)
+        fun place(height: Float) {
+            if (y + height > A4_HEIGHT - topMargin) nextPage()
+        }
+
+        drawText(page.canvas, document.title, leftMargin, y, width, 22f, PaperInk.INK, true)
         y += 40f
 
         for (line in content.split('\n')) {
             val trimmed = line.trim()
+            if (fence != null) {
+                if (PdfMarkdown.closesFence(trimmed, fence)) {
+                    fence = null
+                    continue
+                }
+                val height = styledHeight(line, width, 10f)
+                place(height)
+                drawStyled(page.canvas, line, leftMargin, y, width, 10f, mono = true)
+                y += height + 2f
+                continue
+            }
+            val opens = PdfMarkdown.opensFence(trimmed)
+            if (opens != null) {
+                fence = opens
+                continue
+            }
             if (trimmed.isEmpty()) {
                 y += 8f
                 continue
             }
-            val level = trimmed.takeWhile { it == '#' }.length
-            val (raw, size, bold) = when {
-                level in 1..6 -> Triple(trimmed.drop(level + 1), 20f - level * 1.5f, true)
-                Regex("^[-*+] \\[[ xX]] ").containsMatchIn(trimmed) ->
-                    Triple(
-                        trimmed
-                            .replace(Regex("^[-*+] \\[ ] "), "☐  ")
-                            .replace(Regex("^[-*+] \\[[xX]] "), "☑  "),
-                        11f,
-                        false,
+
+            val picture = PdfMarkdown.image(trimmed)
+            if (picture != null) {
+                val bytes = PdfMarkdown.attachmentBytes(attachment, picture.asset)
+                val bitmap = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                if (bitmap != null) {
+                    var drawW = width * picture.width
+                    var drawH = bitmap.height * (drawW / bitmap.width.toFloat())
+                    val maxH = A4_HEIGHT - 2 * topMargin
+                    if (drawH > maxH) {
+                        val shrink = maxH / drawH
+                        drawW *= shrink
+                        drawH = maxH
+                    }
+                    place(drawH)
+                    page.canvas.drawBitmap(
+                        bitmap,
+                        null,
+                        RectF(leftMargin, y, leftMargin + drawW, y + drawH),
+                        imagePaint,
                     )
-                trimmed.startsWith("- ") || trimmed.startsWith("* ") ->
-                    Triple("•  " + trimmed.drop(2), 11f, false)
-                trimmed.startsWith("> ") -> Triple("    " + trimmed.drop(2), 11f, false)
-                else -> Triple(trimmed, 11f, false)
+                    bitmap.recycle()
+                    y += drawH + 8f
+                }
+                continue
             }
-            // Formatting markers are stripped: on paper, asterisks around a word
-            // are two asterisks, not bold text.
-            val text = TextMarkers.plain(raw)
-            val height = textHeight(text, width, size, bold)
-            if (y + height > A4_HEIGHT - topMargin) nextPage()
-            drawText(page.canvas, text, leftMargin, y, width, size, Color.BLACK, bold)
+
+            val level = trimmed.takeWhile { it == '#' }.length
+            val look = when {
+                level in 1..6 -> LineLook(trimmed.drop(level + 1), 20f - level * 1.5f, extraBold = true)
+                Regex("^[-*+] \\[[xX]] ").containsMatchIn(trimmed) -> LineLook(
+                    trimmed.replace(Regex("^[-*+] \\[[xX]] "), "☑  "),
+                    11f,
+                    extraStrike = true,
+                )
+                Regex("^[-*+] \\[ ] ").containsMatchIn(trimmed) -> LineLook(
+                    trimmed.replace(Regex("^[-*+] \\[ ] "), "☐  "),
+                    11f,
+                )
+                trimmed.startsWith("- ") || trimmed.startsWith("* ") ->
+                    LineLook("•  " + trimmed.drop(2), 11f)
+                trimmed.startsWith("> ") -> LineLook("    " + trimmed.drop(2), 11f, extraItalic = true)
+                else -> LineLook(trimmed, 11f)
+            }
+            val block = styled(
+                markdown = look.raw,
+                extraBold = look.extraBold,
+                extraItalic = look.extraItalic,
+                extraStrike = look.extraStrike,
+            )
+            val height = styledHeight(block, width, look.size)
+            place(height)
+            drawStyled(page.canvas, block, leftMargin, y, width, look.size)
             y += height + 4f
         }
 
@@ -256,23 +325,33 @@ object PdfExport {
         pdf.finishPage(page)
     }
 
+    private data class LineLook(
+        val raw: String,
+        val size: Float,
+        val extraBold: Boolean = false,
+        val extraItalic: Boolean = false,
+        val extraStrike: Boolean = false,
+    )
+
     private fun mindMapPage(pdf: PdfDocument, map: MindMapContent, title: String) {
         val info = PdfDocument.PageInfo.Builder(A4_HEIGHT, A4_WIDTH, 1).create()
         val page = pdf.startPage(info)
         val canvas = page.canvas
         canvas.drawColor(PaperInk.PAPER)
 
-        drawText(canvas, title, 40f, 36f, A4_HEIGHT - 80f, 18f, Color.BLACK, true)
+        drawText(canvas, title, 40f, 36f, A4_HEIGHT - 80f, 18f, PaperInk.INK, true)
 
-        if (map.nodes.isEmpty()) {
+        val nodes = PdfMarkdown.visibleNodes(map)
+        if (nodes.isEmpty()) {
             pdf.finishPage(page)
             return
         }
 
-        val minX = map.nodes.minOf { it.x }
-        val minY = map.nodes.minOf { it.y }
-        val maxX = map.nodes.maxOf { it.x + it.width }
-        val maxY = map.nodes.maxOf { it.y + it.height }
+        val visibleIds = PdfMarkdown.visibleIds(map)
+        val minX = nodes.minOf { it.x }
+        val minY = nodes.minOf { it.y }
+        val maxX = nodes.maxOf { it.x + it.width }
+        val maxY = nodes.maxOf { it.y + it.height }
         val scale = min(
             (A4_HEIGHT - 80f) / max(1f, maxX - minX),
             (A4_WIDTH - 140f) / max(1f, maxY - minY),
@@ -288,8 +367,9 @@ object PdfExport {
             strokeWidth = 1.6f
             color = Color.rgb(0x8C, 0x87, 0x7C)
         }
-        val byId = map.nodes.associateBy { it.id }
+        val byId = nodes.associateBy { it.id }
         for (edge in map.edges) {
+            if (edge.fromId !in visibleIds || edge.toId !in visibleIds) continue
             val from = byId[edge.fromId] ?: continue
             val to = byId[edge.toId] ?: continue
             canvas.drawLine(
@@ -301,15 +381,16 @@ object PdfExport {
             )
         }
 
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = KajetLightColors.sheet.toArgb()
+        }
         val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 1.6f
-            color = Color.rgb(0x23, 0x21, 0x1D)
         }
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-
-        for (node in map.nodes) {
-            val radius = if (node.shape.name == "OWAL") node.height / 2f else 3f
+        for (node in nodes) {
+            val radius = PdfMarkdown.cornerRadius(node)
+            framePaint.color = PdfMarkdown.nodeInk(node)
             canvas.drawRoundRect(
                 node.x, node.y, node.x + node.width, node.y + node.height,
                 radius, radius, fillPaint,
@@ -318,12 +399,7 @@ object PdfExport {
                 node.x, node.y, node.x + node.width, node.y + node.height,
                 radius, radius, framePaint,
             )
-            if (node.text.isNotBlank()) {
-                drawText(
-                    canvas, node.text, node.x + 8f, node.y + 10f,
-                    node.width - 16f, 10f, Color.BLACK, false,
-                )
-            }
+            drawNodeText(canvas, node)
         }
         canvas.restore()
         pdf.finishPage(page)
@@ -334,7 +410,7 @@ object PdfExport {
             PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create(),
         )
         page.canvas.drawColor(PaperInk.PAPER)
-        drawText(page.canvas, title, 64f, 72f, A4_WIDTH - 128f, 20f, Color.BLACK, true)
+        drawText(page.canvas, title, 64f, 72f, A4_WIDTH - 128f, 20f, PaperInk.INK, true)
         drawText(
             page.canvas,
             words.emptyNoteInExport,
@@ -343,23 +419,97 @@ object PdfExport {
         pdf.finishPage(page)
     }
 
-    private fun textPaint(size: Float, color: Int, bold: Boolean) = TextPaint().apply {
+    private fun textPaint(
+        size: Float,
+        color: Int,
+        bold: Boolean,
+        italic: Boolean = false,
+        mono: Boolean = false,
+    ) = TextPaint().apply {
         isAntiAlias = true
         textSize = size
         this.color = color
-        typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
+        typeface = typefaceFor(
+            font = if (mono) NoteFont.MONO else NoteFont.BODY,
+            bold = bold,
+            italic = italic,
+        )
     }
 
-    private fun layout(text: String, width: Float, size: Float, bold: Boolean): StaticLayout {
-        val paint = textPaint(size, Color.BLACK, bold)
+    private fun styled(
+        markdown: String,
+        extraBold: Boolean = false,
+        extraItalic: Boolean = false,
+        extraStrike: Boolean = false,
+    ): SpannableStringBuilder {
+        val builder = SpannableStringBuilder()
+        val runs = PdfMarkdown.runs(markdown).ifEmpty {
+            if (markdown.isEmpty()) emptyList() else listOf(PdfMarkdown.Run(markdown))
+        }
+        val flags = Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+        for (run in runs) {
+            val from = builder.length
+            builder.append(run.text)
+            val to = builder.length
+            if (from == to) continue
+            val bold = extraBold || run.bold
+            val italic = extraItalic || run.italic
+            val style = when {
+                bold && italic -> Typeface.BOLD_ITALIC
+                bold -> Typeface.BOLD
+                italic -> Typeface.ITALIC
+                else -> Typeface.NORMAL
+            }
+            if (style != Typeface.NORMAL) {
+                builder.setSpan(StyleSpan(style), from, to, flags)
+            }
+            if (run.underline) builder.setSpan(UnderlineSpan(), from, to, flags)
+            if (extraStrike || run.strike) builder.setSpan(StrikethroughSpan(), from, to, flags)
+            if (run.highlight) {
+                builder.setSpan(BackgroundColorSpan(PdfMarkdown.HIGHLIGHT), from, to, flags)
+            }
+            if (run.code) {
+                builder.setSpan(TypefaceSpan("monospace"), from, to, flags)
+            }
+            val color = run.color?.let { PaperInk.ink(it) } ?: PaperInk.INK
+            builder.setSpan(ForegroundColorSpan(color), from, to, flags)
+            run.sizePx?.let { px ->
+                builder.setSpan(AbsoluteSizeSpan(px.roundToInt(), false), from, to, flags)
+            }
+        }
+        return builder
+    }
+
+    private fun styledLayout(
+        text: CharSequence,
+        width: Float,
+        size: Float,
+        mono: Boolean = false,
+    ): StaticLayout {
+        val paint = textPaint(size, PaperInk.INK, bold = false, mono = mono)
         return StaticLayout.Builder
             .obtain(text, 0, text.length, paint, width.toInt().coerceAtLeast(1))
             .setLineSpacing(size * 0.55f, 1f)
             .build()
     }
 
-    private fun textHeight(text: String, width: Float, size: Float, bold: Boolean): Float =
-        layout(text, width, size, bold).height.toFloat()
+    private fun styledHeight(text: CharSequence, width: Float, size: Float): Float =
+        styledLayout(text, width, size).height.toFloat()
+
+    private fun drawStyled(
+        canvas: Canvas,
+        text: CharSequence,
+        x: Float,
+        y: Float,
+        width: Float,
+        size: Float,
+        mono: Boolean = false,
+    ) {
+        canvas.save()
+        canvas.translate(x, y)
+        styledLayout(text, width, size, mono).draw(canvas)
+        canvas.restore()
+    }
 
     private fun drawText(
         canvas: Canvas,
@@ -378,6 +528,36 @@ object PdfExport {
             .build()
         canvas.save()
         canvas.translate(x, y)
+        textLayout.draw(canvas)
+        canvas.restore()
+    }
+
+    private fun drawNodeText(canvas: Canvas, node: MindNode) {
+        if (node.text.isBlank()) return
+        val padX = PdfMarkdown.NODE_PAD_X / 2f
+        val padY = PdfMarkdown.NODE_PAD_Y / 2f
+        val size = if (node.fontSize > 0f) node.fontSize else PdfMarkdown.NODE_FONT
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = size
+            color = PdfMarkdown.nodeTextInk(node)
+            typeface = typefaceFor(node.font, node.bold, node.italic)
+        }
+        val width = (node.width - padX * 2f).toInt().coerceAtLeast(1)
+        val alignment = when (node.align) {
+            NoteAlign.LEFT -> Layout.Alignment.ALIGN_NORMAL
+            NoteAlign.CENTER -> Layout.Alignment.ALIGN_CENTER
+            NoteAlign.RIGHT -> Layout.Alignment.ALIGN_OPPOSITE
+        }
+        val textLayout = StaticLayout.Builder
+            .obtain(node.text, 0, node.text.length, paint, width)
+            .setAlignment(alignment)
+            .build()
+        val rect = RectF(node.x, node.y, node.x + node.width, node.y + node.height)
+        val radius = PdfMarkdown.cornerRadius(node)
+        val clip = Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) }
+        canvas.save()
+        canvas.clipPath(clip)
+        canvas.translate(node.x + padX, node.y + padY)
         textLayout.draw(canvas)
         canvas.restore()
     }

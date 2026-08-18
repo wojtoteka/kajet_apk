@@ -110,6 +110,7 @@ interface Strings {
     val drawingSaveFailed: String
     val exportTitle: String
     val exportFormat: String
+    val exportPdfAbout: String
     val exportSave: String
     val shareLink: String
     val shareLinkBusy: String
@@ -1367,6 +1368,8 @@ object PolishStrings : Strings {
     override val drawingSaveFailed = "Nie udało się zapisać rysunku w notatce."
     override val exportTitle = "Zapisz notatkę do pliku"
     override val exportFormat = "Format"
+    override val exportPdfAbout = "Kartka do druku i do wysłania. Pismo odręczne wychodzi jak na " +
+        "ekranie; w tekście i na mapie myśli zostaje formatowanie i zdjęcia."
     override val exportSave = "Zapisz plik"
     override val shareLink = "Udostępnij odnośnikiem"
     override val shareLinkBusy = "Robię odnośnik…"
@@ -2086,6 +2089,8 @@ object EnglishStrings : Strings {
     override val drawingSaveFailed = "The drawing would not save into the note."
     override val exportTitle = "Save the note to a file"
     override val exportFormat = "Format"
+    override val exportPdfAbout = "A page for printing and sending. Handwriting matches the screen; " +
+        "text notes and mind maps keep formatting and pictures."
     override val exportSave = "Save file"
     override val shareLink = "Share a link"
     override val shareLinkBusy = "Making a link…"

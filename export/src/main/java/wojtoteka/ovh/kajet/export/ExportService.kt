@@ -36,7 +36,8 @@ enum class ExportFormat(
 ) {
     PDF(
         labelPl = "PDF",
-        descriptionPl = "Wygląda dokładnie tak jak na ekranie. Nadaje się do druku i do wysłania.",
+        descriptionPl = "Kartka do druku i do wysłania. Pismo odręczne wychodzi jak na ekranie; " +
+            "w tekście i na mapie myśli zostaje formatowanie i zdjęcia.",
         extension = "pdf",
         mime = "application/pdf",
     ),
@@ -67,11 +68,11 @@ enum class ExportFormat(
         PNG -> "PNG image"
     }
 
-    fun description(words: Strings): String = if (!words.english) descriptionPl else when (this) {
-        PDF -> "Looks exactly as it does on screen. Good for printing and sending."
-        DOCX -> "Text to keep working on. No pictures, no handwriting."
-        MARKDOWN -> "Plain text with markers. Opens in any editor."
-        PNG -> "The first page as a picture. Good for pasting into a message."
+    fun description(words: Strings): String = when (this) {
+        PDF -> words.exportPdfAbout
+        DOCX -> if (!words.english) descriptionPl else "Text to keep working on. No pictures, no handwriting."
+        MARKDOWN -> if (!words.english) descriptionPl else "Plain text with markers. Opens in any editor."
+        PNG -> if (!words.english) descriptionPl else "The first page as a picture. Good for pasting into a message."
     }
 }
 
