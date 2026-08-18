@@ -684,8 +684,14 @@ class Sync(
                                 id = entry.noteId,
                                 title = fileName,
                                 kind = "CODE",
+                                // Gwiazdka jedzie razem z plikiem. Bez tego pola
+                                // serwer czytał brak jako „nie ulubiona" i każda
+                                // zmiana pliku na urządzeniu zdejmowała gwiazdkę
+                                // postawioną na stronie.
+                                favorite = runCatching { repository.fileFavorite(entry.path) }
+                                    .getOrDefault(false),
                                 folderId = outgoingFolderId(entry.path),
-                                content = codeNoteContent(entry.noteId, fileName, text),
+                                content = codeNoteContent(entry.noteId, entry.path, text),
                                 baseVersion = knownVersion(entry.noteId),
                             ),
                         )
@@ -1141,9 +1147,18 @@ class Sync(
                             val outcome = runCatching { writeCodeFileFromCloud(fromServer, content) }
                             val write = outcome.getOrNull()
                             if (write != null) {
+                                // Gwiazdka z metadanych serwera, tak samo jak
+                                // przy zwykłej notatce — strona przełącza ją
+                                // bez ruszania treści pliku.
+                                runCatching {
+                                    repository.setFileFavoriteFromCloud(
+                                        write.path,
+                                        fromServer.favorite,
+                                    )
+                                }
                                 rememberVersion(fromServer.id, fromServer.version)
                                 if (pending.isNotEmpty()) resolvedPending = true
-                                if (write == CodeWrite.CONFLICT_COPY) conflicts += 1
+                                if (write.conflictCopy) conflicts += 1
                                 fetched += 1
                                 settled(fromServer.updatedAt)
                             } else {
@@ -1609,8 +1624,8 @@ class Sync(
      * Celowo bez znaczników czasu: ta sama zawartość pliku daje zawsze ten sam
      * zapis, więc serwer rozpoznaje ponowną wysyłkę jako „bez zmian".
      */
-    private fun codeNoteContent(noteId: String, fileName: String, source: String): String {
-        val language = CodeLanguage.fromExtension(fileName)
+    private fun codeNoteContent(noteId: String, path: String, source: String): String {
+        val fileName = path.substringAfterLast('/')
         return buildJsonObject {
             put("format", 1)
             put("id", noteId)
@@ -1619,10 +1634,30 @@ class Sync(
             putJsonArray("tags") {}
             put("favorite", false)
             putJsonObject("code") {
-                put("language", language?.serverRuntime ?: language?.id ?: "text")
+                put("language", outgoingLanguageId(path, fileName))
                 put("source", source)
             }
         }.toString()
+    }
+
+    /**
+     * Jakim językiem nazwać plik jadący na serwer.
+     *
+     * Zwykle wystarczy rozszerzenie. Jest jednak jedna para, której rozszerzenie
+     * nie rozstrzyga: .sql to i SQLite, i MySQL. Wygrywa wtedy język, którym
+     * serwer nazwał tę notatkę wcześniej — inaczej poprawka literówki zrobiona
+     * na tablecie przestawiałaby notatkę MySQL na SQLite.
+     *
+     * Pamięć obowiązuje tylko dopóki pasuje do nazwy pliku. Kto przemianuje
+     * zadanie.sql na zadanie.py, dostaje Pythona i tak ma być — zmiana
+     * rozszerzenia jest świadomą zmianą języka.
+     */
+    private fun outgoingLanguageId(path: String, fileName: String): String {
+        val extension = fileName.substringAfterLast('.', "").lowercase()
+        val remembered = CodeLanguage.fromServerId(codeIds.languageFor(path))
+            ?.takeIf { extension in it.extensions }
+        val language = remembered ?: CodeLanguage.fromExtension(fileName)
+        return language?.serverRuntime ?: language?.id ?: "text"
     }
 
     private fun parseCodeContent(content: String): ServerCode? = runCatching {
@@ -1642,19 +1677,26 @@ class Sync(
             .trim()
             .ifBlank { words.codeWord }
         if (CodeLanguage.fromExtension(cleaned) != null) return cleaned
-        val language = languageId?.let { id ->
-            CodeLanguage.entries.firstOrNull { it.serverRuntime == id || it.id == id }
-        }
+        val language = CodeLanguage.fromServerId(languageId)
         return "$cleaned.${language?.extensions?.first() ?: "txt"}"
     }
 
     /**
-     * Wynik zapisu pliku z serwera: zwykły zapis albo rozjazd rozstrzygnięty
-     * kopią konfliktu obok — pętla pobierania liczy po tym konflikty.
+     * Wynik zapisu pliku z serwera: pod jaką ścieżką plik ostatecznie leży
+     * i czy rozjazd trzeba było rozstrzygnąć kopią konfliktu obok — pętla
+     * pobierania liczy po tym konflikty, a ścieżką trafia gwiazdka.
      */
-    private enum class CodeWrite { SAVED, CONFLICT_COPY }
+    private data class CodeWrite(val path: String, val conflictCopy: Boolean = false)
 
     private suspend fun writeCodeFileFromCloud(fromServer: ServerNote, content: String): CodeWrite {
+        val write = storeCodeFileFromCloud(fromServer, content)
+        // Język zapisujemy PO udanym zapisie pliku i pod ścieżką, która
+        // naprawdę powstała — przy kopii konfliktu bywa inna niż zgadywana.
+        codeIds.rememberLanguage(write.path, parseCodeContent(content)?.language)
+        return write
+    }
+
+    private suspend fun storeCodeFileFromCloud(fromServer: ServerNote, content: String): CodeWrite {
         val code = parseCodeContent(content)
             ?: throw FormatException(words.codeNoteUnknownShape(fromServer.title))
 
@@ -1669,14 +1711,14 @@ class Sync(
               w pobieraniu — w ciemno nie nadpisujemy.
             */
             if (knownVersion(fromServer.id) == 0) {
-                if (repository.readText(existingPath) == code.source) return CodeWrite.SAVED
+                if (repository.readText(existingPath) == code.source) return CodeWrite(existingPath)
                 if (!saveCodeVersionAlongside(existingPath, fromServer)) {
                     throw IllegalStateException(words.conflictCopyFailed)
                 }
-                return CodeWrite.CONFLICT_COPY
+                return CodeWrite(existingPath, conflictCopy = true)
             }
             val written = runCatching { repository.writeTextFromCloud(existingPath, code.source) }
-            if (written.isSuccess) return CodeWrite.SAVED
+            if (written.isSuccess) return CodeWrite(existingPath)
             // Pliku już nie ma pod zapamiętaną ścieżką — zakładamy go od nowa.
             codeIds.remove(existingPath)
         }
@@ -1693,7 +1735,7 @@ class Sync(
         val existingText = runCatching { repository.readText(candidate) }.getOrNull()
         if (existingText == code.source) {
             codeIds.bind(candidate, fromServer.id)
-            return CodeWrite.SAVED
+            return CodeWrite(candidate)
         }
 
         /*
@@ -1712,7 +1754,7 @@ class Sync(
                 throw IllegalStateException(words.conflictCopyFailed)
             }
             codeIds.bind(candidate, fromServer.id)
-            return CodeWrite.CONFLICT_COPY
+            return CodeWrite(candidate, conflictCopy = true)
         }
 
         val path = repository.createTextFileFromCloud(
@@ -1721,7 +1763,7 @@ class Sync(
             content = code.source,
         )
         codeIds.bind(path, fromServer.id)
-        return CodeWrite.SAVED
+        return CodeWrite(path)
     }
 
     private suspend fun trashCodeFileFromCloud(noteId: String) {

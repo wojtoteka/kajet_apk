@@ -29,6 +29,12 @@ interface CloudLibrary {
 
     suspend fun allCodeFilePaths(): List<String>
 
+    /**
+     * Czy plik ma gwiazdkę. Notatka niesie ją w treści, plik nie ma w czym —
+     * a serwer trzyma ją przy notatce CODE tak samo jak przy każdej innej.
+     */
+    suspend fun fileFavorite(path: String): Boolean
+
     suspend fun readTrashContents(): TrashContents
 
     // --- Zapis z chmury ---
@@ -38,6 +44,9 @@ interface CloudLibrary {
     suspend fun writeTextFromCloud(path: String, content: String)
 
     suspend fun createTextFileFromCloud(parent: String, fileName: String, content: String): String
+
+    /** Gwiazdka pliku przysłana z serwera — bez odsyłania jej z powrotem. */
+    suspend fun setFileFavoriteFromCloud(path: String, favorite: Boolean)
 
     suspend fun moveNoteFromCloud(noteId: String, targetFolder: String): String?
 

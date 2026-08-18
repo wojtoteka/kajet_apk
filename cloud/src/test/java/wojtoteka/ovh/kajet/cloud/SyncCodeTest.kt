@@ -53,6 +53,7 @@ class SyncCodeTest {
         title: String = "skrypt.py",
         version: Int = 4,
         source: String = "print(2)",
+        language: String = "python",
     ) = ServerNote(
         id = id,
         title = title,
@@ -60,7 +61,7 @@ class SyncCodeTest {
         version = version,
         updatedAt = 5_000,
         content = """{"format":1,"id":"$id","kind":"code","title":"$title",""" +
-            """"tags":[],"favorite":false,"code":{"language":"python","source":"$source"}}""",
+            """"tags":[],"favorite":false,"code":{"language":"$language","source":"$source"}}""",
     )
 
     private fun knownVersion(id: String): Int =
@@ -299,6 +300,100 @@ class SyncCodeTest {
         assertThat(library.texts[copy]).isEqualTo("serwerowa")
         assertThat(knownVersion("c1")).isEqualTo(5)
         assertThat(result.conflicts).isEqualTo(1)
+    }
+
+    // --- Język notatki, którego rozszerzenie nie rozstrzyga ---
+
+    @Test
+    fun `notatka MySQL schodzi jako plik sql`() {
+        transport.serverNotes = listOf(
+            serverCode("c1", title = "zadanie", version = 5, source = "show tables;", language = "mysql"),
+        )
+
+        sync()
+
+        // Rozszerzenie z języka. Zanim aplikacja poznała MySQL-a, taka notatka
+        // lądowała jako zadanie.txt — bez kolorowania i bez własnej ikony.
+        assertThat(library.texts.keys).containsExactly("zadanie.sql")
+        assertThat(codeIds.existingIdFor("zadanie.sql")).isEqualTo("c1")
+    }
+
+    @Test
+    fun `poprawka na tablecie nie przestawia notatki MySQL na SQLite`() {
+        transport.serverNotes = listOf(
+            serverCode("c1", title = "zadanie", version = 5, source = "show tables;", language = "mysql"),
+        )
+        sync()
+
+        // Uczeń poprawia plik na tablecie i zmiana jedzie z powrotem.
+        transport.serverNotes = emptyList()
+        library.texts["zadanie.sql"] = "show tables;\nselect now();"
+        queue.add("zadanie.sql", "c1", QueueEntry.KIND_CODE)
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 6)) }
+
+        sync()
+
+        /*
+          Sedno: .sql to na tablecie SQLite (tak samo jak na serwerze), więc
+          sam z rozszerzenia wyszedłby „sqlite3" i tablet po cichu przestawiłby
+          język notatki. Wygrywa język, którym serwer nazwał tę notatkę.
+        */
+        val sent = transport.sentNotes.single { it.id == "c1" }
+        assertThat(sent.content).contains(""""language":"mysql"""")
+        assertThat(sent.content).doesNotContain("sqlite3")
+    }
+
+    @Test
+    fun `zwykly plik sql jedzie jako SQLite`() {
+        library.texts["zapytania.sql"] = "select 1;"
+        val id = codeIds.idFor("zapytania.sql")
+        queue.add("zapytania.sql", id, QueueEntry.KIND_CODE)
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 1)) }
+
+        sync()
+
+        // Nic nie zapamiętano, więc rozstrzyga rozszerzenie — a .sql to SQLite.
+        val sent = transport.sentNotes.single { it.id == id }
+        assertThat(sent.content).contains(""""language":"sqlite3"""")
+    }
+
+    @Test
+    fun `zmiana rozszerzenia jest zmiana jezyka i kasuje pamiec`() {
+        transport.serverNotes = listOf(
+            serverCode("c1", title = "zadanie", version = 5, source = "show tables;", language = "mysql"),
+        )
+        sync()
+
+        // Ten sam plik pod nową nazwą: pamięć jedzie za nim, ale przestaje
+        // pasować do rozszerzenia, więc język bierze się z niego.
+        transport.serverNotes = emptyList()
+        codeIds.rebind("zadanie.sql", "zadanie.py")
+        library.texts.remove("zadanie.sql")
+        library.texts["zadanie.py"] = "print(1)"
+        queue.add("zadanie.py", "c1", QueueEntry.KIND_CODE)
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 6)) }
+
+        sync()
+
+        val sent = transport.sentNotes.single { it.id == "c1" }
+        assertThat(sent.content).contains(""""language":"python"""")
+    }
+
+    @Test
+    fun `notatka w nieznanym jezyku schodzi jako zwykly tekst i nie wywraca pobierania`() {
+        transport.serverNotes = listOf(
+            serverCode("c1", title = "zadanie", version = 5, source = "IO.puts 1", language = "elixir"),
+        )
+
+        val result = sync()
+
+        // Ktoś mógł założyć notatkę w języku, którego ta wersja aplikacji nie
+        // zna. Ma się otworzyć jako zwykły tekst, a nie zatrzymać pobieranie.
+        assertThat(library.texts.keys).containsExactly("zadanie.txt")
+        assertThat(library.texts["zadanie.txt"]).isEqualTo("IO.puts 1")
+        assertThat(knownVersion("c1")).isEqualTo(5)
+        assertThat(result.fetched).isEqualTo(1)
+        assertThat(result.reason).isNull()
     }
 
     @Test

@@ -5,7 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -55,7 +58,10 @@ import wojtoteka.ovh.kajet.core.text.disappearsIn
 import wojtoteka.ovh.kajet.core.text.emptyTrashWarning
 import wojtoteka.ovh.kajet.core.text.folderLookTitle
 import wojtoteka.ovh.kajet.core.text.moveDialogTitle
+import wojtoteka.ovh.kajet.core.text.moveManyTitle
 import wojtoteka.ovh.kajet.core.text.notesStuck
+import wojtoteka.ovh.kajet.core.text.selectedCount
+import wojtoteka.ovh.kajet.core.text.trashManyWarning
 import wojtoteka.ovh.kajet.core.text.trashedAt
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
@@ -92,6 +98,12 @@ fun LibraryScreen(
     var moving by remember { mutableStateOf<LibraryItem?>(null) }
     var folderLook by remember { mutableStateOf<LibraryItem?>(null) }
 
+    // Okna działań zbiorczych. Stoją tu, przy pozostałych oknach, a nie
+    // w spisie — wtedy nie znikają razem z przerysowaniem paska zaznaczania.
+    var movingSelected by remember { mutableStateOf(false) }
+    var trashingSelected by remember { mutableStateOf(false) }
+    val selected by model.selected.collectAsStateWithLifecycle()
+
     val words = LocalStrings.current
     val screenWidth = LocalConfiguration.current.screenWidthDp
     // Phones and narrow windows: hide the folder tree, keep the main list usable.
@@ -126,10 +138,17 @@ fun LibraryScreen(
                 .weight(1f)
                 .background(Kajet.colors.sheet),
         ) {
-            if (progress != null) {
+            /*
+              Co się właśnie dzieje. Zdanie przychodzi z modelu w całości,
+              bo tym paskiem chodzi już nie tylko odbudowa spisu, ale też
+              zapis folderu do pliku i działania na wielu wpisach naraz —
+              a doklejane „Odbudowuję spis notatek…" robiło z nich zdania
+              w rodzaju „Odbudowuję spis notatek… Zapisuję folder Fizyka".
+            */
+            progress?.let { message ->
                 NoticeBar(
                     icon = KajetIcons.Restore,
-                    text = "${words.libRebuilding} $progress",
+                    text = message,
                     color = Kajet.colors.accent,
                 )
             }
@@ -164,12 +183,12 @@ fun LibraryScreen(
 
             when (section) {
                 LibrarySection.LIBRARY -> FolderView(
+                    model = model,
                     path = path,
                     items = content,
                     repo = repo,
                     stuckPaths = stuckPaths,
                     showPath = !roomForTree,
-                    onUp = model::goUp,
                     onOpen = { item ->
                         if (item.type == ItemType.FOLDER) {
                             model.goTo(item.path)
@@ -179,10 +198,11 @@ fun LibraryScreen(
                         }
                     },
                     onMenu = { itemMenu = it },
-                    onFavourite = model::toggleFavorite,
                     onNewFolder = { folderDialog = true },
                     onNewNote = { noteDialog = true },
                     onNewFile = { fileDialog = true },
+                    onMoveSelected = { movingSelected = true },
+                    onTrashSelected = { trashingSelected = true },
                 )
 
                 LibrarySection.FAVORITES -> SimpleList(
@@ -304,6 +324,40 @@ fun LibraryScreen(
                 folderLook = null
             },
         )
+    }
+
+    // Przenoszenie zbiorcze: ten sam spis miejsc co przy jednym wpisie, tyle
+    // że bez wykluczania folderu, w którym się stoi — wykluczanie robi model,
+    // bo tylko on wie, co dokładnie jest zaznaczone.
+    if (movingSelected) {
+        MoveManyDialog(
+            count = selected.size,
+            tree = tree,
+            onClose = { movingSelected = false },
+            onMove = { target ->
+                movingSelected = false
+                model.moveSelected(target)
+            },
+        )
+    }
+
+    if (trashingSelected) {
+        KajetDialog(words.trashManyQuestion, onClose = { trashingSelected = false }) {
+            Text(
+                text = words.trashManyWarning(selected.size),
+                style = Kajet.type.body,
+                color = Kajet.colors.text,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    text = words.moveToTrash,
+                    onClick = { trashingSelected = false; model.trashSelected() },
+                    icon = KajetIcons.Bin,
+                    color = Kajet.colors.danger,
+                )
+                SecondaryButton(words.cancel, { trashingSelected = false })
+            }
+        }
     }
 }
 
@@ -499,24 +553,112 @@ private fun FolderRow(
 
 @Composable
 private fun FolderView(
+    model: LibraryViewModel,
     path: String,
     items: List<LibraryItem>,
     repo: LibraryRepository,
     stuckPaths: Set<String>,
     showPath: Boolean,
-    onUp: () -> Unit,
     onOpen: (LibraryItem) -> Unit,
     onMenu: (LibraryItem) -> Unit,
-    onFavourite: (LibraryItem) -> Unit,
     onNewFolder: () -> Unit,
     onNewNote: () -> Unit,
     onNewFile: () -> Unit,
+    onMoveSelected: () -> Unit,
+    onTrashSelected: () -> Unit,
 ) {
     val words = LocalStrings.current
     val placeName = if (path.isEmpty()) words.libAllNotes else path.substringAfterLast('/')
-    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    val selecting by model.selecting.collectAsStateWithLifecycle()
+    val selected by model.selected.collectAsStateWithLifecycle()
 
+    // Przycisk wstecz i wychodzenie z folderu w trakcie zaznaczania nie mają
+    // sensu — pasek zaznaczania zastępuje cały nagłówek.
     Column(Modifier.fillMaxSize()) {
+        if (selecting) {
+            SelectionBar(
+                count = selected.size,
+                onSelectAll = { model.selectAll(items) },
+                onMove = onMoveSelected,
+                onTrash = onTrashSelected,
+                onDone = model::stopSelecting,
+            )
+        } else {
+            FolderHeader(
+                placeName = placeName,
+                path = path,
+                showPath = showPath,
+                anyItems = items.isNotEmpty(),
+                onUp = model::goUp,
+                onNewFolder = onNewFolder,
+                onNewNote = onNewNote,
+                onNewFile = onNewFile,
+                onSelectMany = { model.startSelecting() },
+            )
+        }
+        HorizontalRule()
+
+        if (items.isEmpty()) {
+            EmptyState(
+                title = words.libFolderEmpty,
+                description = words.libFolderEmptyHint,
+                action = { PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus) },
+            )
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(items, key = { it.documentUri }) { item ->
+                    ItemRow(
+                        item = item,
+                        repo = repo,
+                        // W trybie zaznaczania dotknięcie wiersza zaznacza,
+                        // a nie otwiera — inaczej pierwszy odruch wyrzucałby
+                        // ze spisu w środek notatki.
+                        onOpen = {
+                            if (selecting) model.toggleSelected(item) else onOpen(item)
+                        },
+                        onMenu = { onMenu(item) },
+                        onLongPress = {
+                            if (selecting) model.toggleSelected(item) else model.startSelecting(item)
+                        },
+                        onFavourite = { model.toggleFavorite(item) },
+                        stuck = item.path in stuckPaths,
+                        selected = if (selecting) item.path in selected else null,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                    HorizontalRule(insetFromStart = 60.dp)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Nagłówek folderu: gdzie jesteśmy i co można tu założyć.
+ *
+ * O układzie decyduje szerokość samej kolumny spisu, a nie szerokość ekranu.
+ * Na tablecie w oknie o połowie szerokości ekran ma swoje 800 dp, ale margines
+ * z ikonami i drzewo folderów zabierają z tego ponad 300 dp — na nagłówek
+ * zostaje mniej miejsca niż na telefonie. Nagłówek w jednym rzędzie wtedy się
+ * nie mieścił: ostatni przycisk kurczył się do pustego prostokąta bez napisu,
+ * a nazwa folderu do zera szerokości. Nazwa łamała się wtedy po jednej literze
+ * w wierszu i rosła w dół tak, że spychała spis notatek poza dolną krawędź
+ * okna — po zmniejszeniu okna zostawał sam pasek przycisków na pustym tle.
+ */
+@Composable
+private fun FolderHeader(
+    placeName: String,
+    path: String,
+    showPath: Boolean,
+    anyItems: Boolean,
+    onUp: () -> Unit,
+    onNewFolder: () -> Unit,
+    onNewNote: () -> Unit,
+    onNewFile: () -> Unit,
+    onSelectMany: () -> Unit,
+) {
+    val words = LocalStrings.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val narrow = maxWidth < 800.dp
         if (narrow) {
             Column(
                 Modifier
@@ -532,7 +674,13 @@ private fun FolderView(
                         IconAction(KajetIcons.BackArrow, words.libFolderUp, onUp)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(placeName, style = Kajet.type.title, color = Kajet.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            text = placeName,
+                            style = Kajet.type.title,
+                            color = Kajet.colors.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         if (path.isNotEmpty()) {
                             Text(
                                 text = path.substringBeforeLast('/', words.libAllNotes),
@@ -551,6 +699,15 @@ private fun FolderView(
                     PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
                     SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
                     SecondaryButton(words.codeShort, onNewFile, icon = KajetIcons.CodeFile)
+                    // Długie przytrzymanie wiersza robi to samo, ale o tym
+                    // trzeba wiedzieć. Przycisk widać.
+                    if (anyItems) {
+                        SecondaryButton(
+                            text = words.selectMany,
+                            onClick = onSelectMany,
+                            icon = KajetIcons.Confirm,
+                        )
+                    }
                 }
             }
         } else {
@@ -565,44 +722,107 @@ private fun FolderView(
                 if (path.isNotEmpty() && showPath) {
                     IconAction(KajetIcons.BackArrow, words.libFolderUp, onUp)
                 }
+                // Jeden wiersz i wielokropek, nigdy litera pod literą: przy
+                // bardzo długiej nazwie folderu albo przy powiększonym piśmie
+                // nagłówek ma się skrócić, a nie urosnąć w dół.
                 Column(Modifier.weight(1f)) {
-                    Text(placeName, style = Kajet.type.display, color = Kajet.colors.text)
+                    Text(
+                        text = placeName,
+                        style = Kajet.type.display,
+                        color = Kajet.colors.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     if (path.isNotEmpty()) {
                         Text(
                             text = path.substringBeforeLast('/', words.libAllNotes),
                             style = Kajet.type.meta,
                             color = Kajet.colors.muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
                 PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
                 SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
                 SecondaryButton(words.libKindCode, onNewFile, icon = KajetIcons.CodeFile)
-            }
-        }
-        HorizontalRule()
-
-        if (items.isEmpty()) {
-            EmptyState(
-                title = words.libFolderEmpty,
-                description = words.libFolderEmptyHint,
-                action = { PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus) },
-            )
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(items, key = { it.documentUri }) { item ->
-                    ItemRow(
-                        item = item,
-                        repo = repo,
-                        onOpen = { onOpen(item) },
-                        onMenu = { onMenu(item) },
-                        onFavourite = { onFavourite(item) },
-                        stuck = item.path in stuckPaths,
-                        modifier = Modifier.padding(start = 12.dp),
+                if (anyItems) {
+                    SecondaryButton(
+                        text = words.selectMany,
+                        onClick = onSelectMany,
+                        icon = KajetIcons.Confirm,
                     )
-                    HorizontalRule(insetFromStart = 60.dp)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Pasek trybu zaznaczania. Stoi w miejscu nagłówka folderu, bo przez tę chwilę
+ * spis służy do jednego: wskazania wpisów i zrobienia z nimi czegoś naraz.
+ *
+ * Działania zawijają się do następnego wiersza, bo przy dużym piśmie cztery
+ * przyciski w jednym rzędzie ściskały jeden drugiego do zera.
+ *
+ * Tło paska jest w barwie [KajetColors.desk] — tak samo jak [NoticeBar], czyli
+ * jak każdy pasek stojący nad spisem. Wcześniej pasek miał accentWash, tę samą
+ * barwę co zaznaczony wiersz, więc pierwszy zaznaczony wpis zlewał się z nim
+ * w jedną plamę i nie było widać, gdzie kończy się pasek, a zaczyna spis.
+ * Zieleń zostaje na jedno: wiersz jest wskazany.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SelectionBar(
+    count: Int,
+    onSelectAll: () -> Unit,
+    onMove: () -> Unit,
+    onTrash: () -> Unit,
+    onDone: () -> Unit,
+) {
+    val words = LocalStrings.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Kajet.colors.desk)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconAction(KajetIcons.Close, words.selectionDone, onDone)
+            Text(
+                text = words.selectedCount(count),
+                style = Kajet.type.titleSmall,
+                color = Kajet.colors.text,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
+            // Bez zaznaczenia nie ma czego przenosić ani wyrzucać, ale
+            // przyciski zostają na widoku — inaczej pasek skakałby przy
+            // pierwszym dotknięciu wiersza.
+            SecondaryButton(
+                text = words.menuMoveToFolder,
+                onClick = onMove,
+                icon = KajetIcons.Move,
+                enabled = count > 0,
+            )
+            SecondaryButton(
+                text = words.moveToTrash,
+                onClick = onTrash,
+                icon = KajetIcons.Bin,
+                color = Kajet.colors.danger,
+                enabled = count > 0,
+            )
         }
     }
 }
@@ -966,6 +1186,38 @@ private fun MoveDialog(
                 .forEach { node ->
                     TargetRow(node.item.name, node.level + 1) { onMove(node.item.path) }
                 }
+        }
+        SecondaryButton(words.cancel, onClose)
+    }
+}
+
+/**
+ * Wybór folderu dla wielu wpisów naraz.
+ *
+ * Spis miejsc jest pełny, bez wykluczeń: który folder odpada (bo jest jednym
+ * z zaznaczonych albo leży w środku takiego), rozstrzyga model przy samym
+ * przenoszeniu. Tutaj nie da się tego zrobić uczciwie — okno widzi liczbę
+ * zaznaczonych, a nie ich ścieżki.
+ */
+@Composable
+private fun MoveManyDialog(
+    count: Int,
+    tree: List<TreeNode>,
+    onClose: () -> Unit,
+    onMove: (String) -> Unit,
+) {
+    val words = LocalStrings.current
+    KajetDialog(words.moveManyTitle(count), onClose, width = 460) {
+        Text(
+            text = words.movePrompt,
+            style = Kajet.type.body,
+            color = Kajet.colors.muted,
+        )
+        Column {
+            TargetRow(words.libAllNotes, 0) { onMove("") }
+            tree.forEach { node ->
+                TargetRow(node.item.name, node.level + 1) { onMove(node.item.path) }
+            }
         }
         SecondaryButton(words.cancel, onClose)
     }

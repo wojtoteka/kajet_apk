@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -106,6 +107,16 @@ data class KajetSettings(
     val language: String = "system",
     val toolbarSide: ToolbarSide = ToolbarSide.LEFT,
     val recentColors: List<Int> = emptyList(),
+    /*
+      Ścieżki plików oznaczonych gwiazdką - tych z kodem i pozostałych.
+
+      Notatka trzyma gwiazdkę we własnym content.json, ale plik z kodem to na
+      dysku zwykły tekst i nie ma jej gdzie zapisać. Spis notatek na to nie
+      wystarczy: przy zmianie wersji bazy zaczyna od zera (odbudowa z plików),
+      a wtedy wszystkie gwiazdki na plikach by przepadły. Tutaj przeżywają
+      i stąd wracają do spisu przy każdej odbudowie.
+    */
+    val favoriteFiles: Set<String> = emptySet(),
     val pens: RememberedPen = RememberedPen(),
     val shapes: RememberedShape = RememberedShape(),
 ) {
@@ -128,6 +139,7 @@ class SettingsStore(private val context: Context) {
         val language = stringPreferencesKey("jezyk")
         val toolbarSide = stringPreferencesKey("strona_paska")
         val recentColors = stringPreferencesKey("ostatnie_kolory")
+        val favoriteFiles = stringSetPreferencesKey("ulubione_pliki")
 
         val penTool = stringPreferencesKey("pisak_rodzaj")
         val penColor = intPreferencesKey("pisak_kolor")
@@ -190,6 +202,7 @@ class SettingsStore(private val context: Context) {
                 ?.split(',')
                 ?.mapNotNull { it.trim().toLongOrNull()?.toInt() }
                 .orEmpty(),
+            favoriteFiles = data[Keys.favoriteFiles].orEmpty(),
             pens = RememberedPen(
                 tool = data[Keys.penTool],
                 color = data[Keys.penColor],
@@ -246,6 +259,51 @@ class SettingsStore(private val context: Context) {
             val updated = (listOf(argb) + previous.filterNot { it == argb })
                 .take(KajetSettings.RECENT_COLOR_LIMIT)
             data[Keys.recentColors] = updated.joinToString(",")
+        }
+    }
+
+    // --- Gwiazdki na plikach ---
+    //
+    // Wszystkie trzy działania biorą zbiór, przerabiają go i odkładają
+    // z powrotem w jednym `edit`, więc dwa równoczesne zapisy nie zdążą sobie
+    // nawzajem zabrać wpisu.
+
+    suspend fun setFileFavorite(path: String, favorite: Boolean) {
+        if (path.isBlank()) return
+        context.dataStore.edit { data ->
+            val previous = data[Keys.favoriteFiles].orEmpty()
+            data[Keys.favoriteFiles] = if (favorite) previous + path else previous - path
+        }
+    }
+
+    /**
+     * Przepina gwiazdki po zmianie nazwy albo przeniesieniu — także dla
+     * wszystkiego, co leżało w przenoszonym folderze.
+     */
+    suspend fun moveFavoriteFiles(oldPath: String, newPath: String) {
+        if (oldPath.isBlank() || oldPath == newPath) return
+        context.dataStore.edit { data ->
+            val previous = data[Keys.favoriteFiles].orEmpty()
+            val moved = previous.mapTo(mutableSetOf()) { path ->
+                when {
+                    path == oldPath -> newPath
+                    path.startsWith("$oldPath/") -> newPath + path.removePrefix(oldPath)
+                    else -> path
+                }
+            }
+            if (moved != previous) data[Keys.favoriteFiles] = moved
+        }
+    }
+
+    /** Zdejmuje gwiazdki z gałęzi, po której nic już nie zostało. */
+    suspend fun forgetFavoriteFiles(path: String) {
+        if (path.isBlank()) return
+        context.dataStore.edit { data ->
+            val previous = data[Keys.favoriteFiles].orEmpty()
+            val kept = previous.filterNotTo(mutableSetOf()) {
+                it == path || it.startsWith("$path/")
+            }
+            if (kept.size != previous.size) data[Keys.favoriteFiles] = kept
         }
     }
 

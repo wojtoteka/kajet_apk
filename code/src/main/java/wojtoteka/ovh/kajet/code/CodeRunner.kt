@@ -2,6 +2,19 @@ package wojtoteka.ovh.kajet.code
 
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 
+/**
+ * Wynik jednego uruchomienia.
+ *
+ * [exitCode] bywa pusty i to nie jest usterka: program przerwany po limicie
+ * czasu numeru nie ma, tak samo jak program, którego wydruk był dłuższy, niż
+ * wolno pokazać (wynik jest wtedy ucięty i kończy się zdaniem o ucięciu).
+ * Pustego numeru nie zastępujemy zerem ani minus jedynką — zero znaczyłoby
+ * „skończył się dobrze", a takiej wiedzy nie mamy.
+ *
+ * Nie ma tu pola „udało się". Program, który kończy się jedynką i nic nie
+ * wypisuje na wyjście błędów, jest programem DZIAŁAJĄCYM — sam numer stoi
+ * w pasku nad wynikiem i to on o tym mówi.
+ */
 data class RunResult(
     val language: CodeLanguage,
     val output: String,
@@ -9,9 +22,14 @@ data class RunResult(
     val exitCode: Int?,
     val durationMs: Long,
     val viaNetwork: Boolean,
-) {
-    val succeeded: Boolean get() = exitCode == 0 && errors.isBlank()
-}
+    /**
+     * Program nie skończył się sam — przerwał go limit czasu.
+     *
+     * Rozróżnia dwa przypadki pustego [exitCode], które inaczej wyglądałyby
+     * na ekranie identycznie: przerwanie i wynik ucięty za długością.
+     */
+    val interrupted: Boolean = false,
+)
 
 class RunException(
     val userMessage: String,

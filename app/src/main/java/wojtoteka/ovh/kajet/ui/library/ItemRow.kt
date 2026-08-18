@@ -1,7 +1,9 @@
 package wojtoteka.ovh.kajet.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,9 +61,20 @@ fun ItemRow(
     onOpen: () -> Unit,
     onMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Długie przytrzymanie. Bez tego robi to samo, co trzy kropki. */
+    onLongPress: (() -> Unit)? = null,
     onFavourite: (() -> Unit)? = null,
     /** Wysyłka tej notatki wyczerpała próby — patrz [StuckNotes]. */
     stuck: Boolean = false,
+    /*
+      Czy ten wiersz jest zaznaczony — albo null, kiedy nikt niczego nie
+      zaznacza.
+
+      W trybie zaznaczania gwiazdka i trzy kropki schodzą z wiersza. Gdyby
+      zostały, dotknięcie skrajem palca robiłoby coś zupełnie innego, niż
+      wygląda — a wiersz w tym trybie ma znaczyć jedno: zaznacz albo odznacz.
+    */
+    selected: Boolean? = null,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
@@ -75,11 +89,12 @@ fun ItemRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = height)
-            .combinedClickable(onClick = onOpen, onLongClick = onMenu)
+            .background(if (selected == true) colors.accentWash else Color.Transparent)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress ?: onMenu)
             .padding(end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowMark(item)
+        if (selected == null) RowMark(item) else SelectionMark(selected)
 
         Column(
             modifier = Modifier
@@ -154,36 +169,85 @@ fun ItemRow(
 
         // Gwiazdka jest osobnym przyciskiem, a nie samą ikoną. Wcześniej
         // dotknięcie jej otwierało notatkę, bo cały wiersz był klikalny.
-        if (onFavourite != null && item.type == ItemType.NOTE) {
+        //
+        // Plik z kodem dostaje ją tak samo jak notatka — na stronie zawsze ją
+        // miał, a w aplikacji nie było czym oznaczyć ani pliku HTML, ani
+        // Pythona. Folder zostaje bez gwiazdki: ulubione są o treści.
+        if (selected == null) {
+            if (onFavourite != null && item.type != ItemType.FOLDER) {
+                IconAction(
+                    icon = KajetIcons.Favourites,
+                    description = if (item.favorite) {
+                        words.unstarNote(item.name)
+                    } else {
+                        words.starNote(item.name)
+                    },
+                    onClick = onFavourite,
+                    selected = item.favorite,
+                    iconSize = 18.dp,
+                    touchTarget = 44.dp,
+                )
+            } else if (item.favorite) {
+                Icon(
+                    imageVector = KajetIcons.Favourites,
+                    contentDescription = words.inFavorites,
+                    tint = colors.accent,
+                    modifier = Modifier
+                        .padding(end = 4.dp)
+                        .size(16.dp),
+                )
+            }
+
             IconAction(
-                icon = KajetIcons.Favourites,
-                description = if (item.favorite) {
-                    words.unstarNote(item.name)
-                } else {
-                    words.starNote(item.name)
-                },
-                onClick = onFavourite,
-                selected = item.favorite,
+                icon = KajetIcons.MoreDots,
+                description = words.actionsFor(item.name),
+                onClick = onMenu,
                 iconSize = 18.dp,
-                touchTarget = 44.dp,
-            )
-        } else if (item.favorite) {
-            Icon(
-                imageVector = KajetIcons.Favourites,
-                contentDescription = words.inFavorites,
-                tint = colors.accent,
-                modifier = Modifier
-                    .padding(end = 4.dp)
-                    .size(16.dp),
             )
         }
+    }
+}
 
-        IconAction(
-            icon = KajetIcons.MoreDots,
-            description = words.actionsFor(item.name),
-            onClick = onMenu,
-            iconSize = 18.dp,
-        )
+/**
+ * Znacznik zaznaczenia w miejscu ikony rodzaju wpisu.
+ *
+ * Stoi tam, gdzie ikona, a nie obok niej: wiersz na telefonie nie ma
+ * szerokości do oddania, a przez chwilę zaznaczania i tak liczy się tylko to,
+ * co jest zaznaczone.
+ */
+@Composable
+private fun SelectionMark(selected: Boolean) {
+    val colors = Kajet.colors
+    val words = LocalStrings.current
+    Box(
+        modifier = Modifier
+            .width(48.dp)
+            .height(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .background(
+                    color = if (selected) colors.accent else Color.Transparent,
+                    shape = CircleShape,
+                )
+                .border(
+                    width = if (selected) 0.dp else 2.dp,
+                    color = colors.muted,
+                    shape = CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = KajetIcons.Confirm,
+                    contentDescription = words.selectMany,
+                    tint = colors.sheet,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
     }
 }
 

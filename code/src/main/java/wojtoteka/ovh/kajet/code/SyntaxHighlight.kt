@@ -27,6 +27,7 @@ object SyntaxHighlight {
         val words = keywords(language)
         val commentPrefix = language.commentPrefix
         val hasBlockComments = language in BLOCK_COMMENT_LANGUAGES
+        val ignoreCase = language in CASE_BLIND_LANGUAGES
 
         var i = 0
         while (i < code.length) {
@@ -72,8 +73,16 @@ object SyntaxHighlight {
                 while (end < code.length && (code[end].isLetterOrDigit() || code[end] == '_')) end++
                 if (end == i) end = i + 1
                 val word = code.substring(i, end)
+                /*
+                  SELECT i select to w SQL-u to samo słowo, a uczy się go
+                  wielkimi literami. Bez tego kolorował się wyłącznie zapis
+                  małymi, czyli ten, którego w zadaniach prawie nie widać.
+                  W pozostałych językach wielkość liter ma znaczenie i tam
+                  porównujemy znak w znak.
+                */
                 val kind = when {
                     word in words -> FragmentKind.KEYWORD
+                    ignoreCase && word.lowercase() in words -> FragmentKind.KEYWORD
                     word.first().isUpperCase() -> FragmentKind.TYPE
                     else -> FragmentKind.PLAIN
                 }
@@ -120,6 +129,19 @@ object SyntaxHighlight {
         CodeLanguage.C, CodeLanguage.CPP, CodeLanguage.JAVA, CodeLanguage.KOTLIN,
         CodeLanguage.JAVASCRIPT, CodeLanguage.TYPESCRIPT, CodeLanguage.CSHARP,
         CodeLanguage.GO, CodeLanguage.RUST, CodeLanguage.PHP,
+        // Oba dialekty SQL-a mają obok „--" także komentarz w gwiazdkach.
+        CodeLanguage.SQL, CodeLanguage.MYSQL,
+    )
+
+    /** Języki, w których wielkość liter w słowie kluczowym nie ma znaczenia. */
+    private val CASE_BLIND_LANGUAGES = setOf(CodeLanguage.SQL, CodeLanguage.MYSQL)
+
+    /** Słowa, które znaczą to samo w SQLite i w MySQL-u. */
+    private val SQL_COMMON = setOf(
+        "select", "from", "where", "insert", "into", "values", "update", "set", "delete",
+        "create", "table", "drop", "alter", "join", "left", "right", "inner", "outer",
+        "on", "group", "by", "order", "having", "limit", "as", "and", "or", "not", "null",
+        "primary", "key", "foreign", "references", "distinct", "count", "sum", "avg",
     )
 
     private val COMMON = setOf(
@@ -181,11 +203,18 @@ object SyntaxHighlight {
             "if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case", "esac",
             "function", "echo", "read", "local", "export", "return", "exit",
         )
-        CodeLanguage.SQL -> setOf(
-            "select", "from", "where", "insert", "into", "values", "update", "set", "delete",
-            "create", "table", "drop", "alter", "join", "left", "right", "inner", "outer",
-            "on", "group", "by", "order", "having", "limit", "as", "and", "or", "not", "null",
-            "primary", "key", "foreign", "references", "distinct", "count", "sum", "avg",
+        CodeLanguage.SQL -> SQL_COMMON
+        /*
+          MySQL to wspólny trzon SQL-a i to, czego SQLite nie zna — a właśnie te
+          słowa uczeń przepisuje z lekcji: SHOW TABLES, AUTO_INCREMENT,
+          ENGINE=InnoDB, typy kolumn.
+        */
+        CodeLanguage.MYSQL -> SQL_COMMON + setOf(
+            "show", "tables", "databases", "describe", "explain", "use", "auto_increment",
+            "engine", "innodb", "unsigned", "int", "tinyint", "bigint", "varchar", "char",
+            "text", "date", "datetime", "timestamp", "decimal", "float", "double", "boolean",
+            "default", "unique", "index", "constraint", "if", "exists", "replace", "truncate",
+            "now", "curdate", "concat", "ifnull", "like", "between", "in", "is", "asc", "desc",
         )
         CodeLanguage.HTML, CodeLanguage.PLAIN_TEXT -> emptySet()
     }

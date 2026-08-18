@@ -933,6 +933,14 @@ class LibraryStore(
             CodeLanguage.RUBY -> "puts \"${words.greetingWord}\"\n"
             CodeLanguage.BASH -> "echo \"${words.greetingWord}\"\n"
             CodeLanguage.SQL -> "select '${words.greetingWord}';\n"
+            /*
+              MySQL-a nie da się dziś założyć z okna nowego pliku (rozszerzenie
+              sql należy do SQLite), ale gałąź musi tu być — when po języku jest
+              zupełny. Zapytanie stoi po MySQL-owemu, żeby przy zmianie tamtej
+              decyzji nie trzeba było tu wracać.
+            */
+            CodeLanguage.MYSQL ->
+                "select '${words.greetingWord}' as ${words.greetingVariable};\n"
             CodeLanguage.HTML ->
                 "<!doctype html>\n<html lang=\"${if (words.english) "en" else "pl"}\">\n<head>\n  <meta charset=\"utf-8\">\n" +
                     "  <title>${words.myPageTitle}</title>\n</head>\n<body>\n  <h1>${words.greetingWord}</h1>\n</body>\n</html>\n"

@@ -254,10 +254,24 @@ sealed interface SignInState {
         val aiAvailable: Boolean = false,
         val aiConsented: Boolean = false,
     ) : SignInState {
-        val unlimited: Boolean get() = quotaBytes == 0L
+        /**
+         * Miejsce bez ograniczeń.
+         *
+         * Ujemny limit, nie zerowy. Zero znaczy teraz „to konto nie ma ani
+         * bajta miejsca" — dokładnie to samo co na serwerze. Wcześniej zero
+         * było brakiem ograniczeń i konto bez nadanego miejsca chwaliło się
+         * tutaj miejscem bez końca.
+         */
+        val unlimited: Boolean get() = quotaBytes < 0L
 
         val usedPercent: Int
-            get() = if (unlimited) 0 else ((usedBytes * 100) / quotaBytes.coerceAtLeast(1)).toInt()
+            get() = when {
+                unlimited -> 0
+                // Nie ma czego dzielić, a pasek ma być pełny: wolnego miejsca
+                // jest zero i każdy zapis odbije się od serwera.
+                quotaBytes <= 0L -> 100
+                else -> ((usedBytes * 100) / quotaBytes).toInt().coerceIn(0, 100)
+            }
     }
 }
 

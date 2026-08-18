@@ -74,6 +74,12 @@ interface Strings {
     val removeFromFavorites: String
     val rebuildIndex: String
 
+    // --- Zaznaczanie wielu wpisów naraz ---
+    val selectMany: String
+    val selectAll: String
+    val selectionDone: String
+    val trashManyQuestion: String
+
     // --- Notatka ---
     val noteText: String
     val noteHandwritten: String
@@ -269,12 +275,18 @@ interface Strings {
     val codeFromServer: String
     val codeFromTablet: String
     val codeExitCode: String
+    val codeInterrupted: String
     val codeOutputEmpty: String
     val codeNoErrors: String
     val codeInputLabel: String
     val codeOpenFailed: String
     val codeSaveFailed: String
     val codeRunFailed: String
+
+    // --- Konsola pod podglądem strony ---
+    val codeConsole: String
+    val codeConsoleClear: String
+    val codeConsoleEmpty: String
 
     // --- Edytor tekstowy ---
     val insertPhotoFromGallery: String
@@ -678,6 +690,38 @@ fun Strings.shareLastOpened(date: String): String =
 fun Strings.shareMailWent(address: String): String =
     if (english) "The message went to $address." else "Wiadomość poszła na $address."
 
+/**
+ * Plik jest dłuższy, niż serwer przyjmuje do uruchomienia.
+ *
+ * Granicę stawia route.ts i bez tego zdania odpowiadał na to „Podaj język
+ * i kod" — czyli komunikatem o czymś zupełnie innym.
+ */
+fun Strings.codeTooLong(limit: Int): String = if (english) {
+    "This file is too long to run. The server takes at most $limit characters."
+} else {
+    "Ten plik jest za długi, żeby go uruchomić. Serwer przyjmuje najwyżej $limit znaków."
+}
+
+fun Strings.codeInputTooLong(limit: Int): String = if (english) {
+    "The input is too long. The server takes at most $limit characters."
+} else {
+    "Dane do wczytania są za długie. Serwer przyjmuje najwyżej $limit znaków."
+}
+
+/** Numer wiersza przy błędzie skryptu w konsoli podglądu. */
+fun Strings.codeConsoleAtLine(line: Int): String =
+    if (english) "line $line" else "wiersz $line"
+
+/**
+ * Konsola doszła do swojej granicy. Dalszych wierszy nie zbiera: pętla
+ * z console.log wypisuje tysiące wierszy szybciej, niż da się je narysować.
+ */
+fun Strings.codeConsoleFull(limit: Int): String = if (english) {
+    "$limit lines collected, and that is where it stops. Clear it to collect again."
+} else {
+    "Zebrane $limit wierszy i na tym koniec. Wyczyść, żeby zbierać od nowa."
+}
+
 fun Strings.cannotRunLanguage(language: String): String = if (english) {
     "Kajet cannot run $language. You can still write the file and save it."
 } else {
@@ -751,6 +795,70 @@ fun Strings.nameOnDiskAbout(nameOnDisk: String): String =
 
 fun Strings.moveDialogTitle(name: String): String =
     if (english) "Move: $name" else "Przenieś: $name"
+
+// --- Zaznaczanie wielu wpisów naraz ---
+//
+// Wszędzie „wpis", nie „notatka": zaznaczyć da się także folder i plik
+// z kodem, a zdanie ma mówić prawdę o tym, co za chwilę zniknie.
+
+fun Strings.selectedCount(count: Int): String = if (english) {
+    if (count == 1) "1 selected" else "$count selected"
+} else {
+    val noun = when {
+        count == 1 -> "wpis"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "wpisy"
+        else -> "wpisów"
+    }
+    "Zaznaczono: $count $noun"
+}
+
+fun Strings.trashManyWarning(count: Int): String = if (english) {
+    if (count == 1) {
+        "One item goes to the bin. You can take it out of there."
+    } else {
+        "$count items go to the bin. You can take them out of there."
+    }
+} else {
+    val noun = when {
+        count == 1 -> "Jeden wpis trafi"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "$count wpisy trafią"
+        else -> "$count wpisów trafi"
+    }
+    "$noun do kosza. Da się je stamtąd wyjąć."
+}
+
+fun Strings.moveManyTitle(count: Int): String = if (english) {
+    if (count == 1) "Move 1 item" else "Move $count items"
+} else {
+    val noun = when {
+        count == 1 -> "1 wpis"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "$count wpisy"
+        else -> "$count wpisów"
+    }
+    "Przenieś $noun"
+}
+
+// Pasek postępu pokazuje to zdanie w całości, więc mówi ono, CO się dzieje,
+// a nie tylko przy którym wpisie stanęło.
+
+fun Strings.trashingProgress(done: Int, total: Int): String =
+    if (english) "Moving to the bin: $done of $total" else "Wyrzucam do kosza: $done z $total"
+
+fun Strings.movingProgress(done: Int, total: Int): String =
+    if (english) "Moving: $done of $total" else "Przenoszę: $done z $total"
+
+/**
+ * Ile wpisów nie dało się ruszyć. Reszta poszła — dlatego zdanie mówi
+ * o niepowodzeniu części, a nie o niepowodzeniu całości.
+ */
+fun Strings.bulkPartlyFailed(count: Int): String = if (english) {
+    if (count == 1) "One item could not be done." else "$count items could not be done."
+} else {
+    // Po polsku przeczenie bierze dopełniacz przy każdej liczbie, więc tu
+    // trzech postaci liczby mnogiej nie ma - jest „wpisów" i już.
+    val noun = if (count == 1) "Jednego wpisu" else "$count wpisów"
+    "$noun nie udało się ruszyć."
+}
 
 fun Strings.folderLookTitle(name: String): String =
     if (english) "Folder look: $name" else "Wygląd folderu: $name"
@@ -1152,6 +1260,11 @@ object PolishStrings : Strings {
     override val removeFromFavorites = "Usuń z ulubionych"
     override val rebuildIndex = "Odbuduj spis notatek"
 
+    override val selectMany = "Zaznacz"
+    override val selectAll = "Zaznacz wszystko"
+    override val selectionDone = "Zakończ zaznaczanie"
+    override val trashManyQuestion = "Wyrzucić zaznaczone do kosza?"
+
     override val noteText = "Tekstowa"
     override val noteHandwritten = "Odręczna"
     override val noteMindMap = "Mapa myśli"
@@ -1273,9 +1386,9 @@ object PolishStrings : Strings {
     override val codeAssistOffAbout = "Edytor wpisuje dokładnie to, co naciśniesz."
 
     override val libRebuilding = "Odbudowuję spis notatek…"
-    override val libFavoritesAbout = "Notatki oznaczone gwiazdką w edytorze."
-    override val libFavoritesEmpty = "Nie masz jeszcze ulubionych notatek. Otwórz notatkę i naciśnij " +
-        "gwiazdkę na pasku u góry."
+    override val libFavoritesAbout = "Notatki i pliki oznaczone gwiazdką."
+    override val libFavoritesEmpty = "Nie masz jeszcze nic w ulubionych. Naciśnij gwiazdkę przy " +
+        "notatce albo pliku w spisie."
     override val libRecentAbout = "Dwadzieścia ostatnio otwieranych notatek."
     override val libRecentEmpty = "Tu pojawią się notatki, które otworzysz."
     override val libSearchInNotes = "Szukaj w notatkach"
@@ -1361,6 +1474,7 @@ object PolishStrings : Strings {
     override val codeFromServer = "Serwer"
     override val codeFromTablet = "Tablet"
     override val codeExitCode = "kod wyjścia"
+    override val codeInterrupted = "przerwane"
     override val codeOutputEmpty = "Naciśnij przycisk uruchomienia po lewej stronie. Tu pojawi się to, " +
         "co program wypisze."
     override val codeNoErrors = "Nie ma błędów."
@@ -1368,6 +1482,11 @@ object PolishStrings : Strings {
     override val codeOpenFailed = "Nie udało się otworzyć pliku."
     override val codeSaveFailed = "Nie udało się zapisać pliku."
     override val codeRunFailed = "Uruchomienie się nie udało."
+
+    override val codeConsole = "Konsola"
+    override val codeConsoleClear = "Wyczyść"
+    override val codeConsoleEmpty = "Tu staje to, co strona wypisze przez console.log, " +
+        "razem z błędami skryptów."
 
     override val insertPhotoFromGallery = "Wstaw zdjęcie z galerii"
     override val takePhoto = "Zrób zdjęcie"
@@ -1840,6 +1959,11 @@ object EnglishStrings : Strings {
     override val removeFromFavorites = "Remove from favourites"
     override val rebuildIndex = "Rebuild the list of notes"
 
+    override val selectMany = "Select"
+    override val selectAll = "Select all"
+    override val selectionDone = "Stop selecting"
+    override val trashManyQuestion = "Move the selected items to the bin?"
+
     override val noteText = "Text"
     override val noteHandwritten = "Handwritten"
     override val noteMindMap = "Mind map"
@@ -1961,8 +2085,9 @@ object EnglishStrings : Strings {
     override val codeAssistOffAbout = "The editor types exactly what you press."
 
     override val libRebuilding = "Rebuilding the list of notes…"
-    override val libFavoritesAbout = "Notes you starred in the editor."
-    override val libFavoritesEmpty = "No favourites yet. Open a note and press the star in the top bar."
+    override val libFavoritesAbout = "Notes and files you starred."
+    override val libFavoritesEmpty = "Nothing in favourites yet. Press the star next to a note or " +
+        "a file in the list."
     override val libRecentAbout = "The twenty notes you opened most recently."
     override val libRecentEmpty = "Notes you open will show up here."
     override val libSearchInNotes = "Search your notes"
@@ -2048,6 +2173,7 @@ object EnglishStrings : Strings {
     override val codeFromServer = "Server"
     override val codeFromTablet = "Tablet"
     override val codeExitCode = "exit code"
+    override val codeInterrupted = "interrupted"
     override val codeOutputEmpty = "Press the run button on the left. Whatever the program prints " +
         "shows up here."
     override val codeNoErrors = "No errors."
@@ -2055,6 +2181,11 @@ object EnglishStrings : Strings {
     override val codeOpenFailed = "The file would not open."
     override val codeSaveFailed = "The file would not save."
     override val codeRunFailed = "Running it did not work."
+
+    override val codeConsole = "Console"
+    override val codeConsoleClear = "Clear"
+    override val codeConsoleEmpty = "Whatever the page prints with console.log stands here, " +
+        "along with script errors."
 
     override val insertPhotoFromGallery = "Insert a photo from the gallery"
     override val takePhoto = "Take a photo"

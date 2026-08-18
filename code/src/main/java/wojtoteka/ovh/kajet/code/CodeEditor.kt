@@ -35,8 +35,13 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.WebView
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebViewClient
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,6 +115,10 @@ fun CodeEditor(
     }
 
     val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
+
+    // Konsola podglądu strony. Stan trzyma ekran, a nie sam podgląd: przycisk
+    // „Wyczyść" stoi pod spodem, a widok strony bywa w tym czasie schowany.
+    val console = rememberHtmlConsole()
 
     // Telefon. Ta sama granica co w bibliotece, ustawieniach i edytorze tekstu.
     val narrow = LocalConfiguration.current.screenWidthDp < 600
@@ -235,7 +244,7 @@ fun CodeEditor(
                     .imePadding(),
             ) {
                 if (previewVisible && model.language == CodeLanguage.HTML) {
-                    HtmlPreview(code)
+                    HtmlPreview(code, console)
                 } else {
                     val verticalScroll = rememberScrollState()
                     Row(Modifier.fillMaxSize().verticalScroll(verticalScroll)) {
@@ -305,17 +314,30 @@ fun CodeEditor(
             }
 
             HorizontalRule()
-            ResultPanel(
-                tab = tab,
-                result = result,
-                input = input,
-                running = running,
-                offline = model.offline,
-                narrow = narrow,
-                modifier = Modifier.weight(if (narrow) 0.45f else 0.38f),
-                onTab = model::selectTab,
-                onInput = model::onInputChange,
-            )
+            /*
+              Pod HTML-em stoi konsola, a nie wynik uruchomienia — w tym samym
+              miejscu, co przy pozostałych językach. Zakładki „Wynik", „Błędy"
+              i „Wejście" byłyby przy stronie zawsze puste, bo HTML-a się nie
+              uruchamia; ogląda się go.
+            */
+            if (model.language == CodeLanguage.HTML) {
+                HtmlConsolePanel(
+                    state = console,
+                    modifier = Modifier.weight(if (narrow) 0.45f else 0.38f),
+                )
+            } else {
+                ResultPanel(
+                    tab = tab,
+                    result = result,
+                    input = input,
+                    running = running,
+                    offline = model.offline,
+                    narrow = narrow,
+                    modifier = Modifier.weight(if (narrow) 0.45f else 0.38f),
+                    onTab = model::selectTab,
+                    onInput = model::onInputChange,
+                )
+            }
         }
 
         if (toolbarOnRight) rail()
@@ -326,10 +348,15 @@ fun CodeEditor(
  * Podgląd strony HTML wprost z edytora. Treść ładuje się z pamięci, bez
  * adresu bazowego — strona może dociągać rzeczy z internetu, ale nie widzi
  * plików urządzenia.
+ *
+ * Odcięcie stoi na pustym adresie bazowym w [android.webkit.WebView
+ * .loadDataWithBaseURL]: strona ma wtedy źródło nieokreślone, więc nie sięga
+ * ani do ciasteczek Kajetu, ani do notatek obok. Konsola niczego z tego nie
+ * rozluźnia — WebView oddaje jej wiersze sam i nic nie wraca w drugą stronę.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun HtmlPreview(code: String) {
+private fun HtmlPreview(code: String, console: HtmlConsoleState) {
     val sheet = Kajet.colors.sheet.toArgb()
     AndroidView(
         factory = { context ->
@@ -347,9 +374,115 @@ private fun HtmlPreview(code: String) {
                 // Zanim strona się namaluje, widać kolor arkusza, a nie białą
                 // płachtę — w ciemnym motywie było to uderzenie w oczy.
                 setBackgroundColor(sheet)
-                // Odnośniki otwierają się w podglądzie. Bez tego pierwsze
-                // kliknięcie wyrzucało z Kajetu do przeglądarki.
-                webViewClient = WebViewClient()
+                webViewClient = object : WebViewClient() {
+                    /*
+                      Pełny adres wychodzi do przeglądarki, reszta zostaje
+                      w podglądzie.
+
+                      To samo rozstrzygnięcie co na stronie (FULL_ADDRESS
+                      w lib/code-preview.ts, gdzie odnośnik do obcego serwisu
+                      otwiera się w nowej karcie). Powód jest tu inny niż tam,
+                      ale wynik musi być ten sam: bez tego kliknięcie zamieniało
+                      podgląd zadania na cudzą stronę, a uczeń wracał do swojej
+                      dopiero, dopisując literę w kodzie — bo dopiero zmiana
+                      treści przeładowuje podgląd.
+
+                      Kotwice, ścieżki względne i mailto zostają przy swoim
+                      zachowaniu, dokładnie jak na stronie. Odnośnik z własnym
+                      target też tędy przejdzie: w podglądzie nie ma drugiego
+                      okna, w które mógłby trafić, a wyjście na wierzch jest
+                      najbliższe temu, o co autorowi chodziło.
+                    */
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): Boolean {
+                        val address = request?.url ?: return false
+                        val scheme = address.scheme?.lowercase()
+                        if (scheme != "http" && scheme != "https") return false
+
+                        val where = view?.context ?: return false
+                        // Gdy przeglądarki nie ma, odnośnik zostaje przy
+                        // dotychczasowym zachowaniu zamiast nie robić nic.
+                        return runCatching {
+                            where.startActivity(Intent(Intent.ACTION_VIEW, address))
+                        }.isSuccess
+                    }
+
+                    /*
+                      Konsola czyści się przy każdym ładowaniu. Podgląd
+                      odświeża się po każdej dopisanej literze, więc bez tego
+                      zostałaby po nim mieszanka wpisów z kilkudziesięciu
+                      kolejnych wersji tej samej strony.
+                    */
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        console.clear()
+                    }
+                }
+                /*
+                  Konsola bez wstrzykiwania czegokolwiek w cudzą stronę.
+                  Tędy przychodzi log, info, warn, error i debug, a także błędy
+                  skryptów wraz z numerem wiersza i nieobsłużone obietnice —
+                  czyli właśnie to, czego dopisany console.log by nie złapał.
+
+                  Prawda na końcu znaczy „zajęte": bez niej te same wiersze
+                  szłyby jeszcze do dziennika systemu.
+                */
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                        console.add(message)
+                        return true
+                    }
+
+                    /*
+                      alert, confirm i prompt idą do konsoli zamiast na wierzch
+                      edytora.
+
+                      Bez tych trzech nadpisań samo ustawienie WebChromeClient
+                      włącza domyślne okna WebView — a strona z alertem w pętli
+                      zasłoniłaby wtedy edytor razem z kodem, którego uczeń nie
+                      zdążył zapisać. Wcześniej alert w podglądzie po prostu
+                      przepadał, więc nikomu niczego nie ubywa: napis, który
+                      dotąd znikał, teraz widać w konsoli.
+
+                      Pytania odpowiadają się same przez odmowę: confirm oddaje
+                      fałsz, prompt pustkę. Innej odpowiedzi i tak nie ma jak
+                      udzielić bez okna.
+                    */
+                    override fun onJsAlert(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        result: android.webkit.JsResult?,
+                    ): Boolean {
+                        console.addRaw("alert: ${message.orEmpty()}")
+                        result?.confirm()
+                        return true
+                    }
+
+                    override fun onJsConfirm(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        result: android.webkit.JsResult?,
+                    ): Boolean {
+                        console.addRaw("confirm: ${message.orEmpty()}")
+                        result?.cancel()
+                        return true
+                    }
+
+                    override fun onJsPrompt(
+                        view: WebView?,
+                        url: String?,
+                        message: String?,
+                        defaultValue: String?,
+                        result: android.webkit.JsPromptResult?,
+                    ): Boolean {
+                        console.addRaw("prompt: ${message.orEmpty()}")
+                        result?.cancel()
+                        return true
+                    }
+                }
                 // Strony uczniowskie mają prawo używać JavaScriptu.
                 settings.javaScriptEnabled = true
             }
@@ -499,11 +632,23 @@ private fun ResultPanel(
             append(", ")
             append(result.durationMs)
             append(" ms")
-            if (result.exitCode != null) {
-                append(", ")
-                append(words.codeExitCode)
-                append(" ")
-                append(result.exitCode)
+            /*
+              Pusty kod wyjścia ma dwa powody i pasek musi je rozróżniać.
+              Przerwanie po limicie czasu mówi się wprost; przy wyniku uciętym
+              za długością nie ma czego dopisać, bo zdanie o ucięciu stoi już
+              na końcu samego wyniku.
+            */
+            when {
+                result.interrupted -> {
+                    append(", ")
+                    append(words.codeInterrupted)
+                }
+                result.exitCode != null -> {
+                    append(", ")
+                    append(words.codeExitCode)
+                    append(" ")
+                    append(result.exitCode)
+                }
             }
         }
         else -> null

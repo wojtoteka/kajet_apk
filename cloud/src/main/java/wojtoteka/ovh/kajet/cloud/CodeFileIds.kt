@@ -18,6 +18,20 @@ class CodeFileIds(context: Context) {
     private val preferences: SharedPreferences =
         context.getSharedPreferences("kajet-code-ids", Context.MODE_PRIVATE)
 
+    /*
+      Drugi rejestr, w osobnym pliku, żeby nie mieszał się do przeglądania
+      numerów: jakim językiem serwer nazwał plik leżący pod tą ścieżką.
+
+      Po co: aplikacja czyta język z rozszerzenia, a .sql to dwa różne języki -
+      SQLite i MySQL. Bez tej pamięci notatka założona na stronie jako MySQL
+      wracałaby na serwer jako SQLite przy pierwszej poprawce zrobionej na
+      tablecie, czyli tablet po cichu przestawiałby jej język. Serwer trzyma
+      język w samej notatce (content.json → code.language) i tylko zgaduje go
+      z rozszerzenia; tu jest to samo rozróżnienie.
+    */
+    private val languages: SharedPreferences =
+        context.getSharedPreferences("kajet-code-languages", Context.MODE_PRIVATE)
+
     /** Identyfikator dla ścieżki; zakłada nowy, kiedy pliku jeszcze nie znamy. */
     @Synchronized
     fun idFor(path: String): String {
@@ -53,9 +67,25 @@ class CodeFileIds(context: Context) {
         preferences.edit().putString(path, id).apply()
     }
 
+    /**
+     * Zapamiętuje język, którym serwer nazwał ten plik. Pusty identyfikator
+     * kasuje wpis — notatka bez języka nie ma czego trzymać.
+     */
+    @Synchronized
+    fun rememberLanguage(path: String, serverLanguageId: String?) {
+        val edit = languages.edit()
+        if (serverLanguageId.isNullOrBlank()) edit.remove(path) else edit.putString(path, serverLanguageId)
+        edit.apply()
+    }
+
+    /** Język zapamiętany przy tej ścieżce albo `null`, gdy nic nie wiemy. */
+    @Synchronized
+    fun languageFor(path: String): String? = languages.getString(path, null)
+
     @Synchronized
     fun remove(path: String) {
         preferences.edit().remove(path).apply()
+        languages.edit().remove(path).apply()
     }
 
     /**
@@ -64,16 +94,24 @@ class CodeFileIds(context: Context) {
      */
     @Synchronized
     fun rebind(oldPath: String, newPath: String) {
-        val edit = preferences.edit()
+        movePaths(preferences, oldPath, newPath)
+        // Pamięć języka jedzie za plikiem tak samo jak jego numer. Inaczej
+        // zmiana nazwy notatki MySQL gubiłaby jej język przy najbliższym
+        // zapisie.
+        movePaths(languages, oldPath, newPath)
+    }
+
+    private fun movePaths(store: SharedPreferences, oldPath: String, newPath: String) {
+        val edit = store.edit()
         var changed = false
-        for ((key, value) in preferences.all) {
-            val id = value as? String ?: continue
+        for ((key, value) in store.all) {
+            val kept = value as? String ?: continue
             val moved = when {
                 key == oldPath -> newPath
                 key.startsWith("$oldPath/") -> newPath + key.removePrefix(oldPath)
                 else -> continue
             }
-            edit.remove(key).putString(moved, id)
+            edit.remove(key).putString(moved, kept)
             changed = true
         }
         if (changed) edit.apply()
@@ -82,5 +120,6 @@ class CodeFileIds(context: Context) {
     @Synchronized
     fun clear() {
         preferences.edit().clear().apply()
+        languages.edit().clear().apply()
     }
 }

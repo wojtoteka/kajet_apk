@@ -186,20 +186,27 @@ class LibraryRepository(
     // Reading lists
 
     fun folder(path: String): Flow<List<LibraryItem>> =
-        combine(refreshTick, settings.settings) { tick, _ -> tick }
-            .map {
+        combine(refreshTick, settings.settings) { _, current -> current.favoriteFiles }
+            .map { starredFiles ->
                 withContext(io) {
                     val store = store() ?: return@withContext emptyList()
                     val fromDisk = store.list(path)
                     // Sortujemy jeszcze raz, bo indeks ma pewniejsze daty niż SAF,
                     // który potrafi oddać zero w lastModified.
-                    fromDisk.map { item -> enrichFromIndex(item) }
+                    fromDisk.map { item -> enrichFromIndex(item, starredFiles) }
                         .sortedWith(LibraryStore.libraryOrder)
                 }
             }
 
-    private suspend fun enrichFromIndex(item: LibraryItem): LibraryItem {
-        if (item.type != ItemType.NOTE) return item
+    private suspend fun enrichFromIndex(
+        item: LibraryItem,
+        starredFiles: Set<String>,
+    ): LibraryItem {
+        // Plik gwiazdki w sobie nie niesie — ta stoi w ustawieniach, patrz
+        // [KajetSettings.favoriteFiles]. Spis jest tu tylko odbiciem.
+        if (item.type != ItemType.NOTE) {
+            return item.copy(favorite = item.path in starredFiles)
+        }
         val indexed = dao.find(item.documentUri) ?: return item
         return item.copy(
             name = indexed.name.ifBlank { item.name },
@@ -318,12 +325,52 @@ class LibraryRepository(
         onNoteSaved?.invoke(path, document.id)
     }
 
+    /**
+     * Gwiazdka na notatce albo na pliku. Zwraca stan PO przełączeniu.
+     *
+     * Notatka trzyma gwiazdkę we własnej treści i stamtąd jedzie ona na serwer
+     * razem z zapisem. Plik z kodem nie ma w czym jej zapisać (na dysku to
+     * zwykły tekst), więc jego gwiazdka stoi w ustawieniach, a na serwer
+     * dociera jako zwykłe zgłoszenie pliku do wysyłki — synchronizacja dokłada
+     * ją do notatki CODE. Do tej pory ta droga w ogóle nie istniała i gwiazdki
+     * na plikach HTML czy Pythona nie dało się w aplikacji postawić.
+     */
     suspend fun toggleFavorite(path: String): Boolean = withContext(io) {
+        if (!FileNames.isNote(path.substringAfterLast('/'))) {
+            return@withContext toggleFileFavorite(path)
+        }
         val document = requireStore().readNote(path)
         val after = document.copy(favorite = !document.favorite)
         writeNote(path, after)
         refresh()
         after.favorite
+    }
+
+    private suspend fun toggleFileFavorite(path: String): Boolean {
+        val after = path !in starredFiles()
+        settings.setFileFavorite(path, after)
+        // Spis idzie za ustawieniami — z niego czytają „Ulubione".
+        dao.findByPath(path)?.let { dao.upsert(it.copy(favorite = after)) }
+        refresh()
+        onCodeSaved?.invoke(path)
+        return after
+    }
+
+    private suspend fun starredFiles(): Set<String> = settings.settings.first().favoriteFiles
+
+    /** Czy plik ma gwiazdkę — synchronizacja dokłada ją do notatki CODE. */
+    override suspend fun fileFavorite(path: String): Boolean = withContext(io) {
+        path in starredFiles()
+    }
+
+    /** Gwiazdka pliku przysłana z serwera — bez odsyłania jej z powrotem. */
+    override suspend fun setFileFavoriteFromCloud(path: String, favorite: Boolean) {
+        withContext(io) {
+            if ((path in starredFiles()) == favorite) return@withContext
+            settings.setFileFavorite(path, favorite)
+            dao.findByPath(path)?.let { dao.upsert(it.copy(favorite = favorite)) }
+            refresh()
+        }
     }
 
     fun writeInBackground(path: String, document: NoteDocument) {
@@ -419,7 +466,11 @@ class LibraryRepository(
     override suspend fun createTextFileFromCloud(parent: String, fileName: String, content: String): String =
         withContext(io) {
             val item = requireStore().createTextFile(parent, fileName, content)
-            dao.upsertKeepingOpened(item.toIndexEntry())
+            // Plik pod tą samą ścieżką mógł już kiedyś mieć gwiazdkę — wraca
+            // razem z nim, bo zbiór gwiazdek przeżył jego zniknięcie.
+            dao.upsertKeepingOpened(
+                item.toIndexEntry().copy(favorite = item.path in starredFiles()),
+            )
             refresh()
             item.path
         }
@@ -496,6 +547,8 @@ class LibraryRepository(
     suspend fun rename(path: String, newName: String): String = withContext(io) {
         val newPath = requireStore().rename(path, newName)
         dao.deleteBranch(path)
+        // Gwiazdki na plikach są zapisane po ścieżce, więc idą razem z nią.
+        settings.moveFavoriteFiles(path, newPath)
         reindexBranch(newPath)
         refresh()
         onPathMoved?.invoke(path, newPath)
@@ -510,6 +563,7 @@ class LibraryRepository(
     suspend fun move(path: String, targetFolder: String): String = withContext(io) {
         val newPath = requireStore().move(path, targetFolder)
         dao.deleteBranch(path)
+        settings.moveFavoriteFiles(path, newPath)
         reindexBranch(newPath)
         refresh()
         onPathMoved?.invoke(path, newPath)
@@ -718,6 +772,9 @@ class LibraryRepository(
             if (store.deleteEntry(path)) erased = true else retries.addPath(path)
         }
         runCatching { dao.deleteBranchWithContent(path) }
+        // Po pliku nie ma już śladu, więc gwiazdka nie ma czego oznaczać.
+        // Przy wyrzuceniu do kosza zostaje — przywrócenie ma ją oddać.
+        runCatching { settings.forgetFavoriteFiles(path) }
         // Jak przy notatce: otwarty edytor kodu ma się dowiedzieć od razu.
         if (!alsoOnServer) reportRemotelyRemoved(path)
 
@@ -1097,6 +1154,10 @@ class LibraryRepository(
         val store = requireStore()
         dao.clear()
 
+        // Gwiazdki na plikach przeżywają odbudowę, bo leżą w ustawieniach,
+        // a nie w spisie. Wracają do świeżych wierszy tutaj.
+        val starred = starredFiles()
+
         // A listing of everything first, so we can show how much is still left.
         val items = ArrayList<LibraryItem>(128)
         store.walkTree { items += it }
@@ -1110,14 +1171,16 @@ class LibraryRepository(
                     dao.upsertKeepingOpened(item.toIndexEntry())
                 }
             } else {
-                dao.upsertKeepingOpened(item.toIndexEntry())
+                dao.upsertKeepingOpened(
+                    item.toIndexEntry().copy(favorite = item.path in starred),
+                )
             }
             progress?.invoke(number + 1, items.size)
         }
         refresh()
     }
 
-    private suspend fun reindexBranch(path: String) {
+    private suspend fun reindexBranch(path: String, starred: Set<String>? = null) {
         val store = store() ?: return
         val entry = store.entry(path) ?: return
         if (entry.isDirectory && FileNames.isNote(entry.name.orEmpty())) {
@@ -1143,10 +1206,14 @@ class LibraryRepository(
         // A folder or a plain file: we walk the branch again.
         val parentPath = path.substringBeforeLast('/', "")
         val onDisk = store.list(parentPath).firstOrNull { it.path == path } ?: return
-        dao.upsertKeepingOpened(onDisk.toIndexEntry())
+        // Zbiór czytamy raz na całą gałąź, a nie raz na plik w środku.
+        val starredFiles = starred ?: starredFiles()
+        dao.upsertKeepingOpened(
+            onDisk.toIndexEntry().copy(favorite = onDisk.path in starredFiles),
+        )
         if (onDisk.type == ItemType.FOLDER) {
             for (child in store.list(path)) {
-                reindexBranch(child.path)
+                reindexBranch(child.path, starredFiles)
             }
         }
     }

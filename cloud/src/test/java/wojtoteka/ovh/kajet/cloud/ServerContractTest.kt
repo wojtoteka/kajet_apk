@@ -215,6 +215,49 @@ class ServerContractTest {
     }
 
     @Test
+    fun `pusty kod wyjscia zostaje pusty`() {
+        /*
+          exitCode przychodzi jako liczba ALBO null i null zdarza się w dwóch
+          sytuacjach: program przerwano po limicie czasu, albo wypisał więcej,
+          niż wolno pokazać (wynik jest wtedy ucięty i kończy się zdaniem
+          o ucięciu).
+
+          Zera tu podstawić nie wolno: zero znaczy „skończył się dobrze".
+          Kiedyś w tym polu stawał napis ERR_CHILD_PROCESS_STDIO_MAXBUFFER
+          udający liczbę — serwer już go nie odsyła i aplikacja nigdzie go nie
+          rozbiera.
+        */
+        val przerwany =
+            """{"output":"","errors":"Program działał dłużej niż 10 s i został przerwany.",
+            "exitCode":null,"interrupted":true,"timeMs":10004}"""
+        val uciety =
+            """{"output":"1\n2\n\n\n[...] Wynik był dłuższy niż 20000 znaków i reszta została ucięta.",
+            "errors":"","exitCode":null,"interrupted":false,"timeMs":812}"""
+
+        assertThat(json.decodeFromString<CodeResult>(przerwany).exitCode).isNull()
+        assertThat(json.decodeFromString<CodeResult>(przerwany).interrupted).isTrue()
+        assertThat(json.decodeFromString<CodeResult>(uciety).exitCode).isNull()
+        assertThat(json.decodeFromString<CodeResult>(uciety).interrupted).isFalse()
+    }
+
+    @Test
+    fun `niezerowy kod wyjscia przy pustym stderr to nie awaria serwera`() {
+        /*
+          Program, który zwraca 1 i nic nie wypisuje na wyjście błędów, jest
+          programem DZIAŁAJĄCYM. Serwer nie dokłada już do tego zdania
+          o awarii uruchamiania: errors jest po prostu puste, a numer stoi
+          w exitCode. Aplikacja nie ma prawa robić z tego usterki.
+        */
+        val body = """{"output":"","errors":"","exitCode":1,"interrupted":false,"timeMs":91}"""
+
+        val result = json.decodeFromString<CodeResult>(body)
+
+        assertThat(result.exitCode).isEqualTo(1)
+        assertThat(result.errors).isEmpty()
+        assertThat(result.interrupted).isFalse()
+    }
+
+    @Test
     fun `parses a conflict with a note lying in the server bin`() {
         // note-write.ts adds deletedAt to onServer; Sync uses it to restore the
         // note instead of saving a copy of the bin alongside.

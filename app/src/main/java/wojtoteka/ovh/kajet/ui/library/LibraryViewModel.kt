@@ -29,8 +29,11 @@ import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
+import wojtoteka.ovh.kajet.core.text.bulkPartlyFailed
 import wojtoteka.ovh.kajet.core.text.checkingProgress
+import wojtoteka.ovh.kajet.core.text.movingProgress
 import wojtoteka.ovh.kajet.core.text.refreshingIndex
+import wojtoteka.ovh.kajet.core.text.trashingProgress
 import wojtoteka.ovh.kajet.core.text.savingFolder
 import wojtoteka.ovh.kajet.core.text.savingNote
 import wojtoteka.ovh.kajet.core.text.words
@@ -214,7 +217,12 @@ class LibraryViewModel(
         return result
     }
 
+    // Zmiana miejsca kończy zaznaczanie. Zaznaczone ścieżki zostają w innym
+    // folderze, więc pasek z licznikiem mówiłby o wpisach, których na ekranie
+    // już nie widać — a to jest gotowy przepis na skasowanie nie tego.
+
     fun goTo(path: String) {
+        stopSelecting()
         setSectionValue(LibrarySection.LIBRARY)
         setPathValue(path)
         setExpandedValue(_expanded.value + parentPaths(path))
@@ -223,6 +231,7 @@ class LibraryViewModel(
     fun goUp() {
         val current = _path.value
         if (current.isEmpty()) return
+        stopSelecting()
         setPathValue(current.substringBeforeLast('/', ""))
     }
 
@@ -233,6 +242,7 @@ class LibraryViewModel(
     }
 
     fun setSection(updated: LibrarySection) {
+        stopSelecting()
         setSectionValue(updated)
         if (updated == LibrarySection.TRASH) refreshTrash()
     }
@@ -262,6 +272,87 @@ class LibraryViewModel(
         _expanded.value = value
         saved[KEY_EXPANDED] = ArrayList(value)
     }
+
+    /*
+      Zaznaczanie wielu wpisów naraz.
+
+      Tryb stoi osobno od zbioru zaznaczonych ścieżek, bo „włączony, a jeszcze
+      nic nie wskazano" to zwyczajny stan: tak wygląda ekran zaraz po
+      naciśnięciu „Zaznacz". Ścieżkami, a nie wpisami, bo tylko one przeżywają
+      odświeżenie spisu.
+    */
+    private val _selecting = MutableStateFlow(false)
+    val selecting: StateFlow<Boolean> = _selecting.asStateFlow()
+
+    private val _selected = MutableStateFlow<Set<String>>(emptySet())
+    val selected: StateFlow<Set<String>> = _selected.asStateFlow()
+
+    /** Wejście w tryb; [item] to wpis wskazany długim przytrzymaniem. */
+    fun startSelecting(item: LibraryItem? = null) {
+        _selecting.value = true
+        if (item != null) _selected.value = setOf(item.path)
+    }
+
+    fun stopSelecting() {
+        _selecting.value = false
+        _selected.value = emptySet()
+    }
+
+    fun toggleSelected(item: LibraryItem) {
+        val paths = _selected.value
+        _selected.value = if (item.path in paths) paths - item.path else paths + item.path
+    }
+
+    fun selectAll(items: List<LibraryItem>) {
+        _selected.value = items.mapTo(mutableSetOf()) { it.path }
+    }
+
+    /**
+     * Wyrzuca zaznaczone do kosza, jeden po drugim.
+     *
+     * Nieudany wpis nie zatrzymuje reszty — przy dwudziestu notatkach jeden
+     * plik zajęty przez inny program nie ma prawa unieważnić całej roboty.
+     * Ile ich było, mówi zdanie na końcu.
+     */
+    fun trashSelected() = inBackground {
+        val targets = topmost(_selected.value)
+        stopSelecting()
+        var failed = 0
+        targets.forEachIndexed { number, path ->
+            _progress.value = words.trashingProgress(number + 1, targets.size)
+            if (runCatching { repo.moveToTrash(path) }.isFailure) failed += 1
+        }
+        _progress.value = null
+        if (failed > 0) _error.value = words.bulkPartlyFailed(failed)
+    }
+
+    fun moveSelected(targetFolder: String) = inBackground {
+        val targets = topmost(_selected.value)
+        stopSelecting()
+        var failed = 0
+        targets.forEachIndexed { number, path ->
+            _progress.value = words.movingProgress(number + 1, targets.size)
+            // Wpis już leżący na miejscu oraz folder przenoszony do siebie
+            // albo do własnego wnętrza: nie ma co robić, a nie jest to błąd.
+            val alreadyThere = path.substringBeforeLast('/', "") == targetFolder
+            val intoItself = targetFolder == path || targetFolder.startsWith("$path/")
+            if (alreadyThere || intoItself) return@forEachIndexed
+            if (runCatching { repo.move(path, targetFolder) }.isFailure) failed += 1
+        }
+        _progress.value = null
+        if (failed > 0) _error.value = words.bulkPartlyFailed(failed)
+    }
+
+    /**
+     * Zostawia same wierzchołki zaznaczenia.
+     *
+     * Notatka zaznaczona razem z folderem, w którym leży, zniknie i tak razem
+     * z nim. Ruszanie jej osobno oznaczałoby robotę pod ścieżką, której już
+     * nie ma — czyli błąd tam, gdzie wszystko poszło dobrze.
+     */
+    private fun topmost(paths: Set<String>): List<String> = paths
+        .filterNot { path -> paths.any { it != path && path.startsWith("$it/") } }
+        .sorted()
 
     fun refreshAfterChange() {
         repo.refresh()
@@ -319,7 +410,8 @@ class LibraryViewModel(
     }
 
     fun toggleFavorite(item: LibraryItem) = inBackground {
-        if (item.type != ItemType.NOTE) return@inBackground
+        // Folder gwiazdki nie nosi; notatka i plik z kodem tak samo.
+        if (item.type == ItemType.FOLDER) return@inBackground
         repo.toggleFavorite(item.path)
     }
 
@@ -376,9 +468,11 @@ class LibraryViewModel(
 
     fun rebuildIndex() = inBackground {
         _indexRebuilt.value = false
-        _progress.value = words.walkingLibrary
+        // Całe zdanie, nie sam ogon: pasek postępu pokazuje to, co dostanie,
+        // a chodzi nim także zapis folderu i robota na wielu wpisach naraz.
+        _progress.value = "${words.libRebuilding} ${words.walkingLibrary}"
         repo.rebuildIndex { done, total ->
-            _progress.value = words.checkingProgress(done, total)
+            _progress.value = "${words.libRebuilding} ${words.checkingProgress(done, total)}"
         }
         _progress.value = null
         _indexRebuilt.value = true

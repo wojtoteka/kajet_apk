@@ -66,6 +66,15 @@ internal class FakeLibrary : CloudLibrary {
 
     override suspend fun allCodeFilePaths(): List<String> = texts.keys.toList()
 
+    /** Ścieżki plików z gwiazdką — synchronizacja i czyta je, i zapisuje. */
+    val starredFiles = mutableSetOf<String>()
+
+    override suspend fun fileFavorite(path: String): Boolean = path in starredFiles
+
+    override suspend fun setFileFavoriteFromCloud(path: String, favorite: Boolean) {
+        if (favorite) starredFiles += path else starredFiles -= path
+    }
+
     override suspend fun readTrashContents(): TrashContents = trash
 
     override suspend fun writeNoteFromCloud(document: NoteDocument, targetFolder: String): String? {

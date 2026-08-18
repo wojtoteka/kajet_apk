@@ -377,11 +377,20 @@ fun NewFileDialog(
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.settingsLanguage)
-            // Zwykłego tekstu tu nie ma: od pisania tekstu jest notatka, a plik
-            // .txt założony w „Nowy plik z kodem" tylko mylił. Istniejące pliki
-            // .txt dalej się otwierają - PLAIN_TEXT zostaje w spisie języków.
+            /*
+              Zwykłego tekstu tu nie ma: od pisania tekstu jest notatka, a plik
+              .txt założony w „Nowy plik z kodem" tylko mylił. Istniejące pliki
+              .txt dalej się otwierają - PLAIN_TEXT zostaje w spisie języków.
+
+              MySQL wypada z tej listy z innego powodu. Aplikacja czyta język
+              wyłącznie z rozszerzenia pliku, a .sql należy do SQLite (tak samo
+              jak na serwerze), więc plik założony jako MySQL i tak otworzyłby
+              się jako SQLite. Lepiej nie stawiać wyboru, którego nie ma jak
+              dotrzymać - MySQL-a wybiera się na stronie, gdzie język zapisuje
+              się w samej notatce.
+            */
             CodeLanguage.entries
-                .filter { it.runnable || it == CodeLanguage.HTML }
+                .filter { (it.runnable || it == CodeLanguage.HTML) && it != CodeLanguage.MYSQL }
                 .forEach { option ->
                     val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
                     ChoiceRow(

@@ -113,11 +113,31 @@ fun SettingsScreen(
     */
     LaunchedEffect(Unit) { onRebuildNoticeRead() }
 
-    // Sprawdzanie aktualizacji z sekcji „O aplikacji": czy właśnie trwa, co
-    // wyszło i - gdy wyszło, że jest nowsza wersja - które to wydanie.
+    /*
+      Nowa wersja w sekcji „O aplikacji".
+
+      [updateFound] trzyma wydanie do pobrania i stoi na ekranie tak długo, jak
+      długo ono na serwerze jest — nie trzeba w tym celu niczego naciskać.
+      Sprawdzenie idzie samo przy wejściu w ustawienia i zwykle nie rusza
+      nawet sieci: wynik z ostatniej godziny leży w pamięci ([UpdateCheck]).
+
+      Wcześniej o nowym wydaniu mówił wyłącznie komunikat przy uruchomieniu,
+      raz na zimny start. Kto go zamknął, nie miał go już gdzie odszukać —
+      ustawienia milczały, dopóki nie nacisnęło się „Sprawdź aktualizacje".
+
+      [updateAnswer] zostaje na odpowiedzi, dla których nie ma paska: „masz
+      najnowszą" i „nie udało się zapytać".
+    */
     var checkingUpdates by remember { mutableStateOf(false) }
     var updateAnswer by remember { mutableStateOf<String?>(null) }
     var updateFound by remember { mutableStateOf<UpdateCheck.Release?>(null) }
+
+    LaunchedEffect(Unit) {
+        // W środku siedzi withContext(Dispatchers.IO) i runCatching na wszystkim,
+        // więc ani to nie blokuje rysowania, ani nie ma jak stąd wylecieć wyjątek.
+        val outcome = UpdateCheck.check(context)
+        if (outcome is UpdateCheck.Outcome.Newer) updateFound = outcome.release
+    }
 
     fun openDocument(url: String) {
         linkProblem = when (openLink(context, url)) {
@@ -311,9 +331,11 @@ fun SettingsScreen(
                     )
                 }
                 if (rebuildProgress != null) {
+                    // Zdanie przychodzi z biblioteki w całości — patrz
+                    // LibraryViewModel.rebuildIndex.
                     InlineNotice(
                         icon = KajetIcons.Restore,
-                        text = "${words.libRebuilding} $rebuildProgress",
+                        text = rebuildProgress,
                         color = Kajet.colors.accent,
                     )
                 } else if (rebuildProblem != null) {
@@ -496,56 +518,68 @@ fun SettingsScreen(
                     modifier = Modifier.widthIn(max = Kajet.dimens.readingWidth),
                 )
 
+                // Pasek stoi tu sam z siebie, dopóki nowsze wydanie czeka na
+                // serwerze — z numerem wersji i drogą do pobrania pod ręką.
+                updateFound?.let { release ->
+                    InlineNotice(
+                        icon = KajetIcons.Export,
+                        text = words.newVersionFound(release.version),
+                        color = Kajet.colors.accent,
+                    ) {
+                        SecondaryButton(
+                            text = words.updateInstall,
+                            onClick = {
+                                openDocument(release.pageUrl.ifBlank { KajetLinks.download() })
+                            },
+                        )
+                    }
+                }
+
                 /*
                   Sprawdzenie z ręki, w odróżnieniu od tego przy uruchomieniu,
                   MÓWI o niepowodzeniu. Tam brak sieci znaczy „nie zawracamy
                   głowy", tutaj człowiek sam o to poprosił i czekanie
                   w nieskończoność na nic byłoby zwykłym zbyciem.
                 */
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    SecondaryButton(
-                        text = if (checkingUpdates) words.checkingUpdates else words.checkUpdates,
-                        onClick = {
-                            if (checkingUpdates) return@SecondaryButton
-                            checkingUpdates = true
-                            updateAnswer = null
-                            updateFound = null
-                            scope.launch {
-                                when (val outcome = UpdateCheck.check(context, force = true)) {
-                                    is UpdateCheck.Outcome.Newer -> {
-                                        updateFound = outcome.release
-                                        updateAnswer = words.newVersionFound(outcome.release.version)
-                                    }
-
-                                    UpdateCheck.Outcome.UpToDate -> updateAnswer = words.upToDate
-                                    UpdateCheck.Outcome.Unknown ->
-                                        updateAnswer = words.updateCheckFailed
+                SecondaryButton(
+                    text = if (checkingUpdates) words.checkingUpdates else words.checkUpdates,
+                    onClick = {
+                        if (checkingUpdates) return@SecondaryButton
+                        checkingUpdates = true
+                        updateAnswer = null
+                        scope.launch {
+                            when (val outcome = UpdateCheck.check(context, force = true)) {
+                                is UpdateCheck.Outcome.Newer -> {
+                                    updateFound = outcome.release
+                                    updateAnswer = null
                                 }
-                                checkingUpdates = false
+
+                                UpdateCheck.Outcome.UpToDate -> {
+                                    // Wydanie zeszło z serwera albo właśnie
+                                    // je zainstalowano — pasek nie ma już
+                                    // czego zapowiadać.
+                                    updateFound = null
+                                    updateAnswer = words.upToDate
+                                }
+
+                                // Nieudane pytanie nie zmienia tego, co już
+                                // wiadomo: pasek z poprzedniej odpowiedzi
+                                // zostaje, bo wydanie nie zniknęło.
+                                UpdateCheck.Outcome.Unknown ->
+                                    updateAnswer = words.updateCheckFailed
                             }
-                        },
-                        icon = KajetIcons.CloudMark,
-                        enabled = !checkingUpdates,
-                    )
-                    updateFound?.let { release ->
-                        SecondaryButton(
-                            text = words.updateInstall,
-                            onClick = {
-                                openDocument(release.pageUrl.ifBlank { KajetLinks.download() })
-                            },
-                            icon = KajetIcons.Export,
-                        )
-                    }
-                }
+                            checkingUpdates = false
+                        }
+                    },
+                    icon = KajetIcons.CloudMark,
+                    enabled = !checkingUpdates,
+                )
 
                 updateAnswer?.let { answer ->
                     Text(
                         text = answer,
                         style = Kajet.type.meta,
-                        color = if (updateFound == null && answer == words.updateCheckFailed) {
+                        color = if (answer == words.updateCheckFailed) {
                             Kajet.colors.danger
                         } else {
                             Kajet.colors.muted

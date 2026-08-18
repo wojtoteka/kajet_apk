@@ -57,6 +57,20 @@ open class NoteViewModel(
     private var discarded = false
 
     /*
+      Czy ktoś tknął pole tytułu ręcznie.
+
+      Podpowiedź z treści włącza się przy PUSTYM tytule — a skasowanie
+      podpowiedzianego tytułu to właśnie pusty tytuł. Autozapis rusza ułamek
+      sekundy później i wpisywał podpowiedź z powrotem, więc własnego tytułu
+      nie dało się wpisać: pole samo wracało do starej nazwy.
+
+      Ręczna zmiana tytułu kończy podpowiadanie na resztę pracy z notatką,
+      i to niezależnie od tego, co w polu zostało. Puste pole po skasowaniu
+      też jest wyborem człowieka, a nie brakiem tytułu do wymyślenia.
+    */
+    private var titleTouched = false
+
+    /*
       Nasłuchy ustawień mają własne handlery. Bez nich wyjątek z odczytu
       ustawień szedł prosto do domyślnego handlera wątku, czyli ubijał całą
       aplikację przy otwartej notatce — a chodzi tu tylko o spis kolorów i
@@ -173,6 +187,7 @@ open class NoteViewModel(
     }
 
     fun setTitle(title: String) {
+        titleTouched = true
         editWithoutHistory { it.copy(title = title) }
     }
 
@@ -280,8 +295,12 @@ open class NoteViewModel(
      * wciąż podstawionym „Bez tytułu" (albo pusty). Pierwsza podpowiedź go
      * nadpisuje i mechanizm sam się kończy; ręcznie wpisanej nazwy nie rusza
      * nigdy. Notatka odręczna nie ma tekstu, więc naturalnie nic się nie dzieje.
+     *
+     * [titleTouched] wyłącza podpowiadanie od chwili, gdy ktoś sięgnie do pola
+     * tytułu — inaczej skasowanie podpowiedzi wracało przy najbliższym zapisie.
      */
     private fun withSuggestedTitle(document: NoteDocument): NoteDocument {
+        if (titleTouched) return document
         if (!NoteTitles.isPlaceholder(document.title)) return document
         val suggested = document.text?.let { NoteTitles.fromMarkdown(it.markdown) }
             ?: document.mindMap?.let { NoteTitles.fromMindMap(it.nodes) }

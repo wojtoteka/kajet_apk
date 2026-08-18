@@ -216,7 +216,9 @@ object LanguageIcons {
         CodeLanguage.PHP -> Php
         CodeLanguage.RUBY -> Ruby
         CodeLanguage.BASH -> Bash
-        CodeLanguage.SQL -> Sql
+        // MySQL dostaje tę samą ikonę co SQLite: to dwa języki, ale jedna
+        // rzecz na ekranie — baza danych.
+        CodeLanguage.SQL, CodeLanguage.MYSQL -> Sql
         else -> PlainText
     }
 }
