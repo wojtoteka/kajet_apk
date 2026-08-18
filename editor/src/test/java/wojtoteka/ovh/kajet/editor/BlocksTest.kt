@@ -86,10 +86,16 @@ class BlocksTest {
 
     @Test
     fun `wielkosc zdjecia jedzie tam i z powrotem`() {
-        val blocks = Blocks.split("![z](assets/z.png \"50%\")")
+        val fromTitle = Blocks.split("![z](assets/z.png \"50%\")")
+        val fromAlt = Blocks.split("![z|50%](assets/z.png)")
 
-        assertThat((blocks[0] as Block.Image).width).isWithin(0.001f).of(0.5f)
-        assertThat(Blocks.join(blocks)).isEqualTo("![z](assets/z.png \"50%\")")
+        assertThat((fromTitle[0] as Block.Image).width).isWithin(0.001f).of(0.5f)
+        assertThat((fromAlt[0] as Block.Image).width).isWithin(0.001f).of(0.5f)
+        assertThat((fromTitle[0] as Block.Image).alt).isEqualTo("z")
+        assertThat((fromAlt[0] as Block.Image).alt).isEqualTo("z")
+        // Zapis jest jeden: dopisek w opisie, jak na stronie i w prompcie AI.
+        assertThat(Blocks.join(fromTitle)).isEqualTo("![z|50%](assets/z.png)")
+        assertThat(Blocks.join(fromAlt)).isEqualTo("![z|50%](assets/z.png)")
     }
 
     @Test
@@ -104,7 +110,25 @@ class BlocksTest {
         val blocks = Blocks.split("![z](assets/z.png)")
         val after = Blocks.setImageWidth(blocks, blocks[0].key, 0.25f)
 
-        assertThat(Blocks.join(after)).isEqualTo("![z](assets/z.png \"25%\")")
+        assertThat(Blocks.join(after)).isEqualTo("![z|25%](assets/z.png)")
+    }
+
+    @Test
+    fun `z pliku czyta 10 procent, a zapis sciaga do wspolnego progu`() {
+        val blocks = Blocks.split("![z](assets/z.png \"10%\")")
+
+        assertThat((blocks[0] as Block.Image).width).isWithin(0.001f).of(0.1f)
+        assertThat(Blocks.join(blocks)).isEqualTo("![z|20%](assets/z.png)")
+    }
+
+    @Test
+    fun `nazwa z nawiasem nie gubi szerokosci w zadnym zapisie`() {
+        val fromAlt = Blocks.split("![z|40%](assets/zdjecie (2).png)")
+        val fromTitle = Blocks.split("![z](assets/zdjecie (2).png \"40%\")")
+
+        assertThat((fromAlt[0] as Block.Image).url).isEqualTo("assets/zdjecie (2).png")
+        assertThat((fromTitle[0] as Block.Image).url).isEqualTo("assets/zdjecie (2).png")
+        assertThat(Blocks.join(fromTitle)).isEqualTo("![z|40%](assets/zdjecie (2).png)")
     }
 
     @Test

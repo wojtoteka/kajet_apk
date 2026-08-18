@@ -588,7 +588,7 @@ private fun ImageBlock(
     ) {
         Box(
             Modifier
-                .fillMaxWidth(block.width.coerceIn(Block.SMALLEST_WIDTH, Block.FULL_WIDTH))
+                .fillMaxWidth(block.width.coerceIn(0.01f, Block.FULL_WIDTH))
                 .background(colors.desk, RoundedCornerShape(Kajet.dimens.corner))
                 .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner)),
             contentAlignment = Alignment.Center,

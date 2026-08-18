@@ -33,9 +33,11 @@ sealed interface Block {
         val alt: String,
         val url: String,
         /**
-         * Ile szerokości notatki zajmuje zdjęcie, od 0.1 do 1. Zapisuje się
-         * w tytule obrazka w markdownie, więc plik nadal czyta każdy inny
-         * program, tylko procent go nie obchodzi.
+         * Ile szerokości notatki zajmuje zdjęcie, od 0.01 do 1.
+         *
+         * Kanoniczny zapis to `![opis|60%](assets/plik.png)` — tak samo
+         * na stronie. Stary zapis z tabletu, `![opis](assets/plik.png "60%")`,
+         * nadal czytamy. Przy zapisie ściągamy do 20–100%, jak serwer.
          */
         val width: Float = FULL_WIDTH,
     ) : Block {
@@ -50,17 +52,20 @@ sealed interface Block {
     companion object {
         const val ATTACHMENT_PREFIX = "assets/"
         const val FULL_WIDTH = 1f
-        const val SMALLEST_WIDTH = 0.1f
+        /** Najmniejsza szerokość przy zapisie i suwaku — ten sam próg co serwer. */
+        const val SMALLEST_WIDTH = 0.2f
     }
 }
 
 object Blocks {
 
     // URL łapany leniwie, bo magazyn potrafi nadać nazwę ze spacją i nawiasem
-    // ("zdjecie (2).jpg"); tytuł w cudzysłowie ma pierwszeństwo przed URL-em.
+    // ("zdjecie (2).jpg"); tytuł w cudzysłowie (stary zapis szerokości) ma
+    // pierwszeństwo przed URL-em.
     private val imageOnly =
         Regex("""^\s*!\[([^\]]*)]\((.+?)(?:\s+"([^"]*)")?\)\s*$""")
 
+    private val altWidth = Regex("""^(.*?)\s*\|\s*(\d{1,3})\s*%$""")
     private val percentTitle = Regex("""^(\d{1,3})%$""")
 
     private val taskOnly = Regex("""^\s*[-*+] \[([ xX])] ?(.*)$""")
@@ -132,11 +137,12 @@ object Blocks {
             val image = if (inCode) null else imageOnly.find(line)
             if (image != null) {
                 closeText()
+                val (alt, width) = readImageSize(image.groupValues[1], image.groupValues[3])
                 result += Block.Image(
                     key = "o${number++}",
-                    alt = image.groupValues[1],
+                    alt = alt,
                     url = image.groupValues[2].trim(),
-                    width = widthFromTitle(image.groupValues[3]),
+                    width = width,
                 )
                 at++
                 continue
@@ -170,10 +176,36 @@ object Blocks {
         return result
     }
 
-    private fun widthFromTitle(title: String): Float {
-        val percent = percentTitle.find(title.trim())?.groupValues?.get(1)?.toIntOrNull()
-            ?: return Block.FULL_WIDTH
-        return (percent / 100f).coerceIn(Block.SMALLEST_WIDTH, Block.FULL_WIDTH)
+    /**
+     * Opis i szerokość z obu zapisów: `![opis|60%](url)` oraz
+     * `![opis](url "60%")`. Z pliku bierzemy, co stoi (także 10%);
+     * dolny próg 20% obowiązuje dopiero przy zapisie.
+     */
+    private fun readImageSize(rawAlt: String, title: String): Pair<String, Float> {
+        val fromAlt = altWidth.find(rawAlt)
+        if (fromAlt != null) {
+            return fromAlt.groupValues[1] to percentFromFile(fromAlt.groupValues[2])
+        }
+        val fromTitle = percentTitle.find(title.trim())?.groupValues?.get(1)
+        if (fromTitle != null) {
+            return rawAlt to percentFromFile(fromTitle)
+        }
+        return rawAlt to Block.FULL_WIDTH
+    }
+
+    private fun percentFromFile(raw: String): Float {
+        val percent = raw.toIntOrNull() ?: return Block.FULL_WIDTH
+        return percent.coerceIn(1, 100) / 100f
+    }
+
+    /** Kanoniczny opis: sam tekst, a przy węższym zdjęciu dopisek `|NN%`. */
+    private fun writeImageAlt(alt: String, width: Float): String {
+        val clean = readImageSize(alt, "").first
+        val percent = (width * 100).roundToInt().coerceIn(
+            (Block.SMALLEST_WIDTH * 100).roundToInt(),
+            (Block.FULL_WIDTH * 100).roundToInt(),
+        )
+        return if (width >= Block.FULL_WIDTH || percent >= 100) clean else "$clean|$percent%"
     }
 
     fun join(blocks: List<Block>): String {
@@ -190,11 +222,7 @@ object Blocks {
 
     private fun render(block: Block): String = when (block) {
         is Block.Text -> block.content
-        is Block.Image -> if (block.width >= Block.FULL_WIDTH) {
-            "![${block.alt}](${block.url})"
-        } else {
-            "![${block.alt}](${block.url} \"${(block.width * 100).roundToInt()}%\")"
-        }
+        is Block.Image -> "![${writeImageAlt(block.alt, block.width)}](${block.url})"
         is Block.Task -> "- [${if (block.done) "x" else " "}] ${block.content}"
         is Block.Table -> renderTable(block)
     }
@@ -395,7 +423,11 @@ object Blocks {
 
     fun setAlt(blocks: List<Block>, key: String, alt: String): List<Block> =
         blocks.map { block ->
-            if (block is Block.Image && block.key == key) block.copy(alt = alt) else block
+            if (block is Block.Image && block.key == key) {
+                block.copy(alt = readImageSize(alt, "").first)
+            } else {
+                block
+            }
         }
 
     fun setImageWidth(blocks: List<Block>, key: String, width: Float): List<Block> =
