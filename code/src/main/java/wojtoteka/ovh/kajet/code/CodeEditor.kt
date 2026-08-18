@@ -48,6 +48,8 @@ import android.webkit.WebViewClient
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -66,7 +68,6 @@ import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -218,7 +219,7 @@ fun CodeEditor(
                 ) {
                     Icon(KajetIcons.Offline, null, tint = colors.danger, modifier = Modifier.size(18.dp))
                     Text(error.orEmpty(), style = Kajet.type.body, color = colors.text, modifier = Modifier.weight(1f))
-                    SecondaryButton(words.understood, model::dismissError)
+                    BarTextAction(words.understood, model::dismissError)
                 }
                 HorizontalRule()
             }
@@ -824,6 +825,37 @@ private fun PanelText(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .horizontalScroll(rememberScrollState()),
+        )
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  rzędzie komunikatu odcinał się od tła i na telefonie łamał etykietę
+  („Rozumiem"). Tu ten sam krój co treść paska, bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
         )
     }
 }

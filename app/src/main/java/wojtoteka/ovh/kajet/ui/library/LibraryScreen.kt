@@ -33,9 +33,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -158,7 +160,7 @@ fun LibraryScreen(
                     text = error.orEmpty(),
                     color = Kajet.colors.danger,
                 ) {
-                    SecondaryButton(words.understood, model::dismissError)
+                    BarTextAction(words.understood, model::dismissError)
                 }
             }
             /*
@@ -176,8 +178,10 @@ fun LibraryScreen(
                     text = "${words.notesStuck(stuckNotice.size)} ${words.stuckNothingLost}",
                     color = Kajet.colors.muted,
                 ) {
-                    SecondaryButton(words.retryStuckButton, model::retryStuck)
-                    SecondaryButton(words.understood, model::hideStuckNotice)
+                    // Dwa SecondaryButton 48 dp obok długiego zdania nie mieszczą
+                    // się na telefonie. Akcje tekstowe jak „Wyczyść" w konsoli.
+                    BarTextAction(words.retryStuckButton, model::retryStuck)
+                    BarTextAction(words.understood, model::hideStuckNotice)
                 }
             }
 
@@ -1312,5 +1316,37 @@ private fun FolderLookDialog(
             PrimaryButton(words.save, { onSave(color.id, icon.id) })
             SecondaryButton(words.cancel, onClose)
         }
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w NoticeBar
+  obok długiego zdania odcinał się od tła i na telefonie łamał etykiety
+  („Spróbuj jeszcze raz", „Rozumiem"). Tu ten sam krój co etykiety paska,
+  bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
+        )
     }
 }

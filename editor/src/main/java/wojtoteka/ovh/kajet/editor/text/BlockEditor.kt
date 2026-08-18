@@ -56,7 +56,6 @@ import androidx.compose.ui.text.font.FontWeight
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.IconAction
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.SettingSlider
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.design.fontFamilyFor
@@ -689,12 +688,20 @@ private fun ImageBlock(
                     onChange = onWidth,
                     readout = { words.percentOf((it * 100).roundToInt()) },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Cztery SecondaryButton 48 dp nie mieszczą się w rzędzie
+                // rozmiaru zdjęcia. Przewijanie w bok jak w tabeli; akcje
+                // tekstowe jak „Wyczyść" w konsoli.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     listOf(0.25f, 0.5f, 0.75f, 1f).forEach { part ->
-                        SecondaryButton(
-                            text = words.percentOf((part * 100).roundToInt()),
-                            onClick = { onWidth(part) },
-                        )
+                        BarTextAction(words.percentOf((part * 100).roundToInt())) {
+                            onWidth(part)
+                        }
                     }
                 }
             }

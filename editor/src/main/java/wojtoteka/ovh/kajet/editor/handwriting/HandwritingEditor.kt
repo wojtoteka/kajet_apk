@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -435,7 +436,7 @@ fun HandwritingEditor(
                 ) {
                     Icon(KajetIcons.ErrorMark, null, tint = colors.danger, modifier = Modifier.size(18.dp))
                     Text(error.orEmpty(), style = Kajet.type.body, color = colors.text)
-                    SecondaryButton(words.understood, model::dismissError)
+                    BarTextAction(words.understood, model::dismissError)
                 }
             }
 
@@ -1679,6 +1680,37 @@ private fun ChoiceRow(label: String, picked: Boolean, onClick: () -> Unit) {
             text = label,
             style = Kajet.type.body,
             color = if (picked) Kajet.colors.accent else Kajet.colors.text,
+        )
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  rzędzie komunikatu odcinał się od tła i na telefonie łamał etykietę
+  („Rozumiem"). Tu ten sam krój co treść paska, bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
         )
     }
 }

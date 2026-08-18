@@ -54,6 +54,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -533,12 +535,7 @@ fun MindMapEditor(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(names, style = Kajet.type.label, color = colors.text)
-                            SecondaryButton(
-                                text = words.disconnect,
-                                onClick = { model.disconnect(edgeId) },
-                                icon = KajetIcons.Bin,
-                                color = colors.danger,
-                            )
+                            BarTextAction(words.disconnect) { model.disconnect(edgeId) }
                             IconAction(KajetIcons.Close, words.keepConnection, { model.selectEdge(null) })
                         }
                     }
@@ -1243,6 +1240,37 @@ private fun NodePanel(
             onClose = { textColourPicker = false; onRememberColor(node.textColor) },
             withAlpha = false,
             recentColors = recentColors,
+        )
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnej
+  karcie krawędzi odcinał się od tła i na telefonie łamał etykietę
+  („Rozłącz"). Tu ten sam krój co nazwy węzłów, bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
         )
     }
 }

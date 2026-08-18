@@ -7,12 +7,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -22,15 +24,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.MainActivity
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.KajetTheme
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.text.AppLanguage
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.stringsFor
@@ -161,18 +165,51 @@ private fun ErrorScreen(
                 .verticalScroll(rememberScrollState()),
         )
 
-        // Dwa rzędy, nie jeden: trzy przyciski obok siebie nie mieszczą się
-        // na telefonie trzymanym w pionie i ostatni wychodził poza ekran.
+        // Restart zostaje PrimaryButton. Kopiowanie i wysyłka są akcjami
+        // tekstowymi jak „Wyczyść" w konsoli i schodzą pod spód — dwa
+        // SecondaryButton 48 dp w jednym rzędzie nie mieszczą się na telefonie.
         PrimaryButton(text = words.errorRestart, onClick = onRestart)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SecondaryButton(
-                text = words.errorCopyDetails,
-                onClick = { clipboard.setText(AnnotatedString(details)) },
-            )
-            SecondaryButton(
-                text = words.errorSendDetails,
-                onClick = { onSend(details.ifBlank { words.errorNoDetails }) },
-            )
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            BarTextAction(words.errorCopyDetails) {
+                clipboard.setText(AnnotatedString(details))
+            }
+            BarTextAction(words.errorSendDetails) {
+                onSend(details.ifBlank { words.errorNoDetails })
+            }
         }
+    }
+}
+
+/*
+  Akcja tekstowa, nie SecondaryButton. Ten ma 48 dp i obwódkę — w rzędzie
+  obok „Uruchom ponownie" odcinał się od tła i na telefonie wychodził
+  poza ekran. Tu ten sam krój co etykiety, bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
+        )
     }
 }
