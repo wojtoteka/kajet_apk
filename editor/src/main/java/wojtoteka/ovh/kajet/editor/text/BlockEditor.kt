@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
@@ -30,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -462,7 +465,13 @@ private fun TableBlock(
             }
         }
 
+        // Na wąskim ekranie rozmiar, dodawanie i kosze nie mieszczą się obok
+        // siebie. Przewijanie w bok jak w FormatBar; akcje tekstowe jak
+        // „Wyczyść" w konsoli — SecondaryButton 48 dp z obwódką łamał etykiety.
         Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -470,10 +479,10 @@ private fun TableBlock(
                 text = words.tableSize(block.rows.size, columns),
                 style = Kajet.type.meta,
                 color = colors.muted,
-                modifier = Modifier.weight(1f),
+                maxLines = 1,
             )
-            SecondaryButton(words.tableAddRow, onAddRow)
-            SecondaryButton(words.tableAddColumn, onAddColumn)
+            BarTextAction(words.tableAddRow, onAddRow)
+            BarTextAction(words.tableAddColumn, onAddColumn)
             IconAction(
                 icon = KajetIcons.Bin,
                 description = words.tableRemoveRow,
@@ -714,5 +723,37 @@ private fun ImageBlock(
                 )
             }
         }
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  rzędzie tabeli odcinał się od tła i na telefonie łamał etykiety
+  („Dodaj wiersz", „Dodaj kolumnę"). Tu ten sam krój co rozmiar tabeli,
+  bez ramki.
+*/
+@Composable
+private fun BarTextAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                onClick = onClick,
+                onClickLabel = text,
+                role = Role.Button,
+            )
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Kajet.type.label,
+            color = Kajet.colors.muted,
+            maxLines = 1,
+        )
     }
 }
