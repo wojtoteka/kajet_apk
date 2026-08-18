@@ -148,6 +148,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 path = path,
                 repo = container.library,
                 settings = container.settings,
+                loaded = settings,
                 export = container.export,
                 onBack = {
                     model.refreshAfterChange()

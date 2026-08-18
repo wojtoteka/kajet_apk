@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
@@ -52,19 +52,26 @@ class HandwritingViewModel(
     path: String,
     inkColor: Int,
     highlighterColor: Int,
+    rememberedPens: RememberedPen = RememberedPen(),
+    rememberedShapes: RememberedShape = RememberedShape(),
+    fingerBehavior: FingerBehavior = FingerBehavior.SCROLL,
 ) : NoteViewModel(repo, settings, path) {
 
-    private val _tool = MutableStateFlow(EditorTool.PEN)
+    /*
+      Pisak, kształt i palec biorą się ze snapshotu, który Kajet już ma
+      (ekran startowy czeka na DataStore). Gdyby tu wstawić domyślne wartości
+      i dograć zapamiętane w tle, pierwsza klatka pokazałaby zły przycisk,
+      a pierwsze pociągnięcie poszłoby niewłaściwym narzędziem.
+    */
+    private val _tool = MutableStateFlow(toolFrom(rememberedPens))
     val tool: StateFlow<EditorTool> = _tool.asStateFlow()
 
     private val _pens = MutableStateFlow(
-        PenSettings(penColor = inkColor, highlighterColor = highlighterColor),
+        pensFrom(rememberedPens, inkColor, highlighterColor),
     )
     val pens: StateFlow<PenSettings> = _pens.asStateFlow()
 
-    // Zanim ustawienia wczytają się z dysku, palec przewija. Kartka daje się
-    // wtedy przesunąć od pierwszego dotknięcia, a nie zostaje na niej kreska.
-    private val _fingerDraws = MutableStateFlow(false)
+    private val _fingerDraws = MutableStateFlow(fingerBehavior == FingerBehavior.DRAW)
     val fingerDraws: StateFlow<Boolean> = _fingerDraws.asStateFlow()
 
     fun toggleFinger() {
@@ -72,47 +79,12 @@ class HandwritingViewModel(
         _fingerDraws.value = next
         viewModelScope.launch {
             runCatching {
-                settings.setFingerBehavior(
-                    if (next) FingerBehavior.DRAW else FingerBehavior.SCROLL,
-                )
+                withContext(NonCancellable) {
+                    settings.setFingerBehavior(
+                        if (next) FingerBehavior.DRAW else FingerBehavior.SCROLL,
+                    )
+                }
             }
-        }
-    }
-
-    init {
-        viewModelScope.launch {
-            runCatching { settings.settings.first().fingerBehavior }
-                .getOrNull()
-                ?.let { _fingerDraws.value = it == FingerBehavior.DRAW }
-        }
-
-        // Pisak dobrany w poprzedniej notatce wraca tu, zanim człowiek zacznie pisać.
-        viewModelScope.launch {
-            val saved = runCatching { settings.settings.first().pens }.getOrNull() ?: return@launch
-            _pens.value = _pens.value.copy(
-                penKind = saved.tool
-                    ?.let { name -> runCatching { InkTool.valueOf(name) }.getOrNull() }
-                    ?: _pens.value.penKind,
-                /*
-                  Zapamiętany dawny „Biały" zlewał się z kartką; wraca kolor
-                  domyślny. Tak samo zwykły atrament: zapamiętany na jasnej
-                  kartce jest czarny i na ciemnej byłby niewidoczny, więc
-                  zamiast go przywracać, zostaje atrament TEJ kartki (przyszedł
-                  z ekranu notatki jako `inkColor` i już siedzi w _pens).
-                  Kolory dobrane świadomie - czerwony, zielony - wracają.
-                */
-                penColor = saved.color
-                    ?.takeUnless { it == InkPalette.LEGACY_WHITE_ARGB }
-                    ?.takeUnless { InkPalette.isDefaultInk(it) }
-                    ?: _pens.value.penColor,
-                penWidth = saved.width ?: _pens.value.penWidth,
-                penOpacity = saved.opacity ?: _pens.value.penOpacity,
-                highlighterColor = saved.highlighterColor ?: _pens.value.highlighterColor,
-                highlighterWidth = saved.highlighterWidth ?: _pens.value.highlighterWidth,
-                highlighterOpacity = saved.highlighterOpacity
-                    ?: _pens.value.highlighterOpacity,
-                eraserRadius = saved.eraserRadius ?: _pens.value.eraserRadius,
-            )
         }
     }
 
@@ -121,14 +93,16 @@ class HandwritingViewModel(
         _pens.value = next
         viewModelScope.launch {
             runCatching {
-                settings.setPen(
-                    RememberedPen(tool = next.penKind.name, color = next.penColor, width = next.penWidth, opacity = next.penOpacity,
-                        highlighterColor = next.highlighterColor,
-                        highlighterWidth = next.highlighterWidth,
-                        highlighterOpacity = next.highlighterOpacity,
-                        eraserRadius = next.eraserRadius,
-                    ),
-                )
+                withContext(NonCancellable) {
+                    settings.setPen(
+                        RememberedPen(tool = next.penKind.name, color = next.penColor, width = next.penWidth, opacity = next.penOpacity,
+                            highlighterColor = next.highlighterColor,
+                            highlighterWidth = next.highlighterWidth,
+                            highlighterOpacity = next.highlighterOpacity,
+                            eraserRadius = next.eraserRadius,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -424,40 +398,15 @@ class HandwritingViewModel(
 
     // Kształty
 
-    private val _shapes = MutableStateFlow(ShapeSettings(color = inkColor))
+    private val _shapes = MutableStateFlow(shapesFrom(rememberedShapes, inkColor))
     val shapeSettings: StateFlow<ShapeSettings> = _shapes.asStateFlow()
 
     /** Blokada proporcji 1:1 z panelu — dla tych, którzy nie mają klawiatury. */
-    private val _squareShapes = MutableStateFlow(false)
+    private val _squareShapes = MutableStateFlow(rememberedShapes.square ?: false)
     val squareShapes: StateFlow<Boolean> = _squareShapes.asStateFlow()
 
     private val _selectedShape = MutableStateFlow<String?>(null)
     val selectedShape: StateFlow<String?> = _selectedShape.asStateFlow()
-
-    /*
-      Osobny init, niżej niż pola powyżej: blok wpisany na górze klasy sięgałby
-      po `_shapes`, zanim to pole w ogóle powstanie.
-    */
-    init {
-        viewModelScope.launch {
-            val saved = runCatching { settings.settings.first().shapes }.getOrNull() ?: return@launch
-            _shapes.value = _shapes.value.copy(
-                kind = saved.kind
-                    ?.let { name -> runCatching { ShapeKind.valueOf(name) }.getOrNull() }
-                    ?: _shapes.value.kind,
-                // Kolor jak przy pisaku: zapamiętany atrament domyślny zostaje
-                // atramentem TEJ kartki, żeby na ciemnej nie wyszedł niewidoczny.
-                color = saved.color
-                    ?.takeUnless { it == InkPalette.LEGACY_WHITE_ARGB }
-                    ?.takeUnless { InkPalette.isDefaultInk(it) }
-                    ?: _shapes.value.color,
-                strokeWidth = saved.strokeWidth ?: _shapes.value.strokeWidth,
-                fill = saved.fill ?: _shapes.value.fill,
-                opacity = saved.opacity ?: _shapes.value.opacity,
-            )
-            _squareShapes.value = saved.square ?: false
-        }
-    }
 
     fun addShape(page: Int, shape: ShapeElement) {
         val sheet = document.value?.page(page) ?: return
@@ -548,16 +497,18 @@ class HandwritingViewModel(
         val current = _shapes.value
         viewModelScope.launch {
             runCatching {
-                settings.setShape(
-                    RememberedShape(
-                        kind = current.kind.name,
-                        color = current.color,
-                        strokeWidth = current.strokeWidth,
-                        fill = current.fill,
-                        opacity = current.opacity,
-                        square = square,
-                    ),
-                )
+                withContext(NonCancellable) {
+                    settings.setShape(
+                        RememberedShape(
+                            kind = current.kind.name,
+                            color = current.color,
+                            strokeWidth = current.strokeWidth,
+                            fill = current.fill,
+                            opacity = current.opacity,
+                            square = square,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -797,6 +748,68 @@ class HandwritingViewModel(
 
     companion object {
         const val GROW_THRESHOLD = 90f
+
+        internal fun pensFrom(
+            saved: RememberedPen,
+            inkColor: Int,
+            highlighterColor: Int,
+        ): PenSettings {
+            val base = PenSettings(penColor = inkColor, highlighterColor = highlighterColor)
+            return base.copy(
+                penKind = saved.tool
+                    ?.let { name -> runCatching { InkTool.valueOf(name) }.getOrNull() }
+                    ?: base.penKind,
+                /*
+                  Zapamiętany dawny „Biały" zlewał się z kartką; wraca kolor
+                  domyślny. Tak samo zwykły atrament: zapamiętany na jasnej
+                  kartce jest czarny i na ciemnej byłby niewidoczny, więc
+                  zamiast go przywracać, zostaje atrament TEJ kartki (przyszedł
+                  z ekranu notatki jako `inkColor`). Kolory dobrane świadomie
+                  — czerwony, zielony — wracają.
+                */
+                penColor = restoredInk(saved.color, base.penColor),
+                penWidth = saved.width ?: base.penWidth,
+                penOpacity = saved.opacity ?: base.penOpacity,
+                highlighterColor = saved.highlighterColor ?: base.highlighterColor,
+                highlighterWidth = saved.highlighterWidth ?: base.highlighterWidth,
+                highlighterOpacity = saved.highlighterOpacity ?: base.highlighterOpacity,
+                eraserRadius = saved.eraserRadius ?: base.eraserRadius,
+            )
+        }
+
+        internal fun shapesFrom(saved: RememberedShape, inkColor: Int): ShapeSettings {
+            val base = ShapeSettings(color = inkColor)
+            return base.copy(
+                kind = saved.kind
+                    ?.let { name -> runCatching { ShapeKind.valueOf(name) }.getOrNull() }
+                    ?: base.kind,
+                color = restoredInk(saved.color, base.color),
+                strokeWidth = saved.strokeWidth ?: base.strokeWidth,
+                fill = saved.fill ?: base.fill,
+                opacity = saved.opacity ?: base.opacity,
+            )
+        }
+
+        /*
+          `RememberedPen.tool` to rodzaj tuszu (pióro, cienkopis…), nie przycisk
+          paska. Zakreślacz ma tę samą nazwę w obu enumeracjach, więc wraca
+          jako narzędzie; gumka i lasso nie są tu zapisywane.
+        */
+        internal fun toolFrom(saved: RememberedPen): EditorTool {
+            val name = saved.tool ?: return EditorTool.PEN
+            runCatching { EditorTool.valueOf(name) }.getOrNull()?.let { return it }
+            return if (runCatching { InkTool.valueOf(name) }.getOrNull() == InkTool.HIGHLIGHTER) {
+                EditorTool.HIGHLIGHTER
+            } else {
+                EditorTool.PEN
+            }
+        }
+
+        private fun restoredInk(saved: Int?, fallback: Int): Int =
+            saved
+                ?.takeUnless { it == InkPalette.LEGACY_WHITE_ARGB }
+                ?.takeUnless { InkPalette.isDefaultInk(it) }
+                ?: fallback
     }
 
     class Factory(
@@ -805,9 +818,21 @@ class HandwritingViewModel(
         private val path: String,
         private val inkColor: Int,
         private val highlighterColor: Int,
+        private val pens: RememberedPen,
+        private val shapes: RememberedShape,
+        private val fingerBehavior: FingerBehavior,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            HandwritingViewModel(repo, settings, path, inkColor, highlighterColor) as T
+            HandwritingViewModel(
+                repo,
+                settings,
+                path,
+                inkColor,
+                highlighterColor,
+                pens,
+                shapes,
+                fingerBehavior,
+            ) as T
     }
 }

@@ -42,6 +42,7 @@ import wojtoteka.ovh.kajet.container
 import wojtoteka.ovh.kajet.export.ExportDialog
 import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.storage.SettingsStore
+import wojtoteka.ovh.kajet.storage.KajetSettings
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 
 @Composable
@@ -49,6 +50,7 @@ fun NoteScreen(
     path: String,
     repo: LibraryRepository,
     settings: SettingsStore,
+    loaded: KajetSettings,
     export: ExportService,
     onBack: () -> Unit,
 ) {
@@ -89,6 +91,9 @@ fun NoteScreen(
                     path = path,
                     inkColor = colors.defaultInk.toArgb(),
                     highlighterColor = InkPalette.HighlighterYellow.toArgb(),
+                    pens = loaded.pens,
+                    shapes = loaded.shapes,
+                    fingerBehavior = loaded.fingerBehavior,
                 ),
             )
             val context = LocalContext.current
