@@ -69,4 +69,33 @@ object FileNames {
     fun isNote(name: String): Boolean = name.endsWith(".note", ignoreCase = true)
 
     fun isHidden(name: String): Boolean = name.startsWith(".")
+
+    /**
+     * Brakujące rozszerzenie dobieramy z typu MIME. Podgląd zdjęcia i PDF
+     * patrzy na nazwę pliku, nie na typ z intencji — bez `.jpg` / `.pdf`
+     * skopiowany plik szedłby w komunikat o binarce.
+     */
+    fun withMimeExtension(fileName: String, mime: String?): String {
+        val name = fileName.substringAfterLast('/').ifBlank { FALLBACK_NAME }
+        val extension = name.substringAfterLast('.', missingDelimiterValue = "")
+        if (extension.isNotEmpty() && extension != name) return name
+        val fromMime = extensionForMime(mime) ?: return name
+        return "$name.$fromMime"
+    }
+
+    fun extensionForMime(mime: String?): String? {
+        val type = mime?.substringBefore(';')?.trim()?.lowercase() ?: return null
+        return when (type) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/gif" -> "gif"
+            "image/webp" -> "webp"
+            "application/pdf" -> "pdf"
+            "text/plain" -> "txt"
+            "text/html" -> "html"
+            "text/csv" -> "csv"
+            "application/json" -> "json"
+            else -> null
+        }
+    }
 }

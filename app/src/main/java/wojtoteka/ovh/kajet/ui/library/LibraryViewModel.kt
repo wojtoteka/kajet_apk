@@ -1,5 +1,6 @@
 package wojtoteka.ovh.kajet.ui.library
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -40,6 +41,8 @@ import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.export.ExportFormat
 import wojtoteka.ovh.kajet.export.ExportService
+import wojtoteka.ovh.kajet.share.IncomingShare
+import wojtoteka.ovh.kajet.share.ShareImport
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
 
@@ -383,6 +386,16 @@ class LibraryViewModel(
     fun newCodeFile(name: String, language: CodeLanguage, onCreated: (LibraryItem) -> Unit = {}) = inBackground {
         val item = repo.createCodeFile(_path.value, name, language)
         onCreated(item)
+    }
+
+    fun importIncoming(
+        share: IncomingShare,
+        context: Context,
+        onImported: (LibraryItem) -> Unit,
+    ) = inBackground {
+        val item = ShareImport.intoLibrary(context, repo, share, _path.value)
+        repo.rememberOpened(item)
+        onImported(item)
     }
 
     fun rename(item: LibraryItem, newName: String) = inBackground {

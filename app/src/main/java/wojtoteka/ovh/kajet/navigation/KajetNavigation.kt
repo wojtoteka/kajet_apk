@@ -47,6 +47,7 @@ import wojtoteka.ovh.kajet.cloud.AccountViewModel
 import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
 import wojtoteka.ovh.kajet.ui.settings.SettingsScreen
 import wojtoteka.ovh.kajet.storage.KajetSettings
+import wojtoteka.ovh.kajet.share.ShareIncoming
 
 object Routes {
     const val START = "start"
@@ -67,7 +68,9 @@ object Routes {
 fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val authUri by DeviceAuthBridge.pending.collectAsStateWithLifecycle()
+    val incomingShare by ShareIncoming.pending.collectAsStateWithLifecycle()
     val backStack by navController.currentBackStackEntryAsState()
 
     val model: LibraryViewModel = viewModel(
@@ -120,6 +123,19 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         if (backStack?.destination?.route == Routes.ACCOUNT) return@LaunchedEffect
         navController.navigate(Routes.ACCOUNT) {
             launchSingleTop = true
+        }
+    }
+
+    // Udostępnij / Otwórz w: bez katalogu notatek najpierw wybór folderu,
+    // potem kopia do biblioteki i ten sam open() co przy stuknięciu w spisie.
+    LaunchedEffect(incomingShare, settings.libraryFolder, backStack?.destination?.route) {
+        val share = incomingShare ?: return@LaunchedEffect
+        if (!container.library.hasPersistedAccess(settings.libraryFolder)) return@LaunchedEffect
+        val route = backStack?.destination?.route
+        if (route == null || route == Routes.START) return@LaunchedEffect
+        ShareIncoming.clear()
+        model.importIncoming(share, context) { item ->
+            open(navController, item)
         }
     }
 

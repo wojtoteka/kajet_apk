@@ -461,6 +461,38 @@ class LibraryStoreTest {
     }
 
     @Test
+    fun `importing a jpeg keeps the bytes and is an other file`() {
+        val source = temporaryFolder.newFile("zrodlo.jpg")
+        source.writeBytes(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0x01, 0x02))
+        val item = store.importFile(
+            "",
+            "wakacje",
+            "image/jpeg",
+            android.net.Uri.fromFile(source),
+        )
+
+        assertThat(item.name).isEqualTo("wakacje.jpg")
+        assertThat(item.type).isEqualTo(ItemType.OTHER_FILE)
+        assertThat(File(root, "wakacje.jpg").readBytes())
+            .isEqualTo(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0x01, 0x02))
+    }
+
+    @Test
+    fun `importing a text file keeps a recognised language`() {
+        val source = temporaryFolder.newFile("zrodlo.txt")
+        source.writeText("linia")
+        val item = store.importFile(
+            "",
+            "lista.txt",
+            "text/plain",
+            android.net.Uri.fromFile(source),
+        )
+
+        assertThat(item.type).isEqualTo(ItemType.CODE_FILE)
+        assertThat(store.readText(item.path)).isEqualTo("linia")
+    }
+
+    @Test
     fun `walking the tree finds everything outside the bin`() {
         store.createFolder("", "Matematyka")
         store.createNote("Matematyka", "Całki", NoteKind.HANDWRITTEN)

@@ -73,6 +73,16 @@ class FileNamesTest {
     }
 
     @Test
+    fun `a mime type supplies a missing extension`() {
+        assertThat(FileNames.withMimeExtension("wakacje", "image/jpeg")).isEqualTo("wakacje.jpg")
+        assertThat(FileNames.withMimeExtension("skan", "application/pdf")).isEqualTo("skan.pdf")
+        assertThat(FileNames.withMimeExtension("notatka.txt", "text/plain")).isEqualTo("notatka.txt")
+        assertThat(FileNames.withMimeExtension("zdjecie.PNG", "image/png")).isEqualTo("zdjecie.PNG")
+        assertThat(FileNames.extensionForMime("image/webp")).isEqualTo("webp")
+        assertThat(FileNames.extensionForMime("application/octet-stream")).isNull()
+    }
+
+    @Test
     fun `recognising a note directory`() {
         assertThat(FileNames.isNote("Całki.note")).isTrue()
         assertThat(FileNames.isNote("Całki")).isFalse()

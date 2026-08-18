@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.storage
 
 import android.content.ContentResolver
+import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
@@ -18,6 +19,7 @@ import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.core.model.TextContent
 import java.io.IOException
 import java.util.UUID
+import wojtoteka.ovh.kajet.core.text.cannotReadFile
 import wojtoteka.ovh.kajet.core.text.entryGone
 import wojtoteka.ovh.kajet.core.text.fileGone
 import wojtoteka.ovh.kajet.core.text.fileGoneFromBin
@@ -371,6 +373,36 @@ class LibraryStore(
         )
         val file = DiskFiles.createFile(parent, nameOnDisk, DiskFiles.MIME_TEXT)
         DiskFiles.writeText(resolver, file, content)
+
+        val language = CodeLanguage.fromExtension(nameOnDisk)
+        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        return LibraryItem(
+            id = file.uri.toString(),
+            path = path,
+            name = file.name ?: nameOnDisk,
+            type = if (language != null) ItemType.CODE_FILE else ItemType.OTHER_FILE,
+            documentUri = file.uri.toString(),
+            updatedAt = file.lastModified(),
+            language = language,
+        )
+    }
+
+    /**
+     * Kopia pliku z zewnątrz (Udostępnij / Otwórz w) do katalogu notatek.
+     * Bajty idą strumieniem — PDF i zdjęcia nie mieszczą się w Stringu.
+     */
+    fun importFile(parentPath: String, fileName: String, mime: String, source: Uri): LibraryItem {
+        val parent = requireFolder(parentPath)
+        val named = FileNames.withMimeExtension(fileName, mime)
+        val extension = if (named.contains('.')) "." + named.substringAfterLast('.') else ""
+        val nameOnDisk = FileNames.unique(
+            name = named.removeSuffix(extension),
+            occupied = DiskFiles.occupiedNames(parent),
+            extension = extension,
+        )
+        val type = mime.ifBlank { "application/octet-stream" }
+        val file = DiskFiles.createFile(parent, nameOnDisk, type)
+        DiskFiles.copyUri(resolver, source, file)
 
         val language = CodeLanguage.fromExtension(nameOnDisk)
         val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"

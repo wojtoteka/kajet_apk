@@ -315,6 +315,23 @@ class LibraryRepository(
             item
         }
 
+    /**
+     * Plik z Udostępnij / Otwórz w — kopia w katalogu notatek, potem ten sam
+     * `open()` co w bibliotece (notatka, edytor, podgląd zdjęcia/PDF, binarka).
+     */
+    suspend fun importFile(
+        parent: String,
+        fileName: String,
+        mime: String,
+        source: Uri,
+    ): LibraryItem = withContext(io) {
+        val item = requireStore().importFile(parent, fileName, mime, source)
+        dao.upsertKeepingOpened(item.toIndexEntry())
+        refresh()
+        if (item.type == ItemType.CODE_FILE) onCodeCreated?.invoke(item.path)
+        item
+    }
+
     override suspend fun readNote(path: String): NoteDocument = withContext(io) {
         requireStore().readNote(path)
     }

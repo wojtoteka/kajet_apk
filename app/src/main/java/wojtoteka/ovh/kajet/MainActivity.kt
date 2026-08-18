@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.awaria.CrashLog
 import wojtoteka.ovh.kajet.awaria.ErrorActivity
 import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
+import wojtoteka.ovh.kajet.share.ShareIncoming
 import wojtoteka.ovh.kajet.core.awaria.ErrorBoundary
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.KajetTheme
@@ -59,6 +60,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         captureAuthIntent(intent)
+        // Po obrocie ekranu albo śmierci procesu system oddaje tę samą
+        // intencję jeszcze raz — bez tego warunku plik wjeżdżałby do
+        // biblioteki podwójnie.
+        if (savedInstanceState == null) ShareIncoming.offer(intent)
 
         // Awaria, która trafiła Kajet zwinięty do tła, nie mogła wtedy otworzyć
         // ekranu — od Androida 12 system na to nie pozwala. Raport został w
@@ -85,6 +90,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureAuthIntent(intent)
+        ShareIncoming.offer(intent)
     }
 
     override fun onResume() {

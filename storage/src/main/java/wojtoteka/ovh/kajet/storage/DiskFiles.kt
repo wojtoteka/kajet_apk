@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.storage
 
 import android.content.ContentResolver
+import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -54,6 +55,31 @@ internal object DiskFiles {
 
     fun writeText(resolver: ContentResolver, file: DocumentFile, content: String) {
         writeBytes(resolver, file, content.toByteArray(Charsets.UTF_8))
+    }
+
+    fun copyUri(resolver: ContentResolver, source: Uri, target: DocumentFile) {
+        try {
+            val stream = resolver.openInputStream(source)
+                ?: throw IOException(words.cannotReadFile(target.name))
+            stream.use { input ->
+                val plain = plainFile(target)
+                if (plain != null) {
+                    plain.outputStream().use { output ->
+                        input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                        output.flush()
+                    }
+                    return
+                }
+                val output = resolver.openOutputStream(target.uri, "rwt")
+                    ?: throw IOException(words.cannotSaveFile(target.name))
+                output.use {
+                    input.copyTo(it, DEFAULT_BUFFER_SIZE)
+                    it.flush()
+                }
+            }
+        } catch (e: FileNotFoundException) {
+            throw IOException(words.cannotReadFile(target.name), e)
+        }
     }
 
     fun fileForWrite(folder: DocumentFile, name: String, mime: String): DocumentFile {
