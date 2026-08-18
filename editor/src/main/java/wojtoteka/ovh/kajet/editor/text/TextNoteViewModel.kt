@@ -51,12 +51,7 @@ class TextNoteViewModel(
     fun setFont(font: NoteFont) = changeAppearance { it.copy(font = font) }
 
     fun setFontSize(points: Float) = changeAppearance {
-        it.copy(
-            fontSize = points.coerceIn(
-                TextContent.SMALLEST_SIZE,
-                TextContent.LARGEST_SIZE,
-            ),
-        )
+        it.copy(fontSize = TextContent.storedFontSize(points))
     }
 
     /**

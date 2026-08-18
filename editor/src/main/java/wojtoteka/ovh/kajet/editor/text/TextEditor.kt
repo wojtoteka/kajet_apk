@@ -793,7 +793,8 @@ private fun FormatBar(
                     modifier = Modifier.width(24.dp),
                 )
                 FormatGlyph("+", words.largerText, { onNoteSize(noteSize + 1f) })
-                BarTextAction(words.defaultSize) { onNoteSize(TextContent.DEFAULT_SIZE) }
+                // 0, nie DEFAULT_SIZE: na dysku zero znaczy motyw. 17 to tylko podgląd.
+                BarTextAction(words.defaultSize) { onNoteSize(0f) }
 
                 Divider()
 

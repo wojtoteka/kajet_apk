@@ -343,6 +343,12 @@ data class TextContent(
     val markdown: String = "",
     val drawings: List<InlineDrawing> = emptyList(),
     val font: NoteFont = NoteFont.BODY,
+    /**
+     * 0 = wielkość z konta/motywu, tak samo jak na stronie. Wybrana ręcznie
+     * wielkość to 10–48. [DEFAULT_SIZE] to tylko podgląd zera — nie zapisuje
+     * się jej z powrotem, bo po synchronizacji notatka zostawała na 17 na
+     * zawsze.
+     */
     val fontSize: Float = 0f,
     val textColor: Int = 0,
     val align: NoteAlign = NoteAlign.LEFT,
@@ -351,6 +357,13 @@ data class TextContent(
         const val DEFAULT_SIZE = 17f
         const val SMALLEST_SIZE = 10f
         const val LARGEST_SIZE = 48f
+
+        /**
+         * Zero zostaje zerem (motyw). Reszta wchodzi w 10–48, żeby plus/minus
+         * nie zapisał 9 ani 49.
+         */
+        fun storedFontSize(points: Float): Float =
+            if (points <= 0f) 0f else points.coerceIn(SMALLEST_SIZE, LARGEST_SIZE)
     }
 }
 
