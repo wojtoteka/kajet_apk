@@ -114,6 +114,7 @@ fun MindMapEditor(
     val inkLabel by model.inkLabel.collectAsStateWithLifecycle()
     val saveState by model.saveState.collectAsStateWithLifecycle()
     val lastSave by model.lastSave.collectAsStateWithLifecycle()
+    val inCloud by model.inCloud.collectAsStateWithLifecycle()
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
     val dragged by model.draggedLine.collectAsStateWithLifecycle()
     val selectedEdge by model.selectedEdge.collectAsStateWithLifecycle()
@@ -686,7 +687,7 @@ fun MindMapEditor(
                         field()
                     },
                 )
-                SaveIndicator(state = saveState, lastSave = lastSave)
+                SaveIndicator(state = saveState, lastSave = lastSave, inCloud = inCloud)
             }
         }
 

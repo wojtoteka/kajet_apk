@@ -125,6 +125,7 @@ fun HandwritingEditor(
     val imageBitmaps by model.imageBitmaps.collectAsStateWithLifecycle()
     val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
     val lastSave by model.lastSave.collectAsStateWithLifecycle()
+    val inCloud by model.inCloud.collectAsStateWithLifecycle()
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
     val shapes by model.shapeSettings.collectAsStateWithLifecycle()
     val selectedShape by model.selectedShape.collectAsStateWithLifecycle()
@@ -523,6 +524,7 @@ fun HandwritingEditor(
                 title = document?.title.orEmpty(),
                 state = saveState,
                 lastSave = lastSave,
+                inCloud = inCloud,
                 pageCount = handwriting?.pages?.size ?: 0,
                 tool = tool,
                 pens = pens,
@@ -602,6 +604,7 @@ fun HandwritingEditor(
                     title = document?.title.orEmpty(),
                     state = saveState,
                     lastSave = lastSave,
+                    inCloud = inCloud,
                     pageCount = handwriting?.pages?.size ?: 0,
                     tool = tool,
                     pens = pens,
@@ -809,6 +812,7 @@ private fun TopBar(
     title: String,
     state: SaveState,
     lastSave: Long?,
+    inCloud: Boolean?,
     pageCount: Int,
     tool: EditorTool,
     pens: PenSettings,
@@ -854,7 +858,7 @@ private fun TopBar(
                 field()
             },
         )
-        SaveIndicator(state = state, lastSave = lastSave)
+        SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
         if (pageCount > 1 && !narrow) {
             Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
         }

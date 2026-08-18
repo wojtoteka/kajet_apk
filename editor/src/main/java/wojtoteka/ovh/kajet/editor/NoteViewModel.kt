@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.ai.AiHooks
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
@@ -42,6 +44,14 @@ open class NoteViewModel(
 
     private val _lastSave = MutableStateFlow<Long?>(null)
     val lastSave: StateFlow<Long?> = _lastSave.asStateFlow()
+
+    /*
+      Czy serwer ma tę notatkę. „Zapisane" znaczy dysk; ta flaga to osobny
+      sygnał z kolejki i zapamiętanej wersji. null — nie ma konta, ikony
+      chmury nie ma.
+    */
+    private val _inCloud = MutableStateFlow<Boolean?>(null)
+    val inCloud: StateFlow<Boolean?> = _inCloud.asStateFlow()
 
     /*
       Notatka zniknęła z dysku na polecenie serwera — ktoś skasował ją na
@@ -140,12 +150,18 @@ open class NoteViewModel(
                 }
             }
         }
+
+        viewModelScope.launch(failureHandler("stan chmury $path")) {
+            val lookup = repo.cloudSave ?: return@launch
+            merge(lookup.changes(), document.map { }).collect { refreshCloudSave() }
+        }
     }
 
     private suspend fun load() {
         try {
             _document.value = repo.readNote(path)
             _saveState.value = SaveState.SAVED
+            refreshCloudSave()
         } catch (e: Exception) {
             _error.value = e.message ?: words.noteOpenFailed
             _saveState.value = SaveState.ERROR
@@ -241,6 +257,7 @@ open class NoteViewModel(
             _saveState.value = SaveState.SAVED
             _lastSave.value = System.currentTimeMillis()
             _error.value = null
+            refreshCloudSave()
         } catch (e: Exception) {
             _saveState.value = SaveState.ERROR
             _error.value = e.message ?: words.noteSaveFailed
@@ -282,6 +299,7 @@ open class NoteViewModel(
         // czego pilnować i nie może się zapisać w tle pod martwą ścieżką.
         discarded = true
         _saveState.value = SaveState.SAVED
+        refreshCloudSave()
         return true
     }
 
@@ -351,6 +369,10 @@ open class NoteViewModel(
 
     fun dismissError() {
         _error.value = null
+    }
+
+    private fun refreshCloudSave() {
+        _inCloud.value = repo.cloudSave?.inCloud(path, _document.value?.id)
     }
 
     protected fun setError(text: String) {

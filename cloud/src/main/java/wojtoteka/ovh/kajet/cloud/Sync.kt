@@ -113,6 +113,22 @@ class Sync(
         }
     }
 
+    /**
+     * Ikona chmury przy „Zapisane": czy serwer ma tę notatkę, czy tylko dysk.
+     *
+     * true — nie czeka w kolejce i znamy serwerową wersję.
+     * false — jest konto, ale wpis w kolejce albo brak potwierdzenia.
+     * null — wylogowany; nie twierdzimy niczego o chmurze.
+     */
+    fun cloudSave(path: String, noteId: String?): Boolean? {
+        val signedIn = runCatching { account.isSignedIn() }.getOrDefault(false)
+        val queued = runCatching { queue.all().any { it.path == path } }.getOrDefault(false)
+        val id = noteId?.takeIf { it.isNotBlank() }
+            ?: runCatching { codeIds.existingIdFor(path) }.getOrNull()
+        val known = !id.isNullOrBlank() && knownVersion(id) > 0
+        return cloudSaveState(signedIn = signedIn, inQueue = queued, knownOnServer = known)
+    }
+
     fun reportChange(path: String, noteId: String) {
         if (!account.isSignedIn()) return
         runCatching { queue.add(path, noteId) }

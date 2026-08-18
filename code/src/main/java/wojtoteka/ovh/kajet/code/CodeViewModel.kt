@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
@@ -80,6 +82,13 @@ class CodeViewModel(
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
     /*
+      Czy serwer ma ten plik. „Zapisane" znaczy dysk; ta flaga to osobny
+      sygnał z kolejki i zapamiętanej wersji. null — nie ma konta.
+    */
+    private val _inCloud = MutableStateFlow<Boolean?>(null)
+    val inCloud: StateFlow<Boolean?> = _inCloud.asStateFlow()
+
+    /*
       Plik zniknął z dysku na polecenie serwera — skasowany na innym
       urządzeniu, kiedy tu był otwarty. Kod na ekranie wciąż jest w pamięci;
       edytor pyta wtedy człowieka, czy zapisać go jako nowy plik, czy odrzucić.
@@ -142,6 +151,10 @@ class CodeViewModel(
                     _remotelyDeleted.value = true
                 }
             }
+        }
+        viewModelScope.launch(failureHandler("stan chmury $path")) {
+            val lookup = repo.cloudSave ?: return@launch
+            merge(lookup.changes(), _saved.map { }).collect { refreshCloudSave() }
         }
     }
 
@@ -234,6 +247,7 @@ class CodeViewModel(
         runCatching { repo.readText(path) }.onSuccess {
             _code.value = it
             _saved.value = true
+            refreshCloudSave()
         }
     }
 
@@ -263,6 +277,7 @@ class CodeViewModel(
                 repo.writeText(path, _code.value)
             }
             _saved.value = true
+            refreshCloudSave()
         } catch (e: Exception) {
             _error.value = e.message ?: words.codeSaveFailed
             // Droga zapasowa obok nasłuchu: zapis mógł paść dlatego, że plik
@@ -289,6 +304,7 @@ class CodeViewModel(
         }
         discarded = true
         _saved.value = true
+        refreshCloudSave()
         return true
     }
 
@@ -334,6 +350,10 @@ class CodeViewModel(
 
     fun dismissError() {
         _error.value = null
+    }
+
+    private fun refreshCloudSave() {
+        _inCloud.value = repo.cloudSave?.inCloud(path, null)
     }
 
     override fun onCleared() {

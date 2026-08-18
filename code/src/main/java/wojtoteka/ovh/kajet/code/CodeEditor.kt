@@ -88,6 +88,7 @@ fun CodeEditor(
     val running by model.running.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val saved by model.saved.collectAsStateWithLifecycle()
+    val inCloud by model.inCloud.collectAsStateWithLifecycle()
     val wordWrap by model.wordWrap.collectAsStateWithLifecycle()
     val query by model.query.collectAsStateWithLifecycle()
     val matches by model.matches.collectAsStateWithLifecycle()
@@ -172,7 +173,7 @@ fun CodeEditor(
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
 
-            FileHeader(model = model, saved = saved, narrow = narrow)
+            FileHeader(model = model, saved = saved, inCloud = inCloud, narrow = narrow)
             HorizontalRule()
 
             if (searchVisible) {
@@ -525,7 +526,7 @@ private fun WebView.applyBrowserPageCanvas() {
 }
 
 @Composable
-private fun FileHeader(model: CodeViewModel, saved: Boolean, narrow: Boolean) {
+private fun FileHeader(model: CodeViewModel, saved: Boolean, inCloud: Boolean?, narrow: Boolean) {
     val words = LocalStrings.current
     val side = if (narrow) 14.dp else 20.dp
     Row(
@@ -574,6 +575,18 @@ private fun FileHeader(model: CodeViewModel, saved: Boolean, narrow: Boolean) {
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
         )
+        if (saved && inCloud != null) {
+            Icon(
+                imageVector = if (inCloud) KajetIcons.CloudDone else KajetIcons.Offline,
+                contentDescription = if (inCloud) {
+                    words.noteInCloud
+                } else {
+                    words.noteWaitingForCloud
+                },
+                tint = if (inCloud) Kajet.colors.accent else Kajet.colors.muted,
+                modifier = Modifier.size(15.dp),
+            )
+        }
     }
 }
 

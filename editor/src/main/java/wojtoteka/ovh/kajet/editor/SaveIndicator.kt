@@ -40,6 +40,11 @@ fun SaveIndicator(
     state: SaveState,
     lastSave: Long?,
     modifier: Modifier = Modifier,
+    /*
+      Przy SAVED. „Zapisane" to dysk; ta flaga to chmura z kolejki:
+      true — serwer ma tę wersję, false — czeka albo brak potwierdzenia,
+      null — nie ma konta, ikony nie pokazujemy.
+    */
     inCloud: Boolean? = null,
 ) {
     val colors = Kajet.colors

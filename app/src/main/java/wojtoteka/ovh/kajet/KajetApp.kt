@@ -8,6 +8,7 @@ import wojtoteka.ovh.kajet.awaria.CrashLog
 import wojtoteka.ovh.kajet.awaria.CrashUpload
 import wojtoteka.ovh.kajet.awaria.ErrorActivity
 import wojtoteka.ovh.kajet.cloud.Cloud
+import wojtoteka.ovh.kajet.cloud.CloudSaveStatus
 import wojtoteka.ovh.kajet.asystent.KajetAi
 import wojtoteka.ovh.kajet.cloud.CloudAi
 import wojtoteka.ovh.kajet.cloud.CloudCode
@@ -77,6 +78,9 @@ class AppContainer(context: Context) {
         library.onNoteSaved = { path, id ->
             cloud.sync.reportChange(path, id)
         }
+        // Pasek zapisu czyta kolejkę i zapamiętane wersje — bez zgadywania,
+        // że „Zapisane" jest już na serwerze.
+        library.cloudSave = CloudSaveStatus { cloud }
         // Pliki z kodem jeżdżą na serwer jako notatki CODE.
         library.onCodeSaved = { path ->
             cloud.sync.reportCodeChange(path)

@@ -83,6 +83,7 @@ fun TextEditor(
     val busy by model.busy.collectAsStateWithLifecycle()
     val saveState by model.saveState.collectAsStateWithLifecycle()
     val lastSave by model.lastSave.collectAsStateWithLifecycle()
+    val inCloud by model.inCloud.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val appearance by model.appearance.collectAsStateWithLifecycle()
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
@@ -361,6 +362,7 @@ fun TextEditor(
                 title = document?.title.orEmpty(),
                 state = saveState,
                 lastSave = lastSave,
+                inCloud = inCloud,
                 busy = busy,
                 onTitle = model::setTitle,
             )
@@ -556,6 +558,7 @@ private fun NoteHeader(
     title: String,
     state: SaveState,
     lastSave: Long?,
+    inCloud: Boolean?,
     busy: String?,
     onTitle: (String) -> Unit,
 ) {
@@ -585,7 +588,7 @@ private fun NoteHeader(
         if (busy != null) {
             Text(busy, style = Kajet.type.meta, color = Kajet.colors.muted)
         }
-        SaveIndicator(state = state, lastSave = lastSave)
+        SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
     }
 }
 

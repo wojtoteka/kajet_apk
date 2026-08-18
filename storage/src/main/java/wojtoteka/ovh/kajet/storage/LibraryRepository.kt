@@ -90,6 +90,12 @@ class LibraryRepository(
 
     var onNoteSaved: ((path: String, noteId: String) -> Unit)? = null
 
+    /**
+     * Czy otwarta notatka jest na serwerze, czy tylko na dysku. Edytor czyta
+     * to przy pasku zapisu; chmura podpina tu kolejkę i zapamiętane wersje.
+     */
+    var cloudSave: CloudSaveLookup? = null
+
     /** Notatki wyrzucone do kosza na urządzeniu — do zgłoszenia serwerowi. */
     var onNotesTrashed: ((noteIds: List<String>) -> Unit)? = null
 

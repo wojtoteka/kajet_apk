@@ -2,6 +2,9 @@ package wojtoteka.ovh.kajet.cloud
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -9,6 +12,14 @@ class SendQueue(context: Context) {
 
     private val preferences: SharedPreferences =
         context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+
+    /*
+      Pasek zapisu musi wiedzieć, kiedy wpis wszedł albo zszedł z kolejki.
+      Sama zawartość zostaje w SharedPreferences; ten licznik jest tylko
+      sygnałem „spójrz jeszcze raz", bez drugiego spisu ścieżek.
+    */
+    private val _revision = MutableStateFlow(0)
+    val revision: StateFlow<Int> = _revision.asStateFlow()
 
     @Synchronized
     fun add(
@@ -129,6 +140,7 @@ class SendQueue(context: Context) {
     @Synchronized
     fun clear() {
         preferences.edit().remove(KEY).apply()
+        bump()
     }
 
     private fun read(): Map<String, QueueEntry> {
@@ -140,6 +152,11 @@ class SendQueue(context: Context) {
 
     private fun write(entries: Map<String, QueueEntry>) {
         preferences.edit().putString(KEY, json.encodeToString(entries.values.toList())).apply()
+        bump()
+    }
+
+    private fun bump() {
+        _revision.value = _revision.value + 1
     }
 
     private companion object {
