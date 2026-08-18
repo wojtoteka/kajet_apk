@@ -604,6 +604,13 @@ interface Strings {
     val noteOpening: String
     val noEditorYet: String
     val noEditorYetAbout: String
+    val cannotEditAsText: String
+    val cannotEditAsTextAbout: String
+    val fileDidNotOpen: String
+    val fileDidNotOpenAbout: String
+    val openInOtherApp: String
+    val previousPage: String
+    val nextPage: String
     val backToLibrary: String
 
     // --- Praca w tle ---
@@ -1155,6 +1162,9 @@ fun Strings.nothingOpensFile(name: String): String = if (english) {
     "Żadna aplikacja na tym urządzeniu nie umie otworzyć pliku $name. " +
         "Użyj \u201eWyślij\u201d i wybierz program samodzielnie."
 }
+
+fun Strings.pdfPage(current: Int, total: Int): String =
+    if (english) "Page $current of $total" else "Strona $current z $total"
 
 fun Strings.minutesAgo(minutes: Long): String =
     if (english) "$minutes min ago" else "$minutes min temu"
@@ -1838,6 +1848,15 @@ object PolishStrings : Strings {
     override val noEditorYet = "Kajet nie umie otworzyć tej notatki"
     override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Zaktualizuj Kajet — nowsza " +
         "wersja może już ją znać."
+    override val cannotEditAsText = "Tego pliku nie da się edytować jako tekst"
+    override val cannotEditAsTextAbout =
+        "Kajet otwiera tu notatki i pliki z kodem. Ten plik zostaje nietknięty w bibliotece."
+    override val fileDidNotOpen = "Plik się nie otworzył"
+    override val fileDidNotOpenAbout =
+        "Nie udało się odczytać tego pliku. Sprawdź, czy nadal jest w folderze."
+    override val openInOtherApp = "Otwórz w innej aplikacji"
+    override val previousPage = "Poprzednia"
+    override val nextPage = "Następna"
     override val backToLibrary = "Wróć do biblioteki"
 
     override val readingFolderFailed = "Nie udało się odczytać folderu."
@@ -2536,6 +2555,15 @@ object EnglishStrings : Strings {
     override val noEditorYet = "Kajet cannot open this note"
     override val noEditorYetAbout = "The note is safe on disk. Update Kajet — a newer version may " +
         "know it."
+    override val cannotEditAsText = "This file cannot be edited as text"
+    override val cannotEditAsTextAbout =
+        "Kajet opens notes and code files here. This file stays untouched in the library."
+    override val fileDidNotOpen = "The file did not open"
+    override val fileDidNotOpenAbout =
+        "Kajet could not read this file. Check that it is still in its folder."
+    override val openInOtherApp = "Open in another app"
+    override val previousPage = "Previous"
+    override val nextPage = "Next"
     override val backToLibrary = "Back to the library"
 
     override val readingFolderFailed = "Kajet could not read the folder."

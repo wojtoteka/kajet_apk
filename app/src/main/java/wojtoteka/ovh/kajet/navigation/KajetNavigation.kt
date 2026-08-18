@@ -30,7 +30,9 @@ import wojtoteka.ovh.kajet.code.CodeEditor
 import wojtoteka.ovh.kajet.code.CodeViewModel
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
+import wojtoteka.ovh.kajet.core.model.OtherFileKind
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.ui.file.FileViewer
 import wojtoteka.ovh.kajet.ui.library.CloudStuckNotes
 import wojtoteka.ovh.kajet.ui.library.LibraryScreen
 import wojtoteka.ovh.kajet.ui.library.LibraryViewModel
@@ -52,9 +54,11 @@ object Routes {
 
     const val NOTE = "note/{path}"
     const val CODE = "code/{path}"
+    const val VIEW = "view/{path}"
 
     fun note(path: String) = "note/" + Uri.encode(path)
     fun code(path: String) = "code/" + Uri.encode(path)
+    fun view(path: String) = "view/" + Uri.encode(path)
 }
 
 @Composable
@@ -212,6 +216,18 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             }
         }
 
+        composable(
+            route = Routes.VIEW,
+            arguments = listOf(navArgument("path") { type = NavType.StringType }),
+        ) { entry ->
+            val path = Uri.decode(entry.arguments?.getString("path").orEmpty())
+            FileViewer(
+                path = path,
+                repo = container.library,
+                onBack = { popOnce(navController, entry) },
+            )
+        }
+
         composable(Routes.SETTINGS) { entry ->
             // Odbudowa spisu idzie w bibliotece i tam żyje jej stan. Ustawienia
             // dostają go tutaj, żeby przycisk miał czym odpowiedzieć.
@@ -277,7 +293,12 @@ private fun popOnce(navController: NavHostController, entry: NavBackStackEntry) 
 private fun open(navController: NavHostController, item: LibraryItem) {
     when (item.type) {
         ItemType.NOTE -> navController.navigate(Routes.note(item.path))
-        ItemType.CODE_FILE, ItemType.OTHER_FILE -> navController.navigate(Routes.code(item.path))
+        ItemType.CODE_FILE -> navController.navigate(Routes.code(item.path))
+        ItemType.OTHER_FILE -> when (OtherFileKind.of(item.name)) {
+            OtherFileKind.TEXT -> navController.navigate(Routes.code(item.path))
+            OtherFileKind.IMAGE, OtherFileKind.PDF, OtherFileKind.BINARY ->
+                navController.navigate(Routes.view(item.path))
+        }
         ItemType.FOLDER -> Unit
     }
 }
