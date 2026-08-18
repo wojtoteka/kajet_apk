@@ -6,20 +6,27 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Rect
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.MindMapContent
-import wojtoteka.ovh.kajet.core.text.words
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
+import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.ink.ShapeGeometry
 import wojtoteka.ovh.kajet.ink.ShapePainter
+import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.ink.Strokes
 import java.io.OutputStream
 import kotlin.math.max
@@ -59,9 +66,10 @@ object PdfExport {
         val handwriting = document.handwriting ?: return
         val renderer = CanvasStrokeRenderer.create()
         val shapePainter = ShapePainter()
+        val identity = Matrix()
 
-        handwriting.pages.forEachIndexed { index, page ->
-            // A scroll can be taller than A4, so we slice it into consecutive pages.
+        handwriting.pages.forEach { page ->
+            // Długa kartka nie mieści się na A4 — kroimy ją na kolejne arkusze.
             val sliceCount = max(1, kotlin.math.ceil(page.height / A4_HEIGHT.toFloat()).toInt())
             for (slice in 0 until sliceCount) {
                 val offset = slice * A4_HEIGHT.toFloat()
@@ -73,54 +81,119 @@ object PdfExport {
                 val pdfPage = pdf.startPage(info)
                 val canvas = pdfPage.canvas
 
-                canvas.drawColor(Color.WHITE)
-                if (withBackground) drawBackground(canvas, page.background ?: handwriting.background, offset)
-
+                canvas.drawColor(PaperInk.PAPER)
                 canvas.save()
+                canvas.clipRect(0f, 0f, A4_WIDTH.toFloat(), A4_HEIGHT.toFloat())
                 canvas.translate(0f, -offset)
-
-                // Kształty pod atramentem — tak samo jak na ekranie.
-                for (shape in page.shapes) {
-                    val bounds = ShapeGeometry.bounds(shape)
-                    if (bounds.bottom < offset || bounds.top > offset + A4_HEIGHT) continue
-                    shapePainter.draw(canvas, shape)
-                }
-
-                for (stroke in page.strokes) {
-                    val bounds = stroke.bounds()
-                    if (bounds.bottom < offset || bounds.top > offset + A4_HEIGHT) continue
-                    val engineStroke = runCatching { Strokes.toEngine(stroke) }.getOrNull() ?: continue
-                    renderer.draw(canvas, engineStroke, Matrix())
-                }
-
-                for (image in page.images) {
-                    val bytes = attachment(image.asset) ?: continue
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
-                    canvas.drawBitmap(
-                        bitmap,
-                        null,
-                        Rect(
-                            image.x.toInt(),
-                            image.y.toInt(),
-                            (image.x + image.width).toInt(),
-                            (image.y + image.height).toInt(),
-                        ),
-                        null,
-                    )
-                    bitmap.recycle()
-                }
-
-                for (field in page.texts) {
-                    if (field.text.isBlank()) continue
-                    drawText(canvas, field.text, field.x, field.y, field.width, field.fontSize, field.color, field.bold)
-                }
-
+                paintHandwritten(
+                    canvas = canvas,
+                    page = page,
+                    attachment = attachment,
+                    background = page.background ?: handwriting.background,
+                    renderer = renderer,
+                    shapePainter = shapePainter,
+                    strokeMatrix = identity,
+                    offset = offset,
+                    viewHeight = A4_HEIGHT.toFloat(),
+                    withBackground = withBackground,
+                )
                 canvas.restore()
                 pageNumber(canvas, pdf.pages.size + 1)
                 pdf.finishPage(pdfPage)
             }
-            if (index >= 0) Unit
         }
+    }
+
+    /**
+     * Ta sama kolejność co na ekranie: tło, zdjęcia, kształty, atrament, pola.
+     * Kolory idą przez [PaperInk], bo kartka eksportu jest biała.
+     */
+    private fun paintHandwritten(
+        canvas: Canvas,
+        page: NotePage,
+        attachment: (String) -> ByteArray?,
+        background: PageBackground,
+        renderer: CanvasStrokeRenderer,
+        shapePainter: ShapePainter,
+        strokeMatrix: Matrix,
+        offset: Float,
+        viewHeight: Float,
+        withBackground: Boolean,
+    ) {
+        if (withBackground) drawBackground(canvas, background, page.width, page.height)
+
+        val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        for (image in page.images) {
+            if (!visible(image.y, image.y + image.height, offset, viewHeight)) continue
+            val bytes = attachment(image.asset) ?: continue
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
+            canvas.drawBitmap(
+                bitmap,
+                null,
+                RectF(
+                    image.x,
+                    image.y,
+                    image.x + image.width,
+                    image.y + image.height,
+                ),
+                imagePaint,
+            )
+            bitmap.recycle()
+        }
+
+        for (shape in page.shapes) {
+            val bounds = ShapeGeometry.bounds(shape)
+            if (!visible(bounds.top, bounds.bottom, offset, viewHeight)) continue
+            shapePainter.draw(canvas, PaperInk.forShape(shape))
+        }
+
+        val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val fallbackPath = Path()
+        for (stroke in page.strokes) {
+            val bounds = stroke.bounds()
+            if (!visible(bounds.top, bounds.bottom, offset, viewHeight)) continue
+            val paper = PaperInk.forStroke(stroke)
+            val engineStroke = runCatching { Strokes.toEngine(paper) }.getOrNull()
+            if (engineStroke != null) {
+                renderer.draw(canvas, engineStroke, strokeMatrix)
+            } else {
+                drawFallback(canvas, paper, fallbackPaint, fallbackPath)
+            }
+        }
+
+        for (field in page.texts) {
+            if (!visible(field.y, field.y + field.height, offset, viewHeight)) continue
+            drawField(canvas, PaperInk.forField(field))
+        }
+    }
+
+    private fun visible(top: Float, bottom: Float, offset: Float, viewHeight: Float): Boolean =
+        bottom >= offset && top <= offset + viewHeight
+
+    private fun drawFallback(
+        canvas: Canvas,
+        stroke: InkStroke,
+        paint: Paint,
+        path: Path,
+    ) {
+        val count = stroke.pointCount
+        if (count == 0) return
+        paint.color = stroke.color
+        paint.strokeWidth = stroke.size.coerceAtLeast(0.4f)
+        if (count == 1) {
+            paint.style = Paint.Style.FILL
+            canvas.drawCircle(stroke.x(0), stroke.y(0), stroke.size / 2f, paint)
+            paint.style = Paint.Style.STROKE
+            return
+        }
+        path.reset()
+        path.moveTo(stroke.x(0), stroke.y(0))
+        for (i in 1 until count) path.lineTo(stroke.x(i), stroke.y(i))
+        canvas.drawPath(path, paint)
     }
 
     private fun textPages(pdf: PdfDocument, document: NoteDocument) {
@@ -133,7 +206,7 @@ object PdfExport {
         var page = pdf.startPage(
             PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create(),
         )
-        page.canvas.drawColor(Color.WHITE)
+        page.canvas.drawColor(PaperInk.PAPER)
 
         fun nextPage() {
             pageNumber(page.canvas, pdf.pages.size + 1)
@@ -141,7 +214,7 @@ object PdfExport {
             page = pdf.startPage(
                 PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, pdf.pages.size + 1).create(),
             )
-            page.canvas.drawColor(Color.WHITE)
+            page.canvas.drawColor(PaperInk.PAPER)
             y = topMargin
         }
 
@@ -187,7 +260,7 @@ object PdfExport {
         val info = PdfDocument.PageInfo.Builder(A4_HEIGHT, A4_WIDTH, 1).create()
         val page = pdf.startPage(info)
         val canvas = page.canvas
-        canvas.drawColor(Color.WHITE)
+        canvas.drawColor(PaperInk.PAPER)
 
         drawText(canvas, title, 40f, 36f, A4_HEIGHT - 80f, 18f, Color.BLACK, true)
 
@@ -260,7 +333,7 @@ object PdfExport {
         val page = pdf.startPage(
             PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create(),
         )
-        page.canvas.drawColor(Color.WHITE)
+        page.canvas.drawColor(PaperInk.PAPER)
         drawText(page.canvas, title, 64f, 72f, A4_WIDTH - 128f, 20f, Color.BLACK, true)
         drawText(
             page.canvas,
@@ -309,88 +382,168 @@ object PdfExport {
         canvas.restore()
     }
 
+    /**
+     * Pole TEXT/CODE jak na ekranie: płytka tła, krój, kursywa, podkreślenie, justowanie.
+     * Na ekranie wcięcie to 4.dp; tu 4 jednostki strony (przy gęstości 1 to to samo).
+     */
+    private fun drawField(canvas: Canvas, field: TextBoxElement) {
+        if (field.background == 0 && field.text.isBlank()) return
+
+        if (field.background != 0) {
+            val fill = Paint().apply {
+                style = Paint.Style.FILL
+                color = field.background
+            }
+            canvas.drawRect(
+                field.x,
+                field.y,
+                field.x + field.width,
+                field.y + field.height,
+                fill,
+            )
+        }
+        if (field.text.isBlank()) return
+
+        val inset = 4f
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = field.fontSize
+            color = field.color
+            typeface = typefaceFor(field.font, field.bold, field.italic)
+            isUnderlineText = field.underline
+        }
+        val width = (field.width - inset * 2f).toInt().coerceAtLeast(1)
+        val alignment = when (field.align) {
+            NoteAlign.LEFT -> Layout.Alignment.ALIGN_NORMAL
+            NoteAlign.CENTER -> Layout.Alignment.ALIGN_CENTER
+            NoteAlign.RIGHT -> Layout.Alignment.ALIGN_OPPOSITE
+        }
+        val textLayout = StaticLayout.Builder
+            .obtain(field.text, 0, field.text.length, paint, width)
+            .setAlignment(alignment)
+            .build()
+        canvas.save()
+        canvas.clipRect(field.x, field.y, field.x + field.width, field.y + field.height)
+        canvas.translate(field.x + inset, field.y + inset)
+        textLayout.draw(canvas)
+        canvas.restore()
+    }
+
+    private fun typefaceFor(font: NoteFont, bold: Boolean, italic: Boolean): Typeface {
+        val family = when (font) {
+            NoteFont.MONO -> Typeface.MONOSPACE
+            NoteFont.HEADING, NoteFont.BODY -> Typeface.SANS_SERIF
+        }
+        val style = when {
+            bold && italic -> Typeface.BOLD_ITALIC
+            bold -> Typeface.BOLD
+            italic -> Typeface.ITALIC
+            else -> Typeface.NORMAL
+        }
+        return Typeface.create(family, style)
+    }
+
     private fun pageNumber(canvas: Canvas, number: Int) {
         val paint = textPaint(9f, Color.rgb(0x67, 0x63, 0x5A), false)
         canvas.drawText(number.toString(), A4_WIDTH / 2f, A4_HEIGHT - 32f, paint)
     }
 
-    private fun drawBackground(canvas: Canvas, background: PageBackground, offset: Float) {
+    private fun drawBackground(
+        canvas: Canvas,
+        background: PageBackground,
+        pageWidth: Float,
+        pageHeight: Float,
+    ) {
         if (background == PageBackground.PLAIN) return
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 0.6f
-            color = Color.rgb(0xD3, 0xCC, 0xBC)
+            color = PaperInk.RULE
         }
         when (background) {
             PageBackground.LINED -> {
-                var y = 28f
-                while (y < A4_HEIGHT) {
-                    canvas.drawLine(0f, y, A4_WIDTH.toFloat(), y, paint)
-                    y += 28f
+                var y = StrokeCanvas.LINE_SPACING
+                while (y < pageHeight) {
+                    canvas.drawLine(0f, y, pageWidth, y, paint)
+                    y += StrokeCanvas.LINE_SPACING
                 }
             }
             PageBackground.GRID -> {
-                var y = 20f
-                while (y < A4_HEIGHT) {
-                    canvas.drawLine(0f, y, A4_WIDTH.toFloat(), y, paint)
-                    y += 20f
+                var y = StrokeCanvas.GRID_SPACING
+                while (y < pageHeight) {
+                    canvas.drawLine(0f, y, pageWidth, y, paint)
+                    y += StrokeCanvas.GRID_SPACING
                 }
-                var x = 20f
-                while (x < A4_WIDTH) {
-                    canvas.drawLine(x, 0f, x, A4_HEIGHT.toFloat(), paint)
-                    x += 20f
+                var x = StrokeCanvas.GRID_SPACING
+                while (x < pageWidth) {
+                    canvas.drawLine(x, 0f, x, pageHeight, paint)
+                    x += StrokeCanvas.GRID_SPACING
                 }
             }
             PageBackground.DOTS -> {
                 paint.style = Paint.Style.FILL
-                var y = 20f
-                while (y < A4_HEIGHT) {
-                    var x = 20f
-                    while (x < A4_WIDTH) {
+                var y = StrokeCanvas.GRID_SPACING
+                while (y < pageHeight) {
+                    var x = StrokeCanvas.GRID_SPACING
+                    while (x < pageWidth) {
                         canvas.drawCircle(x, y, 0.8f, paint)
-                        x += 20f
+                        x += StrokeCanvas.GRID_SPACING
                     }
-                    y += 20f
+                    y += StrokeCanvas.GRID_SPACING
                 }
+                paint.style = Paint.Style.STROKE
             }
             PageBackground.STAVE -> {
-                var y = 60f
-                while (y + 36f < A4_HEIGHT) {
+                // Na ekranie pierwsza linia to STAVE_SPACING (9), nie margines 60.
+                var y = StrokeCanvas.STAVE_SPACING
+                while (y + 4 * StrokeCanvas.STAVE_SPACING < pageHeight) {
                     for (i in 0 until 5) {
-                        canvas.drawLine(30f, y + i * 9f, A4_WIDTH - 30f, y + i * 9f, paint)
+                        canvas.drawLine(
+                            StrokeCanvas.STAVE_MARGIN,
+                            y + i * StrokeCanvas.STAVE_SPACING,
+                            pageWidth - StrokeCanvas.STAVE_MARGIN,
+                            y + i * StrokeCanvas.STAVE_SPACING,
+                            paint,
+                        )
                     }
-                    y += 5 * 9f + 46f
+                    y += 5 * StrokeCanvas.STAVE_SPACING + StrokeCanvas.STAVE_GAP
                 }
             }
             PageBackground.PLAIN -> Unit
         }
         paint.strokeWidth = 0.9f
-        canvas.drawLine(60f, 0f, 60f, A4_HEIGHT.toFloat(), paint)
-        if (offset > 0f) Unit
+        canvas.drawLine(StrokeCanvas.PAGE_MARGIN, 0f, StrokeCanvas.PAGE_MARGIN, pageHeight, paint)
     }
 
-    fun pageAsPng(page: NotePage, density: Float = 2f): Bitmap {
+    fun pageAsPng(
+        page: NotePage,
+        density: Float = 2f,
+        attachment: (String) -> ByteArray? = { null },
+        background: PageBackground? = null,
+    ): Bitmap {
         val bitmap = Bitmap.createBitmap(
             (page.width * density).toInt().coerceAtLeast(1),
             (page.height * density).toInt().coerceAtLeast(1),
             Bitmap.Config.ARGB_8888,
         )
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.WHITE)
+        canvas.drawColor(PaperInk.PAPER)
         canvas.scale(density, density)
         val renderer = CanvasStrokeRenderer.create()
         // Macierz mówi rendererowi o skali canvasa; bez niej teselacja
         // liczy się dla skali 1 i kreski wychodzą kanciaste.
         val strokeMatrix = Matrix().apply { setScale(density, density) }
-        ShapePainter().draw(canvas, page.shapes)
-        for (stroke in page.strokes) {
-            val engineStroke = runCatching { Strokes.toEngine(stroke) }.getOrNull() ?: continue
-            renderer.draw(canvas, engineStroke, strokeMatrix)
-        }
-        for (field in page.texts) {
-            if (field.text.isBlank()) continue
-            drawText(canvas, field.text, field.x, field.y, field.width, field.fontSize, field.color, field.bold)
-        }
+        paintHandwritten(
+            canvas = canvas,
+            page = page,
+            attachment = attachment,
+            background = page.background ?: background ?: PageBackground.PLAIN,
+            renderer = renderer,
+            shapePainter = ShapePainter(),
+            strokeMatrix = strokeMatrix,
+            offset = 0f,
+            viewHeight = page.height,
+            withBackground = true,
+        )
         return bitmap
     }
 }

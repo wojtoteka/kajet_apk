@@ -109,7 +109,11 @@ class ExportService(
                 ExportFormat.PNG -> {
                     val page = document.handwriting?.pages?.firstOrNull()
                     val bitmap = if (page != null) {
-                        PdfExport.pageAsPng(page)
+                        PdfExport.pageAsPng(
+                            page = page,
+                            attachment = { assetName -> readAttachmentBlocking(notePath, assetName) },
+                            background = document.handwriting?.background,
+                        )
                     } else {
                         Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
                     }
@@ -164,7 +168,11 @@ class ExportService(
                         ExportFormat.PNG -> {
                             val page = document.handwriting?.pages?.firstOrNull()
                             if (page != null) {
-                                val bitmap = PdfExport.pageAsPng(page)
+                                val bitmap = PdfExport.pageAsPng(
+                                    page = page,
+                                    attachment = { assetName -> readAttachmentBlocking(notePath, assetName) },
+                                    background = document.handwriting?.background,
+                                )
                                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, zip)
                                 bitmap.recycle()
                             }
