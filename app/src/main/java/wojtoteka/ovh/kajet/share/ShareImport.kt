@@ -16,7 +16,15 @@ import java.io.IOException
  *
  * Potem nawigacja idzie przez istniejące `open()`: notatka, edytor kodu,
  * podgląd zdjęcia / PDF albo komunikat przy binarce.
+ *
+ * Przy wielu URI pierwsza udana kopia idzie do otwarcia, a [ShareImportOutcome.failed]
+ * mówi, ile plików nie weszło — żeby dało się pokazać częściową porażkę.
  */
+data class ShareImportOutcome(
+    val item: LibraryItem,
+    val failed: Int = 0,
+)
+
 object ShareImport {
 
     suspend fun intoLibrary(
@@ -24,19 +32,13 @@ object ShareImport {
         repo: LibraryRepository,
         share: IncomingShare,
         parent: String,
-    ): LibraryItem {
+    ): ShareImportOutcome {
         if (share.uris.isNotEmpty()) {
-            val imported = mutableListOf<LibraryItem>()
-            var lastProblem: String? = null
-            for (uri in share.uris) {
+            return importEach(share.uris) { uri ->
                 val mime = mimeFor(context, uri, share.mime)
                 val name = fileNameFor(context, uri, mime)
-                runCatching { repo.importFile(parent, name, mime, uri) }
-                    .onSuccess { imported += it }
-                    .onFailure { lastProblem = it.message }
+                repo.importFile(parent, name, mime, uri)
             }
-            return imported.firstOrNull()
-                ?: throw IOException(lastProblem ?: words.couldNotImportShare)
         }
 
         val body = share.text.orEmpty()
@@ -46,8 +48,29 @@ object ShareImport {
         val document = repo.readNote(item.path)
         val text = (document.text ?: TextContent()).copy(markdown = body)
         repo.writeNote(item.path, document.copy(text = text))
-        return item
+        return ShareImportOutcome(item)
     }
+}
+
+/**
+ * Kopiuje po kolei. Jedna porażka nie zatrzymuje reszty. Same porażki
+ * wychodzą jako [IOException]; mieszanka zwraca pierwszy sukces i liczbę
+ * nieudanych.
+ */
+internal suspend fun <T> importEach(
+    sources: List<T>,
+    copy: suspend (T) -> LibraryItem,
+): ShareImportOutcome {
+    val imported = mutableListOf<LibraryItem>()
+    var lastProblem: String? = null
+    for (source in sources) {
+        runCatching { copy(source) }
+            .onSuccess { imported += it }
+            .onFailure { lastProblem = it.message }
+    }
+    val item = imported.firstOrNull()
+        ?: throw IOException(lastProblem ?: words.couldNotImportShare)
+    return ShareImportOutcome(item, failed = sources.size - imported.size)
 }
 
 fun sharedNoteTitle(subject: String?, text: String, untitled: String): String {

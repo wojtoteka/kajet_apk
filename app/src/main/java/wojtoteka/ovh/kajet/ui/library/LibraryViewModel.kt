@@ -396,10 +396,17 @@ class LibraryViewModel(
         share: IncomingShare,
         context: Context,
         onImported: (LibraryItem) -> Unit,
+        onFailed: () -> Unit = {},
     ) = inBackground {
-        val item = ShareImport.intoLibrary(context, repo, share, _path.value)
-        repo.rememberOpened(item)
-        onImported(item)
+        try {
+            val outcome = ShareImport.intoLibrary(context, repo, share, _path.value)
+            if (outcome.failed > 0) _error.value = words.bulkPartlyFailed(outcome.failed)
+            repo.rememberOpened(outcome.item)
+            onImported(outcome.item)
+        } catch (e: Exception) {
+            _error.value = e.message ?: words.couldNotImportShare
+            onFailed()
+        }
     }
 
     fun rename(item: LibraryItem, newName: String) = inBackground {

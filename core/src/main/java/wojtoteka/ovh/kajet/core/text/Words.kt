@@ -1919,7 +1919,7 @@ object PolishStrings : Strings {
     override val fileDidNotOpen = "Plik się nie otworzył"
     override val fileDidNotOpenAbout =
         "Nie udało się odczytać tego pliku. Sprawdź, czy nadal jest w folderze."
-    override val couldNotImportShare = "Nie udało się wziąć tego pliku do Kajetu."
+    override val couldNotImportShare = "Nie udało się wziąć tej treści do Kajetu."
     override val openInOtherApp = "Otwórz w innej aplikacji"
     override val previousPage = "Poprzednia"
     override val nextPage = "Następna"
@@ -2637,7 +2637,7 @@ object EnglishStrings : Strings {
     override val fileDidNotOpen = "The file did not open"
     override val fileDidNotOpenAbout =
         "Kajet could not read this file. Check that it is still in its folder."
-    override val couldNotImportShare = "Kajet could not take this file into the library."
+    override val couldNotImportShare = "Kajet could not take this content into the library."
     override val openInOtherApp = "Open in another app"
     override val previousPage = "Previous"
     override val nextPage = "Next"

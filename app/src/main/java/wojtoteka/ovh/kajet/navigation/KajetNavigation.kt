@@ -2,6 +2,8 @@ package wojtoteka.ovh.kajet.navigation
 
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -10,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
@@ -30,6 +33,10 @@ import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.AppContainer
 import wojtoteka.ovh.kajet.code.CodeEditor
 import wojtoteka.ovh.kajet.code.CodeViewModel
+import wojtoteka.ovh.kajet.core.design.Kajet
+import wojtoteka.ovh.kajet.core.design.component.NoticeBar
+import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
+import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.OtherFileKind
@@ -80,6 +87,9 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             CloudStuckNotes(container.cloud.sync, container.cloud.queue)
         },
     )
+    val libraryError by model.error.collectAsStateWithLifecycle()
+    val words = LocalStrings.current
+    val route = backStack?.destination?.route
 
     /*
       Ekran startowy ustalamy RAZ, przy pierwszym złożeniu.
@@ -128,21 +138,52 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
 
     // Udostępnij / Otwórz w: bez katalogu notatek najpierw wybór folderu,
     // potem kopia do biblioteki i ten sam open() co przy stuknięciu w spisie.
-    LaunchedEffect(incomingShare, settings.libraryFolder, backStack?.destination?.route) {
+    // Pending kasujemy dopiero po udanej kopii — nieudane wzięcie nie zjada
+    // intencji, więc da się spróbować jeszcze raz, póki system trzyma URI.
+    LaunchedEffect(incomingShare, settings.libraryFolder, route) {
         val share = incomingShare ?: return@LaunchedEffect
         if (!container.library.hasPersistedAccess(settings.libraryFolder)) return@LaunchedEffect
-        val route = backStack?.destination?.route
         if (route == null || route == Routes.START) return@LaunchedEffect
-        ShareIncoming.clear()
-        model.importIncoming(share, context) { item ->
-            open(navController, item)
-        }
+        val taken = ShareIncoming.tryBegin() ?: return@LaunchedEffect
+        model.importIncoming(
+            share = taken,
+            context = context,
+            onImported = { item ->
+                ShareIncoming.finish(success = true)
+                open(navController, item)
+            },
+            onFailed = { ShareIncoming.finish(success = false) },
+        )
     }
 
-    NavHost(navController = navController, startDestination = start) {
+    Column(Modifier.fillMaxSize()) {
+        /*
+          Pasek z biblioteki nie widać na notatce, kodzie ani podglądzie.
+          Ten sam komunikat stoi więc tu, nad całym stosem — bez osobnego
+          systemu snackbarów. W bibliotece i ustawieniach już jest swoje miejsce.
+        */
+        val showAwayFromLibrary = libraryError != null &&
+            route != null &&
+            route != Routes.LIBRARY &&
+            route != Routes.SETTINGS &&
+            route != Routes.START
+        if (showAwayFromLibrary) {
+            NoticeBar(
+                icon = KajetIcons.ErrorMark,
+                text = libraryError.orEmpty(),
+                color = Kajet.colors.danger,
+            ) {
+                SecondaryButton(words.understood, model::dismissError)
+            }
+        }
+
+        NavHost(
+            navController = navController,
+            startDestination = start,
+            modifier = Modifier.weight(1f),
+        ) {
 
         composable(Routes.START) {
-            val words = LocalStrings.current
             var pickProblem by remember { mutableStateOf<String?>(null) }
             FolderPickerScreen(
                 lostGrant = !settings.libraryFolder.isNullOrBlank(),
@@ -306,6 +347,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             )
         }
     }
+    }
 
     /*
       Po kopii zapasowej albo reinstalacji adres folderu potrafi wrócić bez
@@ -313,7 +355,6 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
       cokolwiek pokażemy ze spisu, wracamy do wyboru folderu.
     */
     val owner = LocalLifecycleOwner.current
-    val route = backStack?.destination?.route
     LaunchedEffect(owner, settings.libraryFolder, route) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             if (container.library.hasPersistedAccess(settings.libraryFolder)) return@repeatOnLifecycle

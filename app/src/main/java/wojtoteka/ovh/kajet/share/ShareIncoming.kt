@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.share
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,7 @@ data class IncomingShare(
 object ShareIncoming {
     private val _pending = MutableStateFlow<IncomingShare?>(null)
     val pending: StateFlow<IncomingShare?> = _pending.asStateFlow()
+    private val importing = AtomicBoolean(false)
 
     fun offer(intent: Intent?) {
         val parsed = parse(intent) ?: return
@@ -35,6 +37,25 @@ object ShareIncoming {
 
     fun clear() {
         _pending.value = null
+        importing.set(false)
+    }
+
+    /**
+     * Bierze oczekujące udostępnienie do kopii. Drugie wołanie w trakcie
+     * pierwszej wraca null — zmiana ekranu nie odpala importu drugi raz,
+     * zanim pierwszy zdąży skasować pending.
+     *
+     * Pending zostaje, dopóki kopia się nie uda: po porażce można spróbować
+     * jeszcze raz bez ponownego „Udostępnij", jeśli system wciąż trzyma URI.
+     */
+    fun tryBegin(): IncomingShare? {
+        val share = _pending.value ?: return null
+        return if (importing.compareAndSet(false, true)) share else null
+    }
+
+    fun finish(success: Boolean) {
+        if (success) _pending.value = null
+        importing.set(false)
     }
 }
 
