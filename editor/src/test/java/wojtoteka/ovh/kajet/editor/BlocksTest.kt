@@ -342,6 +342,72 @@ class TextFormatTest {
     }
 
     @Test
+    fun `przelaczenie H1 na H2 podmienia kratki zamiast je sczekac`() {
+        val field = TextFieldValue("# Tytul", TextRange(4))
+        val after = TextFormat.beforeLine(field, "## ")
+
+        assertThat(after.text).isEqualTo("## Tytul")
+        assertThat(after.selection.start).isEqualTo(5)
+    }
+
+    @Test
+    fun `przelaczenie H3 na H1 nie zostawia krzyzykow w tresci`() {
+        val field = TextFieldValue("### Tytul", TextRange(6))
+        val after = TextFormat.beforeLine(field, "# ")
+
+        assertThat(after.text).isEqualTo("# Tytul")
+    }
+
+    @Test
+    fun `to samo H2 dwa razy zdejmuje naglowek`() {
+        val once = TextFormat.beforeLine(TextFieldValue("Tytul", TextRange(0)), "## ")
+        val twice = TextFormat.beforeLine(once, "## ")
+
+        assertThat(once.text).isEqualTo("## Tytul")
+        assertThat(twice.text).isEqualTo("Tytul")
+    }
+
+    @Test
+    fun `H1 na pustym wierszu daje kratke ze spacja`() {
+        val after = TextFormat.beforeLine(TextFieldValue("", TextRange(0)), "# ")
+
+        assertThat(after.text).isEqualTo("# ")
+        assertThat(after.selection.start).isEqualTo(2)
+    }
+
+    @Test
+    fun `H3 na wierszu z poskladanymi kratkami zostawia jeden naglowek`() {
+        val field = TextFieldValue("## # Tytul", TextRange(8))
+        val after = TextFormat.beforeLine(field, "### ")
+
+        assertThat(after.text).isEqualTo("### Tytul")
+    }
+
+    @Test
+    fun `H1 na liscie zastepuje punkt a nie dokleja kratek`() {
+        val after = TextFormat.beforeLine(TextFieldValue("- Zakupy", TextRange(4)), "# ")
+
+        assertThat(after.text).isEqualTo("# Zakupy")
+    }
+
+    @Test
+    fun `punkt na naglowku zdejmuje kratki zamiast je zostawiac`() {
+        val after = TextFormat.beforeLine(TextFieldValue("## Tytul", TextRange(5)), "- ")
+
+        assertThat(after.text).isEqualTo("- Tytul")
+    }
+
+    @Test
+    fun `szybkie H1 H2 H3 konczy sie na H3`() {
+        var field = TextFieldValue("Tytul", TextRange(2))
+        field = TextFormat.beforeLine(field, "# ")
+        field = TextFormat.beforeLine(field, "## ")
+        field = TextFormat.beforeLine(field, "### ")
+
+        assertThat(field.text).isEqualTo("### Tytul")
+    }
+
+    @Test
     fun `wstawienie bloku kodu stawia kursor w srodku`() {
         val after = TextFormat.insert(TextFieldValue("", TextRange(0)), "\n```\n\n```\n", stepBack = 5)
 

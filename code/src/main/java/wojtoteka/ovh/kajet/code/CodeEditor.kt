@@ -37,19 +37,21 @@ import androidx.compose.ui.text.input.TextFieldValue
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
-import android.webkit.WebView
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
@@ -349,6 +351,10 @@ fun CodeEditor(
  * adresu bazowego — strona może dociągać rzeczy z internetu, ale nie widzi
  * plików urządzenia.
  *
+ * Płótno jest białe jak w przeglądarce: niesformatowany znacznik ma ciemny
+ * tekst na białym tle. Własne style autora malują się na wierzchu i nic ich
+ * tu nie nadpisuje.
+ *
  * Odcięcie stoi na pustym adresie bazowym w [android.webkit.WebView
  * .loadDataWithBaseURL]: strona ma wtedy źródło nieokreślone, więc nie sięga
  * ani do ciasteczek Kajetu, ani do notatek obok. Konsola niczego z tego nie
@@ -357,7 +363,6 @@ fun CodeEditor(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun HtmlPreview(code: String, console: HtmlConsoleState) {
-    val sheet = Kajet.colors.sheet.toArgb()
     AndroidView(
         factory = { context ->
             WebView(context).apply {
@@ -371,9 +376,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                // Zanim strona się namaluje, widać kolor arkusza, a nie białą
-                // płachtę — w ciemnym motywie było to uderzenie w oczy.
-                setBackgroundColor(sheet)
+                applyBrowserPageCanvas()
                 webViewClient = object : WebViewClient() {
                     /*
                       Pełny adres wychodzi do przeglądarki, reszta zostaje
@@ -488,7 +491,6 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
             }
         },
         update = { view ->
-            view.setBackgroundColor(sheet)
             // Przeładowanie tylko przy zmianie treści; zwykła rekompozycja nie
             // ma zrzucać strony do początku.
             if (view.tag != code) {
@@ -496,8 +498,30 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                 view.loadDataWithBaseURL(null, code, "text/html", "utf-8", null)
             }
         },
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
     )
+}
+
+/**
+ * Biała, nieprzezroczysta kartka jak w przeglądarce. Domyślny HTML ma przezroczyste
+ * body, więc bez tego prześwitywałby ciemny arkusz Kajetu. Ciemnienie algorytmiczne
+ * WebView też by odwróciło niesformatowaną stronę w ciemnym motywie aplikacji —
+ * tu jest wyłączone, bo podgląd ma wyglądać jak zwykła karta, a nie jak chrome
+ * edytora. Styl autora (`body { background }`) maluje się na wierzchu i wygrywa.
+ */
+@Suppress("DEPRECATION")
+private fun WebView.applyBrowserPageCanvas() {
+    setBackgroundColor(android.graphics.Color.WHITE)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        isForceDarkAllowed = false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            settings.forceDark = WebSettings.FORCE_DARK_OFF
+        } else {
+            settings.isAlgorithmicDarkeningAllowed = false
+        }
+    }
 }
 
 @Composable

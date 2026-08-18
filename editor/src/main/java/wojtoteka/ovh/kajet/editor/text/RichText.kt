@@ -210,8 +210,50 @@ object RichTextCodec {
      * Początek wiersza, który jest budową notatki, a nie treścią: kratki
      * nagłówka, znak listy, kwadracik zadania, znak cytatu. Zostaje w treści
      * znak w znak — inaczej gwiazdka listy „* mleko" udawałaby kursywę.
+     *
+     * Kratki biorą się w pętli (`(?:#{1,6} )+`), bo przełączanie H1/H2/H3
+     * potrafiło zostawić „## # Tytuł". Jedna kratka zostawiałaby wewnętrzne
+     * krzyżyki w treści i wychodziłyby na wierzch zamiast nagłówka.
      */
-    private val blockPrefix = Regex("""^\s*(?:#{1,6} |> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
+    private val blockPrefix = Regex("""^\s*(?:(?:#{1,6} )+|> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
+
+    /**
+     * Czy [marker] to kratki nagłówka z paska (H1–H6, ze spacją).
+     * Inne znaczniki wiersza — lista, cytat — idą inną drogą.
+     */
+    fun isHeadingMarker(marker: String): Boolean {
+        if (!marker.endsWith(' ')) return false
+        val hashes = marker.length - 1
+        return hashes in 1..6 && marker.take(hashes).all { it == '#' }
+    }
+
+    /**
+     * Długość kratek na początku [line] — także poskładanych z kilku
+     * naciśnięć H1/H2/H3 („## # Tytuł"). Zero, gdy wiersz nie jest nagłówkiem.
+     * Wcięcie trzeba zdjąć wcześniej: tu liczy się od pierwszego znaku.
+     */
+    fun headingPrefixLength(line: String): Int {
+        var i = 0
+        var consumed = 0
+        while (i < line.length && line[i] == '#') {
+            var hashes = 0
+            while (i < line.length && line[i] == '#') {
+                hashes++
+                i++
+            }
+            if (hashes !in 1..6) break
+            if (i < line.length && line[i] == ' ') {
+                i++
+                consumed = i
+                continue
+            }
+            // Ogonek bez spacji po już zdjętej kratce („## #") — to nadal
+            // znacznik, nie treść. Samo „###" bez spacji zostaje tekstem.
+            if (consumed > 0 && i == line.length) consumed = i
+            break
+        }
+        return consumed
+    }
 
     /** Znacznik otwierający blok kodu albo wzoru; null, gdy wiersz nim nie jest. */
     fun opensFence(trimmed: String): String? = when {

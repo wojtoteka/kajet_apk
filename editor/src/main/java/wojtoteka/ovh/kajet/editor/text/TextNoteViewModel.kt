@@ -1,5 +1,7 @@
 package wojtoteka.ovh.kajet.editor.text
 
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -101,23 +103,12 @@ class TextNoteViewModel(
     }
 
     fun beforeLine(marker: String, position: Int): Int {
-        val content = markdown
-        val cursor = position.coerceIn(0, content.length)
-        val lineStart = content.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0)).let {
-            if (it < 0) 0 else it + 1
-        }
-        val line = content.substring(lineStart, content.indexOf('\n', lineStart).let {
-            if (it < 0) content.length else it
-        })
-
-        // Drugie naciśnięcie tego samego przycisku zdejmuje znacznik.
-        return if (line.startsWith(marker)) {
-            setContent(content.removeRange(lineStart, lineStart + marker.length))
-            (cursor - marker.length).coerceAtLeast(lineStart)
-        } else {
-            setContent(content.substring(0, lineStart) + marker + content.substring(lineStart))
-            cursor + marker.length
-        }
+        val after = TextFormat.beforeLine(
+            TextFieldValue(markdown, TextRange(position.coerceIn(0, markdown.length))),
+            marker,
+        )
+        setContent(after.text)
+        return after.selection.start
     }
 
     // Zdjęcia i rysunki

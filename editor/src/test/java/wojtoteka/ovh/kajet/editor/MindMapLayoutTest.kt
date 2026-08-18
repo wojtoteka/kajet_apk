@@ -107,8 +107,17 @@ class MindMapLayoutTest {
     }
 
     @Test
-    fun `krotkie haslo zostaje w rozmiarze domyslnym`() {
-        assertThat(MindMapSizes.fit("Zakupy")).isEqualTo(160f to 64f)
+    fun `wysokosc wiersza maleje razem z przyblizeniem`() {
+        val font = MindMapSizes.DEFAULT_FONT_SIZE
+        fun linePx(zoom: Float) = font * zoom * MindMapSizes.LINE_RATIO
+
+        assertThat(MindMapSizes.LINE_RATIO).isEqualTo(1.3f)
+        assertThat(linePx(1f)).isEqualTo(font * 1.3f)
+        assertThat(linePx(0.77f)).isWithin(0.001f).of(linePx(1f) * 0.77f)
+        // Stale 24.sp z kroju body nie maleje z zoomem — przy 77% byloby
+        // wyzsze niz sam glif i spychalo haslo na dol wezla.
+        assertThat(linePx(0.77f)).isLessThan(24f)
+        assertThat(linePx(0.25f)).isLessThan(linePx(0.77f))
     }
 
     @Test

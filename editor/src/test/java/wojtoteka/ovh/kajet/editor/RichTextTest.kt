@@ -311,4 +311,18 @@ class RichTextTest {
         // "raz dwa" - pogrubiona jest tylko połowa, więc pasek go nie zapala.
         assertThat(rich.formatsIn(0, 7)).isEmpty()
     }
+
+    @Test
+    fun `kratki naglowka licza sie takze poskladane`() {
+        assertThat(RichTextCodec.isHeadingMarker("# ")).isTrue()
+        assertThat(RichTextCodec.isHeadingMarker("### ")).isTrue()
+        assertThat(RichTextCodec.isHeadingMarker("- ")).isFalse()
+
+        assertThat(RichTextCodec.headingPrefixLength("# Tytul")).isEqualTo(2)
+        assertThat(RichTextCodec.headingPrefixLength("## Tytul")).isEqualTo(3)
+        assertThat(RichTextCodec.headingPrefixLength("## # Tytul")).isEqualTo(5)
+        assertThat(RichTextCodec.headingPrefixLength("# ### Tytul")).isEqualTo(6)
+        assertThat(RichTextCodec.headingPrefixLength("Tytul")).isEqualTo(0)
+        assertThat(RichTextCodec.headingPrefixLength("####### nie naglowek")).isEqualTo(0)
+    }
 }

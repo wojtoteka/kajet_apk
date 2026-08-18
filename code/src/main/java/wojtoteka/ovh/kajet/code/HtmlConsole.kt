@@ -2,11 +2,13 @@ package wojtoteka.ovh.kajet.code
 
 import android.webkit.ConsoleMessage
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,9 +29,9 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.Kajet
-import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.codeConsoleAtLine
@@ -187,7 +189,28 @@ fun HtmlConsolePanel(state: HtmlConsoleState, modifier: Modifier = Modifier) {
             )
             Text(words.codeConsole, style = Kajet.type.label, color = colors.text)
             Spacer(Modifier.weight(1f))
-            SecondaryButton(words.codeConsoleClear, state::clear)
+            /*
+              Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę —
+              w rzędzie 44 dp odcinał się od tła desk jak osobny, niedopasowany
+              przycisk. Tu ten sam krój i gęstość co „Konsola", bez ramki.
+            */
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .clickable(
+                        onClick = state::clear,
+                        onClickLabel = words.codeConsoleClear,
+                        role = Role.Button,
+                    )
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = words.codeConsoleClear,
+                    style = Kajet.type.label,
+                    color = colors.muted,
+                )
+            }
         }
 
         Box(

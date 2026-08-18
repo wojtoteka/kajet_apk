@@ -452,16 +452,55 @@ object TextFormat {
             .let { if (it < 0) 0 else it + 1 }
         val lineEnd = content.indexOf('\n', lineStart).let { if (it < 0) content.length else it }
         val line = content.substring(lineStart, lineEnd)
+        val indentLen = line.indexOfFirst { it != ' ' && it != '\t' }.let { if (it < 0) line.length else it }
+        val body = line.substring(indentLen)
 
-        return if (line.startsWith(marker)) {
-            val next = content.removeRange(lineStart, lineStart + marker.length)
-            val cursorAfter = (cursor - marker.length).coerceAtLeast(lineStart)
-            TextFieldValue(next, TextRange(cursorAfter))
+        /*
+          Nagłówek to JEDEN znacznik wiersza. Doklejanie „## " do „# Tytuł"
+          dawało „## # Tytuł": parser chował tylko zewnętrzne kratki, a
+          wewnętrzne `#` / `###` wychodziły na wierzch. Dlatego kratki — także
+          poskładane z poprzednich przełączeń — schodzą najpierw, a nowy
+          znacznik wchodzi na ich miejsce. To samo naciśnięcie zdejmuje.
+        */
+        val headingLen = RichTextCodec.headingPrefixLength(body)
+        val afterHeading = body.substring(headingLen)
+        val (prefixLen, rest) = if (RichTextCodec.isHeadingMarker(marker)) {
+            val other = otherLinePrefix.find(afterHeading)?.value.orEmpty()
+            headingLen + other.length to afterHeading.substring(other.length)
         } else {
-            val next = content.substring(0, lineStart) + marker + content.substring(lineStart)
-            TextFieldValue(next, TextRange(cursor + marker.length))
+            headingLen to afterHeading
         }
+        val existing = body.substring(0, prefixLen)
+
+        val nextBody = when {
+            RichTextCodec.isHeadingMarker(marker) && existing == marker -> rest
+            RichTextCodec.isHeadingMarker(marker) -> marker + rest
+            rest.startsWith(marker) -> rest.substring(marker.length)
+            else -> marker + rest
+        }
+
+        val next = content.substring(0, lineStart) +
+            line.substring(0, indentLen) +
+            nextBody +
+            content.substring(lineEnd)
+
+        val bodyAt = lineStart + indentLen
+        val newPrefixLen = when {
+            RichTextCodec.isHeadingMarker(marker) && existing == marker -> 0
+            RichTextCodec.isHeadingMarker(marker) -> marker.length
+            rest.startsWith(marker) -> 0
+            else -> marker.length
+        }
+        val cursorAfter = when {
+            cursor < bodyAt -> cursor.coerceIn(0, next.length)
+            cursor < bodyAt + prefixLen -> (bodyAt + newPrefixLen).coerceIn(0, next.length)
+            else -> (cursor + (nextBody.length - body.length)).coerceIn(0, next.length)
+        }
+        return TextFieldValue(next, TextRange(cursorAfter))
     }
+
+    /** Lista, zadanie, cytat — wszystko, co nie jest kratkami nagłówka. */
+    private val otherLinePrefix = Regex("""^(?:> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
 
     fun insert(field: TextFieldValue, fragment: String, stepBack: Int = 0): TextFieldValue {
         val content = field.text

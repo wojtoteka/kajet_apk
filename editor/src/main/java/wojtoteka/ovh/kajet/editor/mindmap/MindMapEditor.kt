@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -63,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -770,6 +772,11 @@ private fun NodeOnBoard(
     val top = (node.y - offsetY) * zoom
     val width = node.width * zoom
     val height = node.height * zoom
+    val shape = if (node.shape == NodeShape.OVAL) {
+        RoundedCornerShape(percent = 50)
+    } else {
+        RoundedCornerShape(Kajet.dimens.corner)
+    }
 
     Box(
         Modifier
@@ -782,14 +789,8 @@ private fun NodeOnBoard(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    color = colors.sheet,
-                    shape = if (node.shape == NodeShape.OVAL) {
-                        RoundedCornerShape(percent = 50)
-                    } else {
-                        RoundedCornerShape(Kajet.dimens.corner)
-                    },
-                )
+                .clip(shape)
+                .background(color = colors.sheet, shape = shape)
                 .border(
                     // Węzeł pod ciągniętą linią dostaje grubszą obwódkę,
                     // żeby było widać, gdzie linia trafi po puszczeniu palca.
@@ -797,11 +798,7 @@ private fun NodeOnBoard(
                     // inaczej dobieranej barwy nie było widać na żywo.
                     width = if (connectTarget) 3.dp else if (selected) 2.dp else 1.5.dp,
                     color = if (connectTarget) colors.accent else color,
-                    shape = if (node.shape == NodeShape.OVAL) {
-                        RoundedCornerShape(percent = 50)
-                    } else {
-                        RoundedCornerShape(Kajet.dimens.corner)
-                    },
+                    shape = shape,
                 )
                 .pointerInput(node.id) {
                     detectTapGestures(
@@ -826,11 +823,7 @@ private fun NodeOnBoard(
                             .border(
                                 width = 2.dp,
                                 color = colors.accent,
-                                shape = if (node.shape == NodeShape.OVAL) {
-                                    RoundedCornerShape(percent = 50)
-                                } else {
-                                    RoundedCornerShape(Kajet.dimens.corner)
-                                },
+                                shape = shape,
                             )
                     } else {
                         Modifier
@@ -846,25 +839,38 @@ private fun NodeOnBoard(
                   rachunek. Wiersz, który miał się zmieścić, schodził wtedy do
                   następnego i znikał pod dolną krawędzią węzła.
 
-                  Na szerokim ekranie zostaje 10.dp: tablet wygląda jak dotąd.
+                  Na szerokim ekranie zostaje 10.dp przy 100%: tablet wygląda
+                  jak dotąd. Przy oddalaniu wyściółka musi maleć razem z węzłem,
+                  inaczej zjada hasło.
                 */
                 .padding(
                     horizontal = if (narrow) {
                         with(density) { (MindMapSizes.PAD_X / 2f * zoom).toDp() }
                     } else {
-                        10.dp
+                        10.dp * zoom
                     },
                     vertical = if (narrow) {
                         with(density) { (MindMapSizes.PAD_Y / 2f * zoom).toDp() }
                     } else {
-                        6.dp
+                        6.dp * zoom
                     },
                 ),
             contentAlignment = Alignment.Center,
         ) {
+            val fontPx = node.fontSize * zoom
             val style = Kajet.type.body.copy(
                 fontFamily = fontFamilyFor(node.font),
-                fontSize = with(density) { (node.fontSize * zoom).toSp() },
+                fontSize = with(density) { fontPx.toSp() },
+                /*
+                  Wysokość wiersza w em, nie w stałych sp z kroju body.
+
+                  `Kajet.type.body` ma lineHeight = 24.sp. copy() zostawia tę
+                  wartość, a fontSize maleje z zoomem. Compose układa glify
+                  w ramce 24.sp od góry, a węzeł przycina resztę — przy 77%
+                  hasło siedzi już przy dolnej krawędzi, przy dalszym
+                  oddalaniu znika. em trzyma 1.3× fontSize na każdym zoomie.
+                */
+                lineHeight = MindMapSizes.LINE_RATIO.em,
                 fontWeight = if (node.bold) FontWeight.SemiBold else FontWeight.Normal,
                 fontStyle = if (node.italic) FontStyle.Italic else FontStyle.Normal,
                 // Zero text colour means "pick one", so the theme colour keeps the
@@ -891,6 +897,7 @@ private fun NodeOnBoard(
                     // Hasło dłuższe niż węzeł kończy się wielokropkiem, a nie
                     // urwaniem w pół litery — widać wtedy, że dalej coś jest.
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

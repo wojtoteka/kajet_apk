@@ -139,6 +139,17 @@ class InlineStyleTest {
     }
 
     @Test
+    fun `poskladane kratki H1 H2 tez sie chowaja`() {
+        // Tak wychodziło po przełączeniu nagłówków, zanim pasek zaczął
+        // podmieniać znacznik zamiast doklejać drugi. Krzyżyki nie mają
+        // prawa zostać w tym, co widać.
+        assertThat(shown("## # Tytul")).isEqualTo("Tytul")
+        assertThat(shown("# ### Tytul")).isEqualTo("Tytul")
+        checkMapping("## # Tytul")
+        checkMapping("# ### Tytul")
+    }
+
+    @Test
     fun `cytat podkreslenie i przekreslenie tez sie rozbieraja`() {
         assertThat(shown("> cytat")).isEqualTo("cytat")
         assertThat(shown("<u>pod</u>")).isEqualTo("pod")

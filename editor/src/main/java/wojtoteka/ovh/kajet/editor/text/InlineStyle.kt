@@ -236,12 +236,13 @@ class InlineStyle(
     }
 
     private fun styleLine(marked: Marked, trimmed: String, from: Int, to: Int) {
-        val level = trimmed.takeWhile { it == '#' }.length
-        if (level in 1..6 && trimmed.length > level && trimmed[level] == ' ') {
-            marked.style(from, from + level + 1, markerStyle)
-            marked.marker(from, from + level + 1)
-            marked.style(from + level + 1, to, headingStyle(level))
-            inlineParts(marked, trimmed.drop(level + 1), from + level + 1)
+        val prefix = RichTextCodec.headingPrefixLength(trimmed)
+        if (prefix > 0) {
+            val level = trimmed.takeWhile { it == '#' }.length.coerceIn(1, 6)
+            marked.style(from, from + prefix, markerStyle)
+            marked.marker(from, from + prefix)
+            marked.style(from + prefix, to, headingStyle(level))
+            inlineParts(marked, trimmed.drop(prefix), from + prefix)
             return
         }
 

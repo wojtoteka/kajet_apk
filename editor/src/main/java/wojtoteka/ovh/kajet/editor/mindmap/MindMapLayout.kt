@@ -296,8 +296,14 @@ object MindMapSizes {
     const val MAX_WIDTH = 280f
     const val DEFAULT_FONT_SIZE = 15f
 
-    /** `line-height: 1.3` z edytora WWW. */
-    private const val LINE_RATIO = 1.3f
+    /**
+     * `line-height: 1.3` z edytora WWW.
+     *
+     * Widok węzła musi użyć tej samej proporcji przy każdym przybliżeniu:
+     * stałe `24.sp` z kroju `body` nie maleje razem z `fontSize`, więc hasło
+     * zjeżdżało na dół ramki i znikało przy oddalaniu.
+     */
+    const val LINE_RATIO = 1.3f
     /**
      * Wyściółka węzła, obustronnie — w jednostkach mapy.
      *
