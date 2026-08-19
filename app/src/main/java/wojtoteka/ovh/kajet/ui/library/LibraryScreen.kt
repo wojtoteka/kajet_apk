@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -795,8 +793,12 @@ private fun SelectManyHeaderButton(
  * Wchodzi na ekran dopiero przy co najmniej jednym wskazanym wpisie. Przy
  * zerze zostaje zwykły nagłówek folderu.
  *
- * Działania zawijają się do następnego wiersza, bo przy dużym piśmie cztery
- * przyciski w jednym rzędzie ściskały jeden drugiego do zera.
+ * Układ jest ten sam co w [FolderHeader]: gdzie jesteśmy u góry, rząd działań
+ * pod spodem, a na wąskim ekranie ten rząd jedzie w bok zamiast rosnąć w dół.
+ * Wcześniej działania zawijały się do kolejnych wierszy i pasek wychodził dwa
+ * razy wyższy od nagłówka — pierwsze zaznaczenie spychało przez to cały spis
+ * notatek w dół. Strona robi to samo inaczej, ale w tym samym celu: pasek
+ * leży NA rzędzie narzędzi biblioteki, a nie nad nim.
  *
  * Tło paska jest w barwie [KajetColors.desk] — tak samo jak [NoticeBar], czyli
  * jak każdy pasek stojący nad spisem. Wcześniej pasek miał accentWash, tę samą
@@ -804,7 +806,6 @@ private fun SelectManyHeaderButton(
  * w jedną plamę i nie było widać, gdzie kończy się pasek, a zaczyna spis.
  * Zieleń zostaje na jedno: wiersz jest wskazany.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SelectionBar(
     count: Int,
@@ -814,45 +815,86 @@ private fun SelectionBar(
     onDone: () -> Unit,
 ) {
     val words = LocalStrings.current
-    Column(
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .background(Kajet.colors.desk)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .background(Kajet.colors.desk),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            IconAction(KajetIcons.Close, words.selectionDone, onDone)
-            Text(
-                text = words.selectedCount(count),
-                style = Kajet.type.titleSmall,
-                color = Kajet.colors.text,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
-            SecondaryButton(
-                text = words.menuMoveToFolder,
-                onClick = onMove,
-                icon = KajetIcons.Move,
-            )
-            SecondaryButton(
-                text = words.moveToTrash,
-                onClick = onTrash,
-                icon = KajetIcons.Bin,
-                color = Kajet.colors.danger,
-            )
+        val narrow = maxWidth < 800.dp
+        if (narrow) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    IconAction(KajetIcons.Close, words.selectionDone, onDone)
+                    Text(
+                        text = words.selectedCount(count),
+                        style = Kajet.type.titleSmall,
+                        color = Kajet.colors.text,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    SelectionActions(onSelectAll, onMove, onTrash)
+                }
+            }
+        } else {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                IconAction(KajetIcons.Close, words.selectionDone, onDone)
+                Text(
+                    text = words.selectedCount(count),
+                    style = Kajet.type.title,
+                    color = Kajet.colors.text,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                SelectionActions(onSelectAll, onMove, onTrash)
+            }
         }
     }
+}
+
+/**
+ * Trzy działania paska zaznaczania, zawsze w tej samej kolejności.
+ *
+ * Przy przeniesieniu stoi krótkie „Przenieś", a nie „Przenieś do innego
+ * folderu": trzy pełne zdania nie mieściły się w jednym rzędzie na telefonie,
+ * a dokąd przenieść i tak pyta okno, które otwiera się zaraz potem.
+ */
+@Composable
+private fun SelectionActions(
+    onSelectAll: () -> Unit,
+    onMove: () -> Unit,
+    onTrash: () -> Unit,
+) {
+    val words = LocalStrings.current
+    SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
+    SecondaryButton(words.move, onMove, icon = KajetIcons.Move)
+    SecondaryButton(
+        text = words.moveToTrash,
+        onClick = onTrash,
+        icon = KajetIcons.Bin,
+        color = Kajet.colors.danger,
+    )
 }
 
 @Composable

@@ -8,6 +8,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +43,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -274,6 +277,7 @@ private fun FolderColourDot(option: FolderColor, selected: Boolean, onClick: () 
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewNoteDialog(
     onClose: () -> Unit,
@@ -328,24 +332,36 @@ fun NewNoteDialog(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel(words.pageBackgroundLabel)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                /*
+                  Każdy kafelek jest szeroki tyle, ile jego napis, a kiedy
+                  zabraknie miejsca, reszta schodzi do następnego wiersza.
+                  Po równym podziale szerokości (weight) na telefonie
+                  „W kratkę" i „Pięciolinia" łamały się w środku słowa, a przy
+                  powiększonym piśmie nie mieściły się wcale.
+                */
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     PageBackground.entries.forEach { option ->
+                        val picked = option == background
                         Box(
                             modifier = Modifier
-                                .weight(1f)
                                 .heightIn(min = 44.dp)
                                 .background(
-                                    if (option == background) Kajet.colors.accentWash else Kajet.colors.desk,
+                                    if (picked) Kajet.colors.accentWash else Kajet.colors.desk,
                                     RoundedCornerShape(Kajet.dimens.corner),
                                 )
                                 .clickable { background = option }
-                                .padding(horizontal = 6.dp, vertical = 10.dp),
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = option.label(words),
-                                style = Kajet.type.meta,
-                                color = if (option == background) Kajet.colors.accent else Kajet.colors.muted,
+                                style = Kajet.type.label,
+                                color = if (picked) Kajet.colors.accent else Kajet.colors.muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

@@ -233,9 +233,6 @@ interface Strings {
     val exportFolderMarkdown: String
     val movePrompt: String
     val codeShort: String
-    val codeWithPreview: String
-    val codeWorksOffline: String
-    val codeNeedsInternet: String
 
     // --- Okna: nowy folder, notatka, plik ---
     val colour: String
@@ -1504,9 +1501,6 @@ object PolishStrings : Strings {
     override val exportFolderMarkdown = "Zapisz cały folder jako Markdown"
     override val movePrompt = "Wybierz folder, do którego ma trafić ten wpis."
     override val codeShort = "Kod"
-    override val codeWithPreview = "z podglądem strony"
-    override val codeWorksOffline = "działa bez internetu"
-    override val codeNeedsInternet = "uruchamiany przez internet"
 
     override val colour = "Kolor"
     override val icon = "Ikona"
@@ -2225,9 +2219,6 @@ object EnglishStrings : Strings {
     override val exportFolderMarkdown = "Save the whole folder as Markdown"
     override val movePrompt = "Pick the folder this should go into."
     override val codeShort = "Code"
-    override val codeWithPreview = "with a page preview"
-    override val codeWorksOffline = "works offline"
-    override val codeNeedsInternet = "runs over the internet"
 
     override val colour = "Colour"
     override val icon = "Icon"

@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.FolderColor
@@ -35,7 +34,6 @@ import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.StrokePreview
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
-import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
@@ -143,18 +141,28 @@ fun ItemRow(
                     )
                 }
 
+                /*
+                  Plik z kodem: język i data ostatniej zmiany w jednym wierszu.
+                  Data stoi przy każdej notatce, a przy plikach jej brakowało.
+                  Było tam za to zdanie o tym, że HTML ma podgląd strony albo
+                  że program działa bez internetu — spis notatek nie jest od
+                  takich objaśnień. To samo, i dokładniej, mówi nagłówek
+                  otwartego pliku.
+                */
                 item.language != null -> {
-                    val language = item.language!!
-                    val phone = LocalConfiguration.current.smallestScreenWidthDp < 600
-                    val offlineHere = language.offline &&
-                        !(language == CodeLanguage.PYTHON && phone)
                     Text(
-                        text = language.label(words) + when {
-                            language == CodeLanguage.HTML -> ", ${words.codeWithPreview}"
-                            !language.runnable -> ""
-                            offlineHere -> ", ${words.codeWorksOffline}"
-                            else -> ", ${words.codeNeedsInternet}"
-                        },
+                        text = "${item.language!!.label(words)} · " +
+                            relativeTime(item.updatedAt, words),
+                        style = Kajet.type.meta,
+                        color = colors.muted,
+                    )
+                }
+
+                // Zdjęcie, PDF, cokolwiek innego wrzuconego do biblioteki.
+                // Nazwa mówi wszystko, więc zostaje sama data.
+                else -> {
+                    Text(
+                        text = relativeTime(item.updatedAt, words),
                         style = Kajet.type.meta,
                         color = colors.muted,
                     )
