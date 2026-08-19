@@ -34,11 +34,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.FolderColor
@@ -795,8 +797,10 @@ private fun SelectManyHeaderButton(
  * Wchodzi na ekran dopiero przy co najmniej jednym wskazanym wpisie. Przy
  * zerze zostaje zwykły nagłówek folderu.
  *
- * Działania zawijają się do następnego wiersza, bo przy dużym piśmie cztery
- * przyciski w jednym rzędzie ściskały jeden drugiego do zera.
+ * Działania są akcjami tekstowymi jak „Wyczyść" w konsoli, nie SecondaryButton
+ * 48 dp z obwódką — te wyglądały jak wielkie pastylki i dominowały nad spisem.
+ * Przy dużym piśmie etykiety zawijają się do następnego wiersza, zamiast
+ * ściskać się do zera.
  *
  * Tło paska jest w barwie [KajetColors.desk] — tak samo jak [NoticeBar], czyli
  * jak każdy pasek stojący nad spisem. Wcześniej pasek miał accentWash, tę samą
@@ -818,14 +822,19 @@ private fun SelectionBar(
         Modifier
             .fillMaxWidth()
             .background(Kajet.colors.desk)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconAction(KajetIcons.Close, words.selectionDone, onDone)
+            IconAction(
+                KajetIcons.Close,
+                words.selectionDone,
+                onDone,
+                touchTarget = 44.dp,
+            )
             Text(
                 text = words.selectedCount(count),
                 style = Kajet.type.titleSmall,
@@ -836,20 +845,28 @@ private fun SelectionBar(
             )
         }
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
-            SecondaryButton(
+            BarTextAction(
+                text = words.selectAll,
+                onClick = onSelectAll,
+                color = Kajet.colors.accent,
+                icon = KajetIcons.Confirm,
+                height = 44.dp,
+            )
+            BarTextAction(
                 text = words.menuMoveToFolder,
                 onClick = onMove,
                 icon = KajetIcons.Move,
+                height = 44.dp,
             )
-            SecondaryButton(
+            BarTextAction(
                 text = words.moveToTrash,
                 onClick = onTrash,
-                icon = KajetIcons.Bin,
                 color = Kajet.colors.danger,
+                icon = KajetIcons.Bin,
+                height = 44.dp,
             )
         }
     }
@@ -1322,17 +1339,20 @@ private fun FolderLookDialog(
 /*
   Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w NoticeBar
   obok długiego zdania odcinał się od tła i na telefonie łamał etykiety
-  („Spróbuj jeszcze raz", „Rozumiem"). Tu ten sam krój co etykiety paska,
-  bez ramki.
+  („Spróbuj jeszcze raz", „Rozumiem"). W pasku zaznaczania te same pastylki
+  dominowały nad spisem. Tu ten sam krój co etykiety paska, bez ramki.
 */
 @Composable
 private fun BarTextAction(
     text: String,
     onClick: () -> Unit,
+    color: Color = Kajet.colors.muted,
+    icon: ImageVector? = null,
+    height: Dp = 48.dp,
 ) {
-    Box(
+    Row(
         Modifier
-            .height(48.dp)
+            .height(height)
             .focusProperties { canFocus = false }
             .clickable(
                 onClick = onClick,
@@ -1340,12 +1360,21 @@ private fun BarTextAction(
                 role = Role.Button,
             )
             .padding(horizontal = 6.dp),
-        contentAlignment = Alignment.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Text(
             text = text,
             style = Kajet.type.label,
-            color = Kajet.colors.muted,
+            color = color,
             maxLines = 1,
         )
     }
