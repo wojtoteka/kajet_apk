@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -166,6 +167,9 @@ fun PrimaryButton(
             text = text,
             style = Kajet.type.label,
             color = if (enabled) Kajet.colors.onAccent else Kajet.colors.muted,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -196,10 +200,22 @@ fun SecondaryButton(
                 modifier = Modifier.size(20.dp),
             )
         }
+        /*
+          Napis przycisku nigdy nie łamie się na dwa wiersze.
+
+          Rząd przycisków bez przewijania oddaje ostatniemu to, co zostało po
+          poprzednich. Przy ciasnym oknie zostawało kilka punktów i napis
+          rozkładał się po jednej literze w wierszu — a że przycisk ma na
+          sztywno 48 dp wysokości, z takiego słupka widać było jedną literę.
+          Wielokropek mówi więcej.
+        */
         Text(
             text = text,
             style = Kajet.type.label,
             color = if (enabled) color else Kajet.colors.muted,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -574,35 +575,29 @@ private fun FolderView(
     val selecting by model.selecting.collectAsStateWithLifecycle()
     val selected by model.selected.collectAsStateWithLifecycle()
 
-    // Pasek działań stoi tylko przy niepustym zaznaczeniu. Samo wejście
-    // w tryb („Zaznacz") zostawia zwykły nagłówek — inaczej nad spisem
-    // wisiałby pusty pasek „zaznaczono zero" z przyciskami bez roboty.
-    val showBulkBar = selecting && selected.isNotEmpty()
+    // Nagłówek jest jeden i ten sam, także w trybie zaznaczania. Zmienia się
+    // tylko zawartość rzędu przycisków pod nazwą folderu. Dzięki temu spis
+    // notatek zaczyna się cały czas w tym samym miejscu i nie skacze w górę
+    // ani w dół przy pierwszym zaznaczeniu.
     Column(Modifier.fillMaxSize()) {
-        if (showBulkBar) {
-            SelectionBar(
-                count = selected.size,
-                onSelectAll = { model.selectAll(items) },
-                onMove = onMoveSelected,
-                onTrash = onTrashSelected,
-                onDone = model::stopSelecting,
-            )
-        } else {
-            FolderHeader(
-                placeName = placeName,
-                path = path,
-                showPath = showPath,
-                anyItems = items.isNotEmpty(),
-                selecting = selecting,
-                onUp = model::goUp,
-                onNewFolder = onNewFolder,
-                onNewNote = onNewNote,
-                onNewFile = onNewFile,
-                onSelectMany = {
-                    if (selecting) model.stopSelecting() else model.startSelecting()
-                },
-            )
-        }
+        FolderHeader(
+            placeName = placeName,
+            path = path,
+            showPath = showPath,
+            anyItems = items.isNotEmpty(),
+            selecting = selecting,
+            selectedCount = selected.size,
+            onUp = model::goUp,
+            onNewFolder = onNewFolder,
+            onNewNote = onNewNote,
+            onNewFile = onNewFile,
+            onSelectMany = {
+                if (selecting) model.stopSelecting() else model.startSelecting()
+            },
+            onSelectAll = { model.selectAll(items) },
+            onMoveSelected = onMoveSelected,
+            onTrashSelected = onTrashSelected,
+        )
         HorizontalRule()
 
         if (items.isEmpty()) {
@@ -640,7 +635,16 @@ private fun FolderView(
 }
 
 /**
- * Nagłówek folderu: gdzie jesteśmy i co można tu założyć.
+ * Nagłówek folderu: gdzie jesteśmy i co można tu zrobić.
+ *
+ * Nagłówek obsługuje też tryb zaznaczania. Wcześniej wchodził wtedy na jego
+ * miejsce osobny pasek działań zbiorczych, a że wychodził innej wysokości niż
+ * nagłówek, cały spis notatek podskakiwał przy pierwszym zaznaczeniu i wracał
+ * na miejsce przy odznaczeniu ostatniego wpisu. Teraz obie odsłony mają ten
+ * sam układ: nazwa folderu u góry zostaje bez zmian, a zamienia się tylko
+ * zawartość rzędu przycisków pod nią. „Nowa notatka", „Folder" i „Kod"
+ * ustępują na czas zaznaczania działaniom zbiorczym, ustawionym dokładnie
+ * w tym samym miejscu i o tej samej wysokości.
  *
  * O układzie decyduje szerokość samej kolumny spisu, a nie szerokość ekranu.
  * Na tablecie w oknie o połowie szerokości ekran ma swoje 800 dp, ale margines
@@ -658,15 +662,51 @@ private fun FolderHeader(
     showPath: Boolean,
     anyItems: Boolean,
     selecting: Boolean,
+    selectedCount: Int,
     onUp: () -> Unit,
     onNewFolder: () -> Unit,
     onNewNote: () -> Unit,
     onNewFile: () -> Unit,
     onSelectMany: () -> Unit,
+    onSelectAll: () -> Unit,
+    onMoveSelected: () -> Unit,
+    onTrashSelected: () -> Unit,
 ) {
     val words = LocalStrings.current
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            // Tło mówi, że spis czeka teraz na wskazanie wpisów. Ta sama barwa
+            // co pod paskiem uwag nad spisem. Zieleń zostaje na jedno: wiersz
+            // jest wskazany.
+            .background(
+                if (selecting) Kajet.colors.desk else androidx.compose.ui.graphics.Color.Transparent,
+            ),
+    ) {
         val narrow = maxWidth < 800.dp
+
+        // Na wąskiej kolumnie rząd przycisków przewija się w bok. Przy zmianie
+        // trybu wraca na początek: w tryb zaznaczania wchodzi się przyciskiem
+        // „Zaznacz" z końca rzędu, a wtedy nowe „Gotowe" z jego początku
+        // zostawało poza ekranem.
+        val actionScroll = rememberScrollState()
+        LaunchedEffect(selecting) { actionScroll.scrollTo(0) }
+
+        // Licznik wskazanych wpisów stoi obok nazwy folderu, drobnym pismem
+        // i zawsze w jednym wierszu — nagłówek nie może przez niego urosnąć.
+        val counter: @Composable () -> Unit = {
+            if (selecting) {
+                Text(
+                    text = words.selectedCount(selectedCount),
+                    style = Kajet.type.meta,
+                    color = Kajet.colors.muted,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
         if (narrow) {
             Column(
                 Modifier
@@ -699,18 +739,24 @@ private fun FolderHeader(
                             )
                         }
                     }
+                    counter()
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.horizontalScroll(actionScroll),
                 ) {
-                    PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
-                    SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
-                    SecondaryButton(words.codeShort, onNewFile, icon = KajetIcons.CodeFile)
-                    SelectManyHeaderButton(
+                    HeaderActions(
                         anyItems = anyItems,
                         selecting = selecting,
+                        selectedCount = selectedCount,
+                        shortCodeLabel = true,
+                        onNewNote = onNewNote,
+                        onNewFolder = onNewFolder,
+                        onNewFile = onNewFile,
                         onSelectMany = onSelectMany,
+                        onSelectAll = onSelectAll,
+                        onMoveSelected = onMoveSelected,
+                        onTrashSelected = onTrashSelected,
                     )
                 }
             }
@@ -747,154 +793,85 @@ private fun FolderHeader(
                         )
                     }
                 }
-                PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
-                SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
-                SecondaryButton(words.libKindCode, onNewFile, icon = KajetIcons.CodeFile)
-                SelectManyHeaderButton(
+                counter()
+                HeaderActions(
                     anyItems = anyItems,
                     selecting = selecting,
+                    selectedCount = selectedCount,
+                    shortCodeLabel = false,
+                    onNewNote = onNewNote,
+                    onNewFolder = onNewFolder,
+                    onNewFile = onNewFile,
                     onSelectMany = onSelectMany,
+                    onSelectAll = onSelectAll,
+                    onMoveSelected = onMoveSelected,
+                    onTrashSelected = onTrashSelected,
                 )
             }
         }
     }
 }
 
-/** Wejście w zaznaczanie zostaje przyciskiem nagłówka, nie pustym paskiem działań. */
+/**
+ * Rząd przycisków nagłówka. Poza zaznaczaniem zakłada nowe wpisy, w trybie
+ * zaznaczania robi coś z tym, co wskazane. Oba zestawy mają po cztery
+ * przyciski o tej samej wysokości, więc podmiana nie rusza niczego pod spodem.
+ *
+ * Przy zerze wskazanych „Przenieś" i „Do kosza" stoją wygaszone, zamiast
+ * znikać — znikanie zmieniałoby szerokość rzędu przy każdym zaznaczeniu.
+ * „Przenieś" jest krótkie, bez „do innego folderu": trzy pełne zdania nie
+ * mieściły się w jednym rzędzie na telefonie, a dokąd przenieść i tak pyta
+ * okno, które otwiera się zaraz potem.
+ */
 @Composable
-private fun SelectManyHeaderButton(
+private fun HeaderActions(
     anyItems: Boolean,
     selecting: Boolean,
+    selectedCount: Int,
+    /** Na wąskiej kolumnie „Kod" zamiast pełnej nazwy pliku z kodem. */
+    shortCodeLabel: Boolean,
+    onNewNote: () -> Unit,
+    onNewFolder: () -> Unit,
+    onNewFile: () -> Unit,
     onSelectMany: () -> Unit,
-) {
-    val words = LocalStrings.current
-    // Długie przytrzymanie wiersza robi to samo, ale o tym trzeba wiedzieć.
-    // Przycisk widać. Gdy tryb już stoi, a nic nie wskazano, ten sam
-    // przycisk zamyka go — paska działań przy zerze nie ma.
-    if (selecting) {
-        SecondaryButton(
-            text = words.selectionDone,
-            onClick = onSelectMany,
-            icon = KajetIcons.Close,
-        )
-    } else if (anyItems) {
-        SecondaryButton(
-            text = words.selectMany,
-            onClick = onSelectMany,
-            icon = KajetIcons.Confirm,
-        )
-    }
-}
-
-/**
- * Pasek trybu zaznaczania. Stoi w miejscu nagłówka folderu, bo przez tę chwilę
- * spis służy do jednego: wskazania wpisów i zrobienia z nimi czegoś naraz.
- *
- * Wchodzi na ekran dopiero przy co najmniej jednym wskazanym wpisie. Przy
- * zerze zostaje zwykły nagłówek folderu.
- *
- * Układ jest ten sam co w [FolderHeader]: gdzie jesteśmy u góry, rząd działań
- * pod spodem, a na wąskim ekranie ten rząd jedzie w bok zamiast rosnąć w dół.
- * Wcześniej działania zawijały się do kolejnych wierszy i pasek wychodził dwa
- * razy wyższy od nagłówka — pierwsze zaznaczenie spychało przez to cały spis
- * notatek w dół. Strona robi to samo inaczej, ale w tym samym celu: pasek
- * leży NA rzędzie narzędzi biblioteki, a nie nad nim.
- *
- * Tło paska jest w barwie [KajetColors.desk] — tak samo jak [NoticeBar], czyli
- * jak każdy pasek stojący nad spisem. Wcześniej pasek miał accentWash, tę samą
- * barwę co zaznaczony wiersz, więc pierwszy zaznaczony wpis zlewał się z nim
- * w jedną plamę i nie było widać, gdzie kończy się pasek, a zaczyna spis.
- * Zieleń zostaje na jedno: wiersz jest wskazany.
- */
-@Composable
-private fun SelectionBar(
-    count: Int,
     onSelectAll: () -> Unit,
-    onMove: () -> Unit,
-    onTrash: () -> Unit,
-    onDone: () -> Unit,
+    onMoveSelected: () -> Unit,
+    onTrashSelected: () -> Unit,
 ) {
     val words = LocalStrings.current
-    BoxWithConstraints(
-        Modifier
-            .fillMaxWidth()
-            .background(Kajet.colors.desk),
-    ) {
-        val narrow = maxWidth < 800.dp
-        if (narrow) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    IconAction(KajetIcons.Close, words.selectionDone, onDone)
-                    Text(
-                        text = words.selectedCount(count),
-                        style = Kajet.type.titleSmall,
-                        color = Kajet.colors.text,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                ) {
-                    SelectionActions(onSelectAll, onMove, onTrash)
-                }
-            }
-        } else {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 64.dp)
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconAction(KajetIcons.Close, words.selectionDone, onDone)
-                Text(
-                    text = words.selectedCount(count),
-                    style = Kajet.type.title,
-                    color = Kajet.colors.text,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                SelectionActions(onSelectAll, onMove, onTrash)
-            }
+    if (selecting) {
+        // Krótkie „Gotowe", nie „Zakończ zaznaczanie": w rzędzie mają się
+        // zmieścić cztery przyciski, a pełne zdanie zabiera miejsce
+        // działaniom, po które człowiek tu przyszedł.
+        SecondaryButton(words.done, onSelectMany, icon = KajetIcons.Close)
+        SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
+        SecondaryButton(
+            text = words.move,
+            onClick = onMoveSelected,
+            icon = KajetIcons.Move,
+            enabled = selectedCount > 0,
+        )
+        SecondaryButton(
+            text = words.moveToTrash,
+            onClick = onTrashSelected,
+            icon = KajetIcons.Bin,
+            enabled = selectedCount > 0,
+            color = Kajet.colors.danger,
+        )
+    } else {
+        PrimaryButton(words.newNote, onNewNote, icon = KajetIcons.Plus)
+        SecondaryButton(words.libKindFolder, onNewFolder, icon = KajetIcons.Folder)
+        SecondaryButton(
+            text = if (shortCodeLabel) words.codeShort else words.libKindCode,
+            onClick = onNewFile,
+            icon = KajetIcons.CodeFile,
+        )
+        // Długie przytrzymanie wiersza robi to samo, ale o tym trzeba wiedzieć.
+        // Przycisk widać.
+        if (anyItems) {
+            SecondaryButton(words.selectMany, onSelectMany, icon = KajetIcons.Confirm)
         }
     }
-}
-
-/**
- * Trzy działania paska zaznaczania, zawsze w tej samej kolejności.
- *
- * Przy przeniesieniu stoi krótkie „Przenieś", a nie „Przenieś do innego
- * folderu": trzy pełne zdania nie mieściły się w jednym rzędzie na telefonie,
- * a dokąd przenieść i tak pyta okno, które otwiera się zaraz potem.
- */
-@Composable
-private fun SelectionActions(
-    onSelectAll: () -> Unit,
-    onMove: () -> Unit,
-    onTrash: () -> Unit,
-) {
-    val words = LocalStrings.current
-    SecondaryButton(words.selectAll, onSelectAll, icon = KajetIcons.Confirm)
-    SecondaryButton(words.move, onMove, icon = KajetIcons.Move)
-    SecondaryButton(
-        text = words.moveToTrash,
-        onClick = onTrash,
-        icon = KajetIcons.Bin,
-        color = Kajet.colors.danger,
-    )
 }
 
 @Composable

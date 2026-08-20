@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -808,6 +809,22 @@ private fun NarrowToolRow(
     }
 }
 
+/**
+ * Pasek u góry kartki: tytuł, stan zapisu i to, czym się właśnie pisze.
+ *
+ * Na telefonie stoi w dwóch rzędach, a nie w jednym. W jednym rzędzie na
+ * kolory i grubości zostawało po odliczeniu strzałki powrotu, tytułu i napisu
+ * o zapisie kilkadziesiąt punktów przy prawej krawędzi — kropki ledwo tam było
+ * widać, a trafienie w tę właściwą wymagało przewijania w bok po omacku. Teraz
+ * pierwszy rząd trzyma tytuł ze stanem zapisu, a kolory i grubości dostają
+ * osobny rząd na całą szerokość ekranu.
+ *
+ * Kropka pełnych ustawień pisaka stoi na telefonie w rzędzie tytułu, nie na
+ * końcu przewijanych kropek: to jedyne wyjście do reszty barw, więc ma być
+ * pod palcem bez przewijania.
+ *
+ * Na tablecie zostaje jeden rząd — tam miejsca starcza.
+ */
 @Composable
 private fun TopBar(
     title: String,
@@ -833,124 +850,219 @@ private fun TopBar(
     onBack: (() -> Unit)? = null,
 ) {
     val words = LocalStrings.current
-    Row(
-        modifier
-            .fillMaxWidth()
-            .background(Kajet.colors.sheet)
-            .padding(horizontal = if (narrow) 4.dp else 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (narrow) 4.dp else 10.dp),
-    ) {
-        if (onBack != null) {
-            IconAction(KajetIcons.BackArrow, words.backToLibrary, onBack)
-        }
-        BasicTextField(
-            value = title,
-            onValueChange = onTitle,
-            singleLine = true,
-            textStyle = Kajet.type.titleSmall.copy(color = Kajet.colors.text),
-            cursorBrush = SolidColor(Kajet.colors.accent),
-            // Na wąskim ekranie tytuł nie może zjeść miejsca na kolory.
-            modifier = Modifier.widthIn(min = 72.dp, max = if (narrow) 120.dp else 220.dp),
-            decorationBox = { field ->
-                if (title.isEmpty()) {
-                    Text(words.unnamed, style = Kajet.type.titleSmall, color = Kajet.colors.muted)
-                }
-                field()
-            },
+    val strip: @Composable () -> Unit = {
+        PenStrip(
+            tool = tool,
+            pens = pens,
+            shapes = shapes,
+            onPenColor = onPenColor,
+            onPenWidth = onPenWidth,
+            onHighlighterColor = onHighlighterColor,
+            onHighlighterWidth = onHighlighterWidth,
+            onShapeColor = onShapeColor,
+            onShapeWidth = onShapeWidth,
+            onEraserRadius = onEraserRadius,
         )
-        SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
-        if (pageCount > 1 && !narrow) {
-            Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
-        }
+    }
+    val swatch: @Composable () -> Unit = {
+        IconAction(
+            icon = KajetIcons.ColorSwatch,
+            description = words.morePenSettings,
+            onClick = onMore,
+            selected = moreOpen,
+            touchTarget = 44.dp,
+        )
+    }
 
-        VerticalDivider()
-
-        // Reszta paska przewija się w bok, żeby na wąskim ekranie nic nie
-        // wypadło poza krawędź i żeby tytuł zawsze został na swoim miejscu.
-        Row(
-            Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+    if (narrow) {
+        Column(
+            modifier
+                .fillMaxWidth()
+                .background(Kajet.colors.sheet)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
-            if (tool.isEraser) {
-                Text(words.eraser, style = Kajet.type.label, color = Kajet.colors.muted)
-                Spacer(Modifier.width(6.dp))
-                listOf(6f to 8.dp, 12f to 12.dp, 24f to 16.dp, 48f to 20.dp).forEach { (size, dot) ->
-                    SizeDot(
-                        dot = dot,
-                        color = Kajet.colors.muted.toArgb(),
-                        picked = pens.eraserRadius == size,
-                        description = words.eraserSizeOf(size.roundToInt()),
-                        onClick = { onEraserRadius(size) },
-                    )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (onBack != null) {
+                    IconAction(KajetIcons.BackArrow, words.backToLibrary, onBack, touchTarget = 40.dp)
                 }
-            } else {
-                val highlighting = tool == EditorTool.HIGHLIGHTER
-                val shaping = tool == EditorTool.SHAPES
-                // Pierwszy pisak to atrament tej kartki: na ciemnej jasny, na jasnej ciemny.
-                val palette =
-                    if (highlighting) InkPalette.highlighters(words)
-                    else InkPalette.pens(Kajet.colors.isDark, words)
-                val picked = when {
-                    shaping -> shapes.color
-                    highlighting -> pens.highlighterColor
-                    else -> pens.penColor
-                }
-
-                palette.forEach { (name, color) ->
-                    ColourDot(
-                        color = color.toArgb(),
-                        description = name,
-                        onClick = {
-                            when {
-                                shaping -> onShapeColor(color.toArgb())
-                                highlighting -> onHighlighterColor(color.toArgb())
-                                else -> onPenColor(color.toArgb())
-                            }
-                        },
-                        selected = picked == color.toArgb(),
-                        diameter = 22.dp,
-                    )
-                }
-
-                Spacer(Modifier.width(6.dp))
-
-                val widths = if (highlighting) {
-                    listOf(8f to 8.dp, 16f to 12.dp, 26f to 16.dp, 36f to 20.dp)
-                } else {
-                    listOf(1f to 6.dp, 2f to 9.dp, 4f to 13.dp, 8f to 18.dp)
-                }
-                val currentWidth = when {
-                    shaping -> shapes.strokeWidth
-                    highlighting -> pens.highlighterWidth
-                    else -> pens.penWidth
-                }
-                widths.forEach { (size, dot) ->
-                    SizeDot(
-                        dot = dot,
-                        color = picked,
-                        picked = currentWidth == size,
-                        description = words.strokeWidthOf("%.1f".format(size)),
-                        onClick = {
-                            when {
-                                shaping -> onShapeWidth(size)
-                                highlighting -> onHighlighterWidth(size)
-                                else -> onPenWidth(size)
-                            }
-                        },
-                    )
-                }
+                TitleField(
+                    title = title,
+                    onTitle = onTitle,
+                    modifier = Modifier.weight(1f),
+                )
+                SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
+                swatch()
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                strip()
+            }
+        }
+    } else {
+        Row(
+            modifier
+                .fillMaxWidth()
+                .background(Kajet.colors.sheet)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (onBack != null) {
+                IconAction(KajetIcons.BackArrow, words.backToLibrary, onBack)
+            }
+            TitleField(
+                title = title,
+                onTitle = onTitle,
+                modifier = Modifier.widthIn(min = 72.dp, max = 220.dp),
+            )
+            SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
+            if (pageCount > 1) {
+                Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
             }
 
-            IconAction(
-                icon = KajetIcons.ColorSwatch,
-                description = words.morePenSettings,
-                onClick = onMore,
-                selected = moreOpen,
-                touchTarget = 44.dp,
+            VerticalDivider()
+
+            // Reszta paska przewija się w bok, żeby przy wąskim oknie nic nie
+            // wypadło poza krawędź i żeby tytuł zawsze został na swoim miejscu.
+            Row(
+                Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                strip()
+                swatch()
+            }
+        }
+    }
+}
+
+/** Tytuł notatki wprost w pasku — kliknięcie w napis od razu go poprawia. */
+@Composable
+private fun TitleField(
+    title: String,
+    onTitle: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val words = LocalStrings.current
+    BasicTextField(
+        value = title,
+        onValueChange = onTitle,
+        singleLine = true,
+        textStyle = Kajet.type.titleSmall.copy(color = Kajet.colors.text),
+        cursorBrush = SolidColor(Kajet.colors.accent),
+        modifier = modifier,
+        decorationBox = { field ->
+            if (title.isEmpty()) {
+                Text(
+                    text = words.unnamed,
+                    style = Kajet.type.titleSmall,
+                    color = Kajet.colors.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            field()
+        },
+    )
+}
+
+/**
+ * Barwy i grubości bieżącego narzędzia. Gumka ma zamiast barw same wielkości.
+ *
+ * Stoi wprost w rzędzie, który ją wywołuje — raz w pasku tabletu, raz
+ * w osobnym rzędzie na telefonie.
+ */
+@Composable
+private fun PenStrip(
+    tool: EditorTool,
+    pens: PenSettings,
+    shapes: ShapeSettings,
+    onPenColor: (Int) -> Unit,
+    onPenWidth: (Float) -> Unit,
+    onHighlighterColor: (Int) -> Unit,
+    onHighlighterWidth: (Float) -> Unit,
+    onShapeColor: (Int) -> Unit,
+    onShapeWidth: (Float) -> Unit,
+    onEraserRadius: (Float) -> Unit,
+) {
+    val words = LocalStrings.current
+    if (tool.isEraser) {
+        Text(words.eraser, style = Kajet.type.label, color = Kajet.colors.muted)
+        Spacer(Modifier.width(6.dp))
+        listOf(6f to 8.dp, 12f to 12.dp, 24f to 16.dp, 48f to 20.dp).forEach { (size, dot) ->
+            SizeDot(
+                dot = dot,
+                color = Kajet.colors.muted.toArgb(),
+                picked = pens.eraserRadius == size,
+                description = words.eraserSizeOf(size.roundToInt()),
+                onClick = { onEraserRadius(size) },
+            )
+        }
+    } else {
+        val highlighting = tool == EditorTool.HIGHLIGHTER
+        val shaping = tool == EditorTool.SHAPES
+        // Pierwszy pisak to atrament tej kartki: na ciemnej jasny, na jasnej ciemny.
+        val palette =
+            if (highlighting) InkPalette.highlighters(words)
+            else InkPalette.pens(Kajet.colors.isDark, words)
+        val picked = when {
+            shaping -> shapes.color
+            highlighting -> pens.highlighterColor
+            else -> pens.penColor
+        }
+
+        palette.forEach { (name, color) ->
+            ColourDot(
+                color = color.toArgb(),
+                description = name,
+                onClick = {
+                    when {
+                        shaping -> onShapeColor(color.toArgb())
+                        highlighting -> onHighlighterColor(color.toArgb())
+                        else -> onPenColor(color.toArgb())
+                    }
+                },
+                selected = picked == color.toArgb(),
+                diameter = 22.dp,
+            )
+        }
+
+        Spacer(Modifier.width(6.dp))
+
+        val widths = if (highlighting) {
+            listOf(8f to 8.dp, 16f to 12.dp, 26f to 16.dp, 36f to 20.dp)
+        } else {
+            listOf(1f to 6.dp, 2f to 9.dp, 4f to 13.dp, 8f to 18.dp)
+        }
+        val currentWidth = when {
+            shaping -> shapes.strokeWidth
+            highlighting -> pens.highlighterWidth
+            else -> pens.penWidth
+        }
+        widths.forEach { (size, dot) ->
+            SizeDot(
+                dot = dot,
+                color = picked,
+                picked = currentWidth == size,
+                description = words.strokeWidthOf("%.1f".format(size)),
+                onClick = {
+                    when {
+                        shaping -> onShapeWidth(size)
+                        highlighting -> onHighlighterWidth(size)
+                        else -> onPenWidth(size)
+                    }
+                },
             )
         }
     }
