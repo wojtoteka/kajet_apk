@@ -10,3 +10,6 @@ captures/
 .cxx
 local.properties
 app/release/
+*.apk
+*.aab
+.claude/
