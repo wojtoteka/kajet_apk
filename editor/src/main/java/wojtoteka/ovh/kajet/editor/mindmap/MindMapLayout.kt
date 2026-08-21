@@ -17,7 +17,7 @@ import kotlin.math.sin
  * Do tej pory mapa szła w prawo kolumnami, poziom po poziomie. Wygląda to
  * porządnie, ale czyta się źle: przy czterech gałęziach po kilkoro dzieci
  * kartka rośnie w dół na kilka ekranów, a na telefonie zostaje z tego wąski,
- * bardzo długi pasek. Mapa myśli ma się rozchodzić na boki — po to właśnie
+ * bardzo długi pasek. Mapa myśli ma się rozchodzić na boki - po to właśnie
  * jest mapą, a nie spisem.
  *
  * Rachunek jest przepisany JEDEN DO JEDNEGO z serwera (src/lib/mindmap-layout.ts).
@@ -38,7 +38,7 @@ object MindMapLayout {
     const val GAP_Y = 26f
     const val GAP_ROOTS = 60f
 
-    /** Najmniejszy prześwit między węzłami — i w głąb, i w poprzek pierścienia. */
+    /** Najmniejszy prześwit między węzłami - i w głąb, i w poprzek pierścienia. */
     const val GAP = 44f
     /** Przerwa między osobnymi mapami, gdy na jednej kartce jest ich kilka. */
     const val GAP_CLUSTERS = 96f
@@ -89,7 +89,7 @@ object MindMapLayout {
         }
 
         for (node in map.nodes) if (node.id !in hasParent) openRoot(node.id)
-        // Zostały węzły zamknięte w pierścieniu — każdy zaczyna własną mapę,
+        // Zostały węzły zamknięte w pierścieniu - każdy zaczyna własną mapę,
         // żeby nie przepadł.
         for (node in map.nodes) openRoot(node.id)
 
@@ -135,7 +135,7 @@ object MindMapLayout {
             /*
              * Pełne koło przesunięte tak, żeby PIERWSZE dziecko wypadło
              * dokładnie po prawej. Przy jednej gałęzi wychodzi z tego węzeł
-             * obok korzenia, przy dwóch — lewo i prawo, przy czterech — krzyż.
+             * obok korzenia, przy dwóch - lewo i prawo, przy czterech - krzyż.
              */
             val rootKids = kids[root].orEmpty()
             val wholeRim = rootKids.fold(0f) { sum, child -> sum + (rim[child] ?: 1f) }
@@ -279,14 +279,14 @@ object MindMapLayout {
 }
 
 /*
- * Rozmiar węzła pod długość hasła — przepisany z serwera
+ * Rozmiar węzła pod długość hasła - przepisany z serwera
  * (src/lib/mindmap-layout.ts, fitNodeSize) i musi liczyć to samo.
  *
  * Węzeł ma stały rozmiar i przycina to, co się nie zmieściło, więc dłuższe
- * hasło po prostu ZNIKA — bez śladu, że coś tam jeszcze było. Miar pisma tu
+ * hasło po prostu ZNIKA - bez śladu, że coś tam jeszcze było. Miar pisma tu
  * nie ma, więc szerokość znaku jest oszacowana, ale nie jedną liczbą na
  * wszystkie znaki: „WWW" i „ili" są w tym samym kroju szerokie zupełnie
- * inaczej. Oszacowanie ma wychodzić raczej za duże niż za małe — węzeł
+ * inaczej. Oszacowanie ma wychodzić raczej za duże niż za małe - węzeł
  * odrobinę za wysoki nikomu nie przeszkadza, a ucięte hasło bardzo.
  */
 object MindMapSizes {
@@ -305,7 +305,7 @@ object MindMapSizes {
      */
     const val LINE_RATIO = 1.3f
     /**
-     * Wyściółka węzła, obustronnie — w jednostkach mapy.
+     * Wyściółka węzła, obustronnie - w jednostkach mapy.
      *
      * To jest `padding: 6px 10px` z węzła w edytorze WWW (measureNodeText.ts).
      * Widok węzła MUSI odkładać dokładnie tyle miejsca, bo inaczej rachunek
@@ -324,7 +324,7 @@ object MindMapSizes {
         NARROW.contains(sign) -> 0.33f
         WIDE.contains(sign) -> 0.92f
         DIGITS.contains(sign) -> 0.57f
-        // Wielka litera — także polska. Porównanie z wersją małą odróżnia
+        // Wielka litera - także polska. Porównanie z wersją małą odróżnia
         // litery od znaków przestankowych, które są sobie równe w obu wersjach.
         sign != sign.lowercaseChar() && sign == sign.uppercaseChar() -> 0.68f
         else -> 0.55f
@@ -394,7 +394,7 @@ object MindMapSizes {
     }
 
     /**
-     * Rozmiar, w którym hasło się zmieści — ale nigdy mniejszy niż teraz.
+     * Rozmiar, w którym hasło się zmieści - ale nigdy mniejszy niż teraz.
      *
      * Węzeł tylko ROŚNIE. Skurczenie go po skasowaniu połowy hasła cofałoby
      * ręczne rozciągnięcie przy poprawianiu literówki; od zmniejszania jest

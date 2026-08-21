@@ -74,7 +74,7 @@ interface IndexDao {
 
     /**
      * Ulubione: notatki i pliki, bo gwiazdkę da się postawić i na jednym,
-     * i na drugim. Foldery zostają poza spisem — one gwiazdki nie noszą.
+     * i na drugim. Foldery zostają poza spisem - one gwiazdki nie noszą.
      */
     @Query(
         """
@@ -117,27 +117,27 @@ interface IndexDao {
     @Query("SELECT COUNT(*) FROM entries")
     suspend fun count(): Int
 
-    /** Wszystkie notatki ze spisu — do uzgadniania biblioteki z chmurą. */
+    /** Wszystkie notatki ze spisu - do uzgadniania biblioteki z chmurą. */
     @Query("SELECT * FROM entries WHERE type = 'NOTE' AND documentId != ''")
     suspend fun allNotes(): List<IndexEntry>
 
-    /** Cały spis — do wypatrywania wierszy po plikach, których już nie ma. */
+    /** Cały spis - do wypatrywania wierszy po plikach, których już nie ma. */
     @Query("SELECT * FROM entries")
     suspend fun allEntries(): List<IndexEntry>
 
-    /** Adresy plików w gałęzi — po nich kasuje się treść z wyszukiwarki. */
+    /** Adresy plików w gałęzi - po nich kasuje się treść z wyszukiwarki. */
     @Query("SELECT documentUri FROM entries WHERE path = :path OR path LIKE :path || '/%'")
     suspend fun urisUnder(path: String): List<String>
 
-    /** Wszystkie pliki z kodem — one też jeżdżą do chmury. */
+    /** Wszystkie pliki z kodem - one też jeżdżą do chmury. */
     @Query("SELECT path FROM entries WHERE type = 'CODE_FILE'")
     suspend fun allCodeFilePaths(): List<String>
 
-    /** Wszystkie foldery — do synchronizacji struktury katalogów z chmurą. */
+    /** Wszystkie foldery - do synchronizacji struktury katalogów z chmurą. */
     @Query("SELECT path FROM entries WHERE type = 'FOLDER'")
     suspend fun allFolderPaths(): List<String>
 
-    /** Notatki w gałęzi (wpis i wszystko pod nim) — do zgłaszania kasowań. */
+    /** Notatki w gałęzi (wpis i wszystko pod nim) - do zgłaszania kasowań. */
     @Query(
         """
         SELECT * FROM entries
@@ -147,7 +147,7 @@ interface IndexDao {
     )
     suspend fun notesUnder(path: String): List<IndexEntry>
 
-    /** Foldery w gałęzi (wpis i wszystko pod nim) — do zgłaszania kasowań. */
+    /** Foldery w gałęzi (wpis i wszystko pod nim) - do zgłaszania kasowań. */
     @Query(
         """
         SELECT path FROM entries
@@ -157,7 +157,7 @@ interface IndexDao {
     )
     suspend fun folderPathsUnder(path: String): List<String>
 
-    /** Pliki z kodem w gałęzi — do zgłaszania kasowań. */
+    /** Pliki z kodem w gałęzi - do zgłaszania kasowań. */
     @Query(
         """
         SELECT path FROM entries
@@ -211,7 +211,7 @@ interface IndexDao {
     /**
      * Kasuje gałąź razem z treścią do wyszukiwania.
      *
-     * Samo [deleteBranch] zostawiało wiersze w `content_fts` — szukanie po
+     * Samo [deleteBranch] zostawiało wiersze w `content_fts` - szukanie po
      * treści oddawało wtedy notatki, których dawno nie ma (złączenie z
      * `entries` je gubi, ale wiersze rosną w nieskończoność). Kasowanie ma po
      * sobie nie zostawiać niczego, więc idą razem i jednym zapisem.
@@ -234,7 +234,7 @@ interface IndexDao {
     // Version 3 renames the tables and columns to English. The index is thrown
     // away and rebuilt, so there is nothing to migrate.
     //
-    // Wersja 4 nie zmienia kształtu tabel — wymusza odbudowę, bo podglądy
+    // Wersja 4 nie zmienia kształtu tabel - wymusza odbudowę, bo podglądy
     // notatek zapisane starą wersją IndexText mają w treści gołe `**`.
     // Podgląd powstaje przy zapisie do spisu, więc bez odbudowy poprawka
     // objęłaby wyłącznie notatki tknięte po aktualizacji.

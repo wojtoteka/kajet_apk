@@ -10,14 +10,14 @@ import java.net.URL
 /**
  * Wysyłka raportów o awariach na serwer Kajetu.
  *
- * Bez konta i bez tokenu — punkt `POST /api/v1/crash` przyjmuje raporty od
+ * Bez konta i bez tokenu - punkt `POST /api/v1/crash` przyjmuje raporty od
  * każdego. Aplikacja potrafi wywrócić się zanim ktokolwiek się zaloguje, a
  * wtedy raport jest najbardziej potrzebny.
  *
  * Celowo nie dotyka [AccountStore] ani [CloudClient]: raporty wysyła się także
  * po awarii w budowie kontenera aplikacji, kiedy tamtych obiektów może po
  * prostu nie być. Stąd goły [HttpURLConnection] i jedyna zależność w postaci
- * stałej z adresem — a ta jest wstawiana w kod przy kompilacji.
+ * stałej z adresem - a ta jest wstawiana w kod przy kompilacji.
  *
  * Wołać poza wątkiem głównym.
  */
@@ -31,7 +31,7 @@ object CrashReporter {
         /** Serwer odmówił na stałe (za duży, nieczytelny). Powtarzanie nic nie da. */
         REJECTED,
 
-        /** Nie udało się teraz — brak sieci, zapora, awaria serwera. Zostaje na potem. */
+        /** Nie udało się teraz - brak sieci, zapora, awaria serwera. Zostaje na potem. */
         RETRY,
     }
 
@@ -43,7 +43,7 @@ object CrashReporter {
     /**
      * Treść zapytania. Puste pola wypadają z JSON-a (`explicitNulls = false`
      * w [CloudClient.json]), a po stronie serwera wszystkie poza `report` są
-     * nieobowiązkowe — starszy raport bez numeru wydania też ma dojść.
+     * nieobowiązkowe - starszy raport bez numeru wydania też ma dojść.
      */
     @Serializable
     data class Body(
@@ -112,15 +112,15 @@ object CrashReporter {
                   Także 404: serwer bez nowej trasy jeszcze nie umie przyjąć
                   raportu (wdrożenie idzie serwer-najpierw, ale kolejność da
                   się odwrócić przez pomyłkę). Raport ma wtedy poczekać na
-                  dysku, a nie przepaść — stąd RETRY, nie REJECTED.
+                  dysku, a nie przepaść - stąd RETRY, nie REJECTED.
                 */
                 else -> {
-                    Log.i(TAG, "Serwer nie przyjął teraz raportu o awarii ($code) — spróbuję później")
+                    Log.i(TAG, "Serwer nie przyjął teraz raportu o awarii ($code) - spróbuję później")
                     Outcome.RETRY
                 }
             }
         } catch (failure: Throwable) {
-            // Brak sieci to normalny stan, nie usterka — stąd tylko notatka
+            // Brak sieci to normalny stan, nie usterka - stąd tylko notatka
             // w dzienniku i powrót do tego raportu przy następnym uruchomieniu.
             Log.i(TAG, "Raport o awarii poczeka na sieć: ${failure.message}")
             Outcome.RETRY

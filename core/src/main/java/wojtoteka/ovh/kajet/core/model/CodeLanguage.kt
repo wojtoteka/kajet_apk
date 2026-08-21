@@ -7,7 +7,7 @@ import wojtoteka.ovh.kajet.core.text.Strings
  *
  * KOLEJNOŚĆ WPISÓW JEST CZĘŚCIĄ ZACHOWANIA, nie porządkiem alfabetycznym.
  * Rządzi dwiema rzeczami: tym, co widać w oknie zakładania pliku, i tym, na
- * jaki język wypada plik przy dwóch wpisach o tym samym rozszerzeniu —
+ * jaki język wypada plik przy dwóch wpisach o tym samym rozszerzeniu -
  * [fromExtension] bierze pierwsze dopasowanie. Pierwsze trzynaście wpisów
  * stoi dokładnie tak jak LANGUAGES w src/lib/code-runner.ts na serwerze;
  * przestawienie ich rozjeżdża aplikację ze stroną.
@@ -26,7 +26,7 @@ enum class CodeLanguage(
     PYTHON("python", "Python", listOf("py"), "python", true, "main.py", "#"),
     JAVASCRIPT("javascript", "JavaScript", listOf("js", "mjs"), "javascript", false, "main.js"),
     TYPESCRIPT("typescript", "TypeScript", listOf("ts"), "typescript", false, "main.ts"),
-    // „Shell", nie „Bash" — tak ten język nazywa się w spisie serwera, a ten
+    // „Shell", nie „Bash" - tak ten język nazywa się w spisie serwera, a ten
     // sam plik .sh nie ma prawa podpisywać się inaczej na stronie, a inaczej
     // na tablecie.
     BASH("bash", "Shell", listOf("sh", "bash"), "bash", false, "main.sh", "#"),
@@ -41,22 +41,22 @@ enum class CodeLanguage(
       kolejności. Serwer rozstrzyga kolizję pierwszym dopasowaniem ze spisu
       (guessLanguageFromTitle w code-note.ts), SQLite stoi tam wyżej, więc
       zadanie.sql jest wszędzie SQLite. Odwrócenie tego wymaga zmiany tu
-      i w code-runner.ts naraz — samo tutaj zrobi tylko tyle, że ten sam plik
+      i w code-runner.ts naraz - samo tutaj zrobi tylko tyle, że ten sam plik
       będzie się otwierał inaczej na tablecie, a inaczej na stronie.
     */
     SQL("sql", "SQL", listOf("sql"), "sqlite3", false, "main.sql", "--"),
     /*
-      MySQL to nie ten sam język co SQLite — szkoła uczy SHOW TABLES,
+      MySQL to nie ten sam język co SQLite - szkoła uczy SHOW TABLES,
       AUTO_INCREMENT i NOW(), których SQLite nie zna.
 
       Na tablecie tego wpisu nie da się wybrać, bo aplikacja czyta język
       wyłącznie z rozszerzenia pliku, a .sql należy do SQLite. Wpis jest tu po
       to, żeby notatka założona na stronie jako MySQL zeszła na tablet jako
       zwykły plik .sql z kolorowaniem (a nie .txt) i żeby wróciła na serwer
-      dalej jako MySQL — pilnuje tego pamięć języka w CodeFileIds.
+      dalej jako MySQL - pilnuje tego pamięć języka w CodeFileIds.
     */
     MYSQL("mysql", "MySQL", listOf("sql"), "mysql", false, "main.sql", "--"),
-    // HTML się nie uruchamia jak program — zamiast tego edytor kodu ma podgląd
+    // HTML się nie uruchamia jak program - zamiast tego edytor kodu ma podgląd
     // strony. Prefiks komentarza jest liniowy z braku lepszego mechanizmu.
     HTML("html", "HTML", listOf("html", "htm"), null, false, "index.html", "<!--"),
 
@@ -64,7 +64,7 @@ enum class CodeLanguage(
       Dalej to, czego serwer nie uruchamia. Puste serverRuntime znaczy „Kajet
       tego nie policzy": takiego języka nie ma w oknie zakładania pliku i nie
       ma przy nim działającego przycisku uruchomienia. Pliki, które już leżą
-      w bibliotece, otwierają się normalnie — z kolorowaniem i własną ikoną.
+      w bibliotece, otwierają się normalnie - z kolorowaniem i własną ikoną.
     */
     KOTLIN("kotlin", "Kotlin", listOf("kt", "kts"), null, false, "Main.kt"),
     GO("go", "Go", listOf("go"), null, false, "main.go"),
@@ -84,7 +84,7 @@ enum class CodeLanguage(
     companion object {
         /**
          * Język pliku po jego nazwie. Przy dwóch językach o tym samym
-         * rozszerzeniu wygrywa ten, który stoi wyżej w spisie — tak samo jak
+         * rozszerzeniu wygrywa ten, który stoi wyżej w spisie - tak samo jak
          * na serwerze.
          */
         fun fromExtension(fileName: String): CodeLanguage? {
@@ -95,7 +95,7 @@ enum class CodeLanguage(
 
         /**
          * Język po identyfikatorze z serwera. Nieznany identyfikator oddaje
-         * `null`, a NIE rzuca — notatka w języku, którego ta wersja aplikacji
+         * `null`, a NIE rzuca - notatka w języku, którego ta wersja aplikacji
          * jeszcze nie zna, ma się otworzyć jako zwykły tekst, a nie wywrócić
          * pobieranie.
          */
@@ -106,7 +106,7 @@ enum class CodeLanguage(
          * jest tam „sqlite3", a C++ „c++", więc samo [fromId] ich nie znajdzie.
          */
         fun fromServerId(id: String?): CodeLanguage? {
-            // Bez tej straży pusty identyfikator trafiałby w HTML — to pierwszy
+            // Bez tej straży pusty identyfikator trafiałby w HTML - to pierwszy
             // wpis, który ma puste serverRuntime, więc "== id" byłoby prawdą.
             if (id.isNullOrEmpty()) return null
             return entries.firstOrNull { it.serverRuntime == id } ?: fromId(id)

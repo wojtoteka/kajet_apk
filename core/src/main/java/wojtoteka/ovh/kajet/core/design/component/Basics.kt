@@ -205,7 +205,7 @@ fun SecondaryButton(
 
           Rząd przycisków bez przewijania oddaje ostatniemu to, co zostało po
           poprzednich. Przy ciasnym oknie zostawało kilka punktów i napis
-          rozkładał się po jednej literze w wierszu — a że przycisk ma na
+          rozkładał się po jednej literze w wierszu - a że przycisk ma na
           sztywno 48 dp wysokości, z takiego słupka widać było jedną literę.
           Wielokropek mówi więcej.
         */
@@ -288,7 +288,7 @@ fun NoticeBar(
 
 /*
   Komunikat postawiony wewnątrz treści, a nie przyklejony do górnej krawędzi
-  ekranu jak NoticeBar. Bez wypełnienia i z obwódką w barwie komunikatu — tak
+  ekranu jak NoticeBar. Bez wypełnienia i z obwódką w barwie komunikatu - tak
   samo jak napisy na ekranie konta, żeby jedna wiadomość nie wyglądała w Kajecie
   inaczej niż druga. Wypełniony pasek w środku sekcji odcinał się od tła jak
   obca płyta.

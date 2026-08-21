@@ -15,7 +15,7 @@ import kotlin.math.pow
  * Kolory notatki na prawdziwy papier: biała kartka, ciemny tusz, czytelne linie.
  *
  * Na ekranie Kajet trzyma jasny atrament na ciemnej kartce. PDF, druk i PNG
- * malują biel — bez tej zamiany kremowy `#E8E4DA` znika. To ta sama umowa
+ * malują biel - bez tej zamiany kremowy `#E8E4DA` znika. To ta sama umowa
  * co biały podgląd HTML: płótno papieru, a nie zrzut ciemnego edytora.
  *
  * Kolory z palety (niebieski, czerwony, zakreślacze) zostają, o ile już

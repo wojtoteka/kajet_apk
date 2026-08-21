@@ -6,7 +6,7 @@ import org.junit.Test
 /**
  * Spis języków kontra spis serwera.
  *
- * Aplikacja trzyma własną listę — serwera o nią nie pyta. Rozjazd nie kończy
+ * Aplikacja trzyma własną listę - serwera o nią nie pyta. Rozjazd nie kończy
  * się tu komunikatem, tylko plikiem, który otwiera się inaczej na tablecie,
  * a inaczej na stronie, albo uruchomieniem odbitym zdaniem „Tego języka Kajet
  * nie uruchomi na tym serwerze". Te testy pilnują trzech rzeczy: identyfikatora
@@ -24,7 +24,7 @@ class CodeLanguageTest {
         "php", "ruby", "sqlite3", "mysql", "html",
     )
 
-    /** Napis, który leci na serwer — bywa inny niż nasz [CodeLanguage.id]. */
+    /** Napis, który leci na serwer - bywa inny niż nasz [CodeLanguage.id]. */
     private val CodeLanguage.serverId: String get() = serverRuntime ?: id
 
     @Test
@@ -94,7 +94,7 @@ class CodeLanguageTest {
         assertThat(CodeLanguage.fromServerId("c++")).isEqualTo(CodeLanguage.CPP)
         assertThat(CodeLanguage.fromServerId("csharp")).isEqualTo(CodeLanguage.CSHARP)
         assertThat(CodeLanguage.fromServerId("java")).isEqualTo(CodeLanguage.JAVA)
-        // Języki spoza serwera mają puste serverRuntime — te znajdują się po id.
+        // Języki spoza serwera mają puste serverRuntime - te znajdują się po id.
         assertThat(CodeLanguage.fromServerId("kotlin")).isEqualTo(CodeLanguage.KOTLIN)
     }
 
@@ -114,7 +114,7 @@ class CodeLanguageTest {
         /*
           GET /api/v1/code nie oddaje pola `preview`, więc po samym tamtym
           spisie HTML wyglądałby na język do uruchomienia. Aplikacja wie to
-          sama, z pustego serverRuntime — i po tym pozna go też runner.
+          sama, z pustego serverRuntime - i po tym pozna go też runner.
         */
         assertThat(CodeLanguage.HTML.runnable).isFalse()
         assertThat(CodeLanguage.HTML.serverRuntime).isNull()
@@ -135,7 +135,7 @@ class CodeLanguageTest {
         assertThat(CodeLanguage.CSHARP.runnable).isTrue()
         assertThat(CodeLanguage.JAVA.runnable).isTrue()
         assertThat(CodeLanguage.MYSQL.runnable).isTrue()
-        // Żaden z nich nie liczy się na samym tablecie — potrzebny jest serwer.
+        // Żaden z nich nie liczy się na samym tablecie - potrzebny jest serwer.
         assertThat(CodeLanguage.CSHARP.offline).isFalse()
         assertThat(CodeLanguage.JAVA.offline).isFalse()
         assertThat(CodeLanguage.MYSQL.offline).isFalse()

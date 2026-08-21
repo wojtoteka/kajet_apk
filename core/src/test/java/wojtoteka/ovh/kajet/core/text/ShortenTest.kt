@@ -17,7 +17,7 @@ class ShortenTest {
 
         assertThat(short.length).isAtMost(30)
         assertThat(short).contains("…")
-        // Początek i domena zostają — po nich poznaje się, czyj to adres.
+        // Początek i domena zostają - po nich poznaje się, czyj to adres.
         assertThat(short).startsWith("bardzo.dlugi.adre")
         assertThat(short).endsWith("przyklad.pl")
     }
@@ -30,7 +30,7 @@ class ShortenTest {
 
     @Test
     fun `smiesznie mala granica nie wywraca skracania`() {
-        // Poniżej pięciu znaków nie ma czego dzielić na głowę i ogon —
+        // Poniżej pięciu znaków nie ma czego dzielić na głowę i ogon -
         // oddajemy tekst, jaki jest, zamiast liczyć ujemne długości.
         assertThat(shortenMiddle("abcdefgh", 3)).isEqualTo("abcdefgh")
     }

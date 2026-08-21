@@ -29,7 +29,7 @@ object KajetLinks {
     /**
      * Strona z plikiem aplikacji do pobrania.
      *
-     * Do komunikatu o nowej wersji adres przychodzi Z ODPOWIEDZI serwera —
+     * Do komunikatu o nowej wersji adres przychodzi Z ODPOWIEDZI serwera -
      * to on wie, gdzie leży plik, i może kiedyś podać co innego. Ten stoi tu na
      * wypadek, gdyby odpowiedź go nie niosła, oraz dla ustawień, gdzie nie ma
      * czego pytać.

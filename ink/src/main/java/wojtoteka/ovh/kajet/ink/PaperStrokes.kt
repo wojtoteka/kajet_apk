@@ -13,7 +13,7 @@ import kotlin.math.pow
  * Kreski na kartkę, na której ląduje PNG wstawiony do notatki tekstowej.
  *
  * Na ekranie Kajet trzyma jasny atrament na ciemnej kartce. PNG siada na
- * jasnym papierze markdowna — bez tej zamiany kremowy `#E8E4DA` znika.
+ * jasnym papierze markdowna - bez tej zamiany kremowy `#E8E4DA` znika.
  * To ta sama umowa co biały podgląd HTML i PDF: płótno papieru, nie zrzut
  * ciemnego edytora.
  */

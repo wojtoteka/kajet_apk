@@ -9,7 +9,7 @@ import java.util.Locale
  * Język aplikacji.
  *
  * Zasada jest prosta: bez własnego wyboru Kajet mówi tak, jak ustawiony jest
- * system — po polsku, gdy system jest po polsku, po angielsku w każdym innym
+ * system - po polsku, gdy system jest po polsku, po angielsku w każdym innym
  * przypadku. Kto chce inaczej, przestawia to w ustawieniach i wybór zostaje.
  *
  * Nie idziemy przez `res/values-*` i systemowe zasoby, choć to zwykła droga na
@@ -35,7 +35,7 @@ enum class AppLanguage(val id: String) {
  * Który zestaw napisów obowiązuje przy tym wyborze i tym ustawieniu systemu.
  *
  * [systemLanguage] to dwuliterowy kod z systemu ("pl", "en", "de"...).
- * Wszystko poza polskim dostaje angielski — to najbliższe „drugiego języka",
+ * Wszystko poza polskim dostaje angielski - to najbliższe „drugiego języka",
  * jaki ktokolwiek zrozumie.
  */
 fun stringsFor(choice: AppLanguage, systemLanguage: String): Strings = when (choice) {
@@ -53,7 +53,7 @@ val LocalStrings = staticCompositionLocalOf<Strings> { PolishStrings }
  * Napisy dla kodu, który nie jest widokiem.
  *
  * [LocalStrings] działa tylko wewnątrz Compose, a komunikaty o błędach powstają
- * także w modelach widoku, w synchronizacji i przy czytaniu plików — a lądują
+ * także w modelach widoku, w synchronizacji i przy czytaniu plików - a lądują
  * potem na ekranie. Trzymanie wyboru języka osobno w każdym z tych miejsc
  * znaczyłoby przekazywanie go przez każdą fabrykę i każde repozytorium.
  *

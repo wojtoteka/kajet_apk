@@ -16,13 +16,13 @@ import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.storage.NoteCodec
 
 /**
- * Co synchronizacja ROBI z odpowiedzią serwera — dalszy ciąg
+ * Co synchronizacja ROBI z odpowiedzią serwera - dalszy ciąg
  * [ServerContractTest], który sprawdza tylko, czy umie ją odczytać.
  *
  * Odpowiedź konfliktu rozgałęzia się na pięć ścieżek różniących się jedną
  * flagą albo jednym polem, a pomyłka między nimi to „skasowałem notatkę
  * i wróciła" albo „napisałem notatkę i zniknęła". Te testy przypinają każdą
- * ścieżkę z osobna, na atrapach z [SyncFakes] — prawdziwe są kolejka
+ * ścieżkę z osobna, na atrapach z [SyncFakes] - prawdziwe są kolejka
  * (SharedPreferences przez Robolectric) i zapamiętane wersje.
  *
  * Pliki z kodem ma [SyncCodeTest], a kosz i trwałe kasowanie [SyncTrashTest].
@@ -143,7 +143,7 @@ class SyncTest {
         assertThat(library.trashedNoteIds).containsExactly(noteId)
         assertThat(knownVersion(noteId)).isEqualTo(9)
         assertThat(queue.size()).isEqualTo(0)
-        // Kopia konfliktu NIE powstaje — kosz to nie rozjazd treści.
+        // Kopia konfliktu NIE powstaje - kosz to nie rozjazd treści.
         assertThat(library.notes.values.none { it.title.contains("kopia z chmury") }).isTrue()
     }
 
@@ -239,7 +239,7 @@ class SyncTest {
 
         sync()
 
-        // Serwer pusty, pobranie pełne — uzgadnianie ma prawo wysłać nowość.
+        // Serwer pusty, pobranie pełne - uzgadnianie ma prawo wysłać nowość.
         assertThat(transport.sentNotes.single().baseVersion).isEqualTo(0)
         assertThat(knownVersion(noteId)).isEqualTo(1)
     }
@@ -262,7 +262,7 @@ class SyncTest {
 
         sync()
 
-        // Serwer NIGDY nie dostał zapisu z zerową podstawą — przy zerze
+        // Serwer NIGDY nie dostał zapisu z zerową podstawą - przy zerze
         // przyjąłby bezwarunkowo i nowsza wersja przepadłaby bez śladu.
         assertThat(transport.sentNotes.none { it.id == noteId && it.baseVersion == 0 }).isTrue()
         // Wpis pojechał w tym samym przebiegu, ale już po pobraniu,
@@ -285,7 +285,7 @@ class SyncTest {
 
         sync()
 
-        // Zerwane pobranie: kolejka czeka, nie wysyła w ciemno — i nie liczy
+        // Zerwane pobranie: kolejka czeka, nie wysyła w ciemno - i nie liczy
         // tego jako nieudanej próby, bo to nie wina notatki.
         assertThat(transport.sentNotes).isEmpty()
         assertThat(queue.size()).isEqualTo(1)
@@ -314,7 +314,7 @@ class SyncTest {
 
         sync()
 
-        // Zapamiętana wersja udawałaby komplet — brakującego załącznika
+        // Zapamiętana wersja udawałaby komplet - brakującego załącznika
         // nikt by już nie dociągnął.
         assertThat(knownVersion(noteId)).isEqualTo(0)
 
@@ -334,7 +334,7 @@ class SyncTest {
 
         sync()
 
-        // Treść doszła i wersja słusznie zapamiętana, ale wpis zostaje —
+        // Treść doszła i wersja słusznie zapamiętana, ale wpis zostaje -
         // kiedyś schodził i braku załącznika nie nadrabiało już nic.
         assertThat(knownVersion(noteId)).isEqualTo(1)
         assertThat(queue.size()).isEqualTo(1)
@@ -352,12 +352,12 @@ class SyncTest {
     fun `wyjatek w tle nie blokuje nastepnych synchronizacji`() {
         library.notes[path] = document()
 
-        // Pierwsze pytanie o zalogowanie zadaje reportChange, drugie —
+        // Pierwsze pytanie o zalogowanie zadaje reportChange, drugie -
         // synchronizacja w tle; to ono rzuca wyjątkiem.
         account.throwOnSignedInCall = 2
         sync.reportChange(path, noteId)
 
-        // Awaria w tle ma zapalić stan „czeka" (brokenSync) — kiedyś
+        // Awaria w tle ma zapalić stan „czeka" (brokenSync) - kiedyś
         // połknięty wyjątek zostawiał wieczne „Synchronizuję…".
         runBlocking {
             withTimeout(5_000) {
@@ -413,7 +413,7 @@ class SyncTest {
         repeat(QueueEntry.MAX_ATTEMPTS) { sync() }
         assertThat(queue.stuckCount()).isEqualTo(1)
 
-        // Człowiek zapisał notatkę jeszcze raz — wpis dostaje pełną pulę prób.
+        // Człowiek zapisał notatkę jeszcze raz - wpis dostaje pełną pulę prób.
         queue.add(path, noteId)
         assertThat(queue.stuckCount()).isEqualTo(0)
     }

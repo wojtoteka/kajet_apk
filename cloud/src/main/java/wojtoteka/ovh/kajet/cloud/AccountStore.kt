@@ -38,7 +38,7 @@ class AccountStore(context: Context) : SyncAccount {
 
     /**
      * Przesuwa ten znacznik. Wołane DOPIERO po przejściu całego spisu do końca
-     * — przerwana w połowie synchronizacja nie ma prawa przeskoczyć nagrobków,
+     * - przerwana w połowie synchronizacja nie ma prawa przeskoczyć nagrobków,
      * których jeszcze nie zastosowano.
      */
     override fun rememberDeletedSync(moment: Long) {
@@ -66,11 +66,11 @@ class AccountStore(context: Context) : SyncAccount {
      *
      * Schodzi token, a razem z nim WSZYSTKO, co mówi o człowieku: login, adres,
      * zajęte miejsce. Sesji nie ma, więc aplikacja nie ma prawa dalej wyświetlać
-     * czyjejś nazwy — zostaje sam znacznik, dzięki któremu ekrany mówią wprost
+     * czyjejś nazwy - zostaje sam znacznik, dzięki któremu ekrany mówią wprost
      * „sesja wygasła" zamiast udawać, że nikt się nigdy nie logował. Kolejka
      * wysyłki zostaje nietknięta: po ponownym zalogowaniu zaległe zmiany dojadą.
      *
-     * Wołane z jednego miejsca — [CloudClient] przy odpowiedzi odmawiającej
+     * Wołane z jednego miejsca - [CloudClient] przy odpowiedzi odmawiającej
      * tożsamości.
      */
     fun markSessionExpired() {
@@ -234,7 +234,7 @@ sealed interface SignInState {
 
     /**
      * Token przestał działać (wylogowanie przez stronę, wygaśnięcie). Bez
-     * nazwy konta — ta zeszła razem z sesją; zostaje sama wiadomość, że trzeba
+     * nazwy konta - ta zeszła razem z sesją; zostaje sama wiadomość, że trzeba
      * zalogować się jeszcze raz.
      */
     data class SessionExpired(override val serverUrl: String) : SignInState
@@ -258,7 +258,7 @@ sealed interface SignInState {
          * Miejsce bez ograniczeń.
          *
          * Ujemny limit, nie zerowy. Zero znaczy teraz „to konto nie ma ani
-         * bajta miejsca" — dokładnie to samo co na serwerze. Wcześniej zero
+         * bajta miejsca" - dokładnie to samo co na serwerze. Wcześniej zero
          * było brakiem ograniczeń i konto bez nadanego miejsca chwaliło się
          * tutaj miejscem bez końca.
          */

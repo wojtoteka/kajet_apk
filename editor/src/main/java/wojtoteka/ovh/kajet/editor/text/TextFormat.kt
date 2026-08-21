@@ -6,14 +6,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 /**
  * Formaty zapamiętane na przyszłość.
  *
- * Kto naciśnie pogrubienie bez zaznaczenia, nie chce pogrubić niczego wstecz —
+ * Kto naciśnie pogrubienie bez zaznaczenia, nie chce pogrubić niczego wstecz -
  * chce, żeby pogrubione było to, co zaraz napisze. Do czasu napisania format
  * czeka tutaj, a pasek narzędzi pokazuje go jako zapalony.
  */
 data class PendingFormat(
     /** Formaty do nadania, razem z wartością (barwa, liczba pikseli). */
     val on: Map<SpanType, String> = emptyMap(),
-    /** Formaty do zdjęcia — kursor stoi w pogrubieniu, a dalej ma być zwykłe. */
+    /** Formaty do zdjęcia - kursor stoi w pogrubieniu, a dalej ma być zwykłe. */
     val off: Set<SpanType> = emptySet(),
 ) {
     val isEmpty: Boolean get() = on.isEmpty() && off.isEmpty()
@@ -41,16 +41,16 @@ data class PendingFormat(
  * osierocić ani wyjść poza zaznaczenie.
  *
  * Każda z tych funkcji rusza WYŁĄCZNIE zaznaczenie. Bez zaznaczenia oddaje
- * null — wtedy format idzie do [PendingFormat] i czeka na pisanie.
+ * null - wtedy format idzie do [PendingFormat] i czeka na pisanie.
  */
 object TextFormat {
 
-    /** Zakres wielkości pisma fragmentu — szerszy niż całej notatki, bo
+    /** Zakres wielkości pisma fragmentu - szerszy niż całej notatki, bo
      *  pojedyncze słowo może być i drobnym przypisem, i wielkim tytułem. */
     const val SMALLEST_FRAGMENT = 8f
     const val LARGEST_FRAGMENT = 72f
 
-    /** Formaty obejmujące całe zaznaczenie; bez zaznaczenia — te pod kursorem. */
+    /** Formaty obejmujące całe zaznaczenie; bez zaznaczenia - te pod kursorem. */
     fun formatsIn(field: TextFieldValue): Set<FormatSpan> {
         val parsed = RichTextCodec.read(field.text)
         val from = parsed.plainOffset(field.selection.min)
@@ -64,7 +64,7 @@ object TextFormat {
 
     /**
      * Nadaje albo zdejmuje format zaznaczenia. Fragment, który format już ma
-     * w całości, traci go — drugie naciśnięcie przycisku zdejmuje pogrubienie.
+     * w całości, traci go - drugie naciśnięcie przycisku zdejmuje pogrubienie.
      */
     fun toggle(field: TextFieldValue, type: SpanType, value: String = ""): TextFieldValue? =
         edit(field, trimEdges = true) { parsed, from, to ->
@@ -144,7 +144,7 @@ object TextFormat {
      * Nadaje zapamiętane formaty tekstowi dopiero co wpisanemu.
      *
      * Wywoływane po zmianie treści: [previous] to zapis sprzed naciśnięcia
-     * klawisza. Jeśli człowiek dopisał znaki, dostają one formaty z [pending] —
+     * klawisza. Jeśli człowiek dopisał znaki, dostają one formaty z [pending] -
      * tak samo, jak w każdym porządnym edytorze. Zwraca null, gdy nie było
      * czego formatować (kasowanie, sam ruch kursora).
      */
@@ -184,7 +184,7 @@ object TextFormat {
      * Kursor po nadaniu formatu stoi MIĘDZY znacznikami, żeby dalsze pisanie
      * szło dalej pogrubione. Znak nowej linii wstawiony w to miejsce rozcinał
      * jednak znaczniki na pół („**tekst\n**"), a formaty nie przechodzą przez
-     * koniec wiersza — obie połówki stawały się zwykłym tekstem i gwiazdki
+     * koniec wiersza - obie połówki stawały się zwykłym tekstem i gwiazdki
      * wychodziły na wierzch.
      *
      * Dlatego nowa linia idzie przez model, a nie przez ciąg znaków: znak
@@ -214,7 +214,7 @@ object TextFormat {
 
         /*
           Czy kursor stoi MIĘDZY znacznikami, czy już za nimi. Po nadaniu
-          formatu stoi w środku — i tylko wtedy nowa linia rozcina znacznik,
+          formatu stoi w środku - i tylko wtedy nowa linia rozcina znacznik,
           i tylko wtedy format ma iść dalej. Kursor za domknięciem znaczy, że
           format się skończył: nowy wiersz zaczyna się zwykłym pismem.
         */
@@ -237,7 +237,7 @@ object TextFormat {
 
           Sam warunek na [carried] nie wystarczał: kto zdejmował format przed
           naciśnięciem Enter, trafiał tu z pustym [carried] mimo kursora
-          w środku znaczników — i nowa linia znów je rozcinała.
+          w środku znaczników - i nowa linia znów je rozcinała.
         */
         if (inside == RichTextCodec.NONE && carried == RichTextCodec.NONE && item == null) {
             return null
@@ -245,7 +245,7 @@ object TextFormat {
 
         if (item != null && item.groupValues[5].isBlank()) {
             // Nowa linia w pustej pozycji: koniec listy. Znacznik znika,
-            // a wiersz zostaje pusty — tak kończy się każda lista zakupów.
+            // a wiersz zostaje pusty - tak kończy się każda lista zakupów.
             val lineStart = pFrom - line.length
             return rebuild(
                 plain = plain.substring(0, lineStart) + plain.substring(pTo),
@@ -290,7 +290,7 @@ object TextFormat {
     /**
      * Kasowanie w polu, w którym znaczników nie widać.
      *
-     * Znaczniki są schowane, ale nadal siedzą w treści — a Compose kasuje
+     * Znaczniki są schowane, ale nadal siedzą w treści - a Compose kasuje
      * znaki ZAPISU, nie te, które widać. Kursor stojący za „</span>" i jedno
      * naciśnięcie Backspace zabierało z niego „>", rozbity znacznik przestawał
      * być znacznikiem i pokazywał się w notatce jako goły tekst. Tak samo
@@ -298,7 +298,7 @@ object TextFormat {
      *
      * Dlatego kasowanie idzie przez model: liczy się to, co widać. Zniknięcie
      * samych znaczników znaczy „człowiek celował w znak przed nimi", a zapis
-     * składa się z powrotem — bez pustych par i bez połówek znaczników.
+     * składa się z powrotem - bez pustych par i bez połówek znaczników.
      *
      * Obsługuje też podmianę: zaznaczenie zastąpione pisaniem bierze formaty
      * tego, co zastępuje. Null, gdy nic nie ubyło (samo dopisywanie idzie
@@ -316,7 +316,7 @@ object TextFormat {
         if (pFrom == pTo) {
             /*
               Zniknęły same znaczniki, żaden widoczny znak. Jeśli jest co
-              zabrać przed nimi — zabieramy to. Jeśli nie ma, kasowanie nie
+              zabrać przed nimi - zabieramy to. Jeśli nie ma, kasowanie nie
               miało czego dotknąć i zapis wraca w całości.
             */
             if (pFrom == 0 || plain.isEmpty()) {
@@ -407,13 +407,13 @@ object TextFormat {
 
     /**
      * Przestawia formaty zaznaczenia i składa zapis z powrotem. Zwraca pole
-     * z zaznaczonym tym samym fragmentem — można poprawiać do skutku.
+     * z zaznaczonym tym samym fragmentem - można poprawiać do skutku.
      */
     private fun edit(
         field: TextFieldValue,
         /**
          * Czy obciąć z zaznaczenia spacje na brzegach. Znaczniki parzyste
-         * ich nie znoszą — „* ma*" przestaje być kursywą i gwiazdki wychodzą
+         * ich nie znoszą - „* ma*" przestaje być kursywą i gwiazdki wychodzą
          * na wierzch. Nikt zresztą nie chce pogrubionej spacji.
          */
         trimEdges: Boolean = false,
@@ -458,8 +458,8 @@ object TextFormat {
         /*
           Nagłówek to JEDEN znacznik wiersza. Doklejanie „## " do „# Tytuł"
           dawało „## # Tytuł": parser chował tylko zewnętrzne kratki, a
-          wewnętrzne `#` / `###` wychodziły na wierzch. Dlatego kratki — także
-          poskładane z poprzednich przełączeń — schodzą najpierw, a nowy
+          wewnętrzne `#` / `###` wychodziły na wierzch. Dlatego kratki - także
+          poskładane z poprzednich przełączeń - schodzą najpierw, a nowy
           znacznik wchodzi na ich miejsce. To samo naciśnięcie zdejmuje.
         */
         val headingLen = RichTextCodec.headingPrefixLength(body)
@@ -499,7 +499,7 @@ object TextFormat {
         return TextFieldValue(next, TextRange(cursorAfter))
     }
 
-    /** Lista, zadanie, cytat — wszystko, co nie jest kratkami nagłówka. */
+    /** Lista, zadanie, cytat - wszystko, co nie jest kratkami nagłówka. */
     private val otherLinePrefix = Regex("""^(?:> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
 
     fun insert(field: TextFieldValue, fragment: String, stepBack: Int = 0): TextFieldValue {

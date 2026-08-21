@@ -1,4 +1,4 @@
-# Kajet — notatnik na Androida
+# Kajet - notatnik na Androida
 
 Notatnik na tablet z rysikiem: pismo odręczne, notatki tekstowe w Markdownie, mapy myśli,
 notatki z kodem (z Pythonem uruchamianym na urządzeniu), eksport do PDF/DOCX i synchronizacja
@@ -13,7 +13,7 @@ Serwer, z którym się synchronizuje, leży w repo
 
 **Pismo odręczne.** Kreska stawiana przez `androidx.ink`, z rozpoznawaniem figur (prostuje
 koło, prostokąt, strzałkę), gumką, zaznaczaniem, ramkami na zdjęcia i polami tekstowymi
-na kartce. Do tego haptyka pióra i formaty stron — notatka pamięta swój rozmiar kartki.
+na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmiar kartki.
 
 **Notatki tekstowe.** Markdown z tabelami, listami, obrazkami ze skalowaniem szerokości
 (`![alt|60%]`) i rozmiarem czcionki. Rozmiar `0` znaczy „domyślny z motywu", więc notatka
@@ -27,7 +27,7 @@ w WebView oraz uruchamianie: Python bezpośrednio na tablecie (Chaquopy, `arm64-
 zdalnie na serwerze Kajetu w kontenerze.
 
 **Przeglądarka plików.** Obrazy, PDF-y i nieznane binaria otwierają się w podglądzie tylko do
-odczytu — nigdy nie lądują w edytorze kodu jako UTF-8.
+odczytu - nigdy nie lądują w edytorze kodu jako UTF-8.
 
 **Udostępnianie w obie strony.** Apka przyjmuje pliki przez Android Share i „Otwórz w",
 kopiując je najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
@@ -38,7 +38,7 @@ kopiując je najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwer
 ikona chmurki dopiero po faktycznym zapisie na serwerze, kolejka ponawiania usunięć i osłona
 przed nadpisaniem notatki skasowanej zdalnie.
 
-**KajetAI.** Panel asystenta wpięty w notatkę — z ekranem zgody, limitami i komunikatami
+**KajetAI.** Panel asystenta wpięty w notatkę - z ekranem zgody, limitami i komunikatami
 o błędach po polsku i angielsku.
 
 **Awarie.** Własny `ErrorBoundary` i handler wyjątków: zamiast zniknięcia apki użytkownik
@@ -65,7 +65,7 @@ Osiem modułów Gradle, każdy z własną odpowiedzialnością:
 | `cloud` | konto, transport HTTP, synchronizacja, AI, zgłoszenia awarii |
 
 Treść notatki to jeden dokument JSON (`content.json`), identyczny z tym, który trzyma serwer.
-Synchronizacja porównuje dokumenty, nie modele — to samo założenie po obu stronach.
+Synchronizacja porównuje dokumenty, nie modele - to samo założenie po obu stronach.
 
 ## Stos
 

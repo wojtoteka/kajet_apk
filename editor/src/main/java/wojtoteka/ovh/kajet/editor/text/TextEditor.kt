@@ -94,7 +94,7 @@ fun TextEditor(
 
     /*
       Pisanie rysikiem w notatce tekstowej (system zamienia kreski na litery)
-      też ma drgać jak długopis — nie tylko okno rysowania. Zagnieżdżenia
+      też ma drgać jak długopis - nie tylko okno rysowania. Zagnieżdżenia
       liczy PenHaptics, więc okno rysowania nad notatką niczego nie psuje;
       po jego zamknięciu wracamy do profilu pisania.
     */
@@ -164,7 +164,7 @@ fun TextEditor(
     /*
       Format zapamiętany na przyszłość: nic nie jest zaznaczone, więc czeka na
       tekst, który człowiek zaraz napisze. Tak samo działa każdy porządny
-      edytor — naciśnięcie pogrubienia przed pisaniem ma pogrubić to, co
+      edytor - naciśnięcie pogrubienia przed pisaniem ma pogrubić to, co
       dopiero powstanie, a nie cofać się do słowa obok.
     */
     var pending by remember(document?.id) { mutableStateOf(PendingFormat()) }
@@ -178,7 +178,7 @@ fun TextEditor(
     }
 
     /**
-     * Przestawia pole, w którym stoi kursor. Transformacja może oddać null —
+     * Przestawia pole, w którym stoi kursor. Transformacja może oddać null -
      * znaczy to „nie ma czego zmienić", bo nic nie jest zaznaczone. Zwraca,
      * czy treść naprawdę się zmieniła.
      */
@@ -202,7 +202,7 @@ fun TextEditor(
         return true
     }
 
-    // Pole, w którym stoi kursor — na nim działa pasek narzędzi.
+    // Pole, w którym stoi kursor - na nim działa pasek narzędzi.
     val cursorField = if (blockMode) focusedField else field
 
     /** Wiersz, w którym stoi kursor. */
@@ -219,7 +219,7 @@ fun TextEditor(
      * Przelicza bloki od nowa i wraca kursorem tam, gdzie stał.
      *
      * Notatka układa się na bloki tylko wtedy, gdy treść zmieni się z zewnątrz
-     * — inaczej przeliczanie przy każdym naciśnięciu klawisza przerywałoby
+     * - inaczej przeliczanie przy każdym naciśnięciu klawisza przerywałoby
      * pisanie. Znacznik zadania jest jednak wyjątkiem: zmienia budowę notatki,
      * bo wiersz przestaje być akapitem, a staje się zadaniem z kwadracikiem.
      * Bez przeliczenia od razu kwadracik pojawiałby się dopiero po ponownym
@@ -239,7 +239,7 @@ fun TextEditor(
         keyToFocus = split.focusKey
     }
 
-    /** Czy kursor stoi w zadaniu — wtedy budowa wiersza rządzi się inaczej. */
+    /** Czy kursor stoi w zadaniu - wtedy budowa wiersza rządzi się inaczej. */
     fun taskUnderCursor(): Block.Task? {
         if (!blockMode) return null
         val key = focusedKey ?: return null
@@ -264,7 +264,7 @@ fun TextEditor(
         pending.willHave(type, atCursor.any { it.type == type })
 
     /**
-     * Nadaje format zaznaczeniu. Bez zaznaczenia format czeka na pisanie —
+     * Nadaje format zaznaczeniu. Bez zaznaczenia format czeka na pisanie -
      * i tak samo się wtedy przełącza, żeby drugie naciśnięcie go zdejmowało.
      */
     fun toggleFormat(type: SpanType, value: String = "") {
@@ -277,7 +277,7 @@ fun TextEditor(
 
     /**
      * Nadaje zapamiętany format tekstowi dopiero co wpisanemu. Oddaje nowe
-     * pole albo null, gdy nie ma czego zmieniać — wtedy pole zostaje takie,
+     * pole albo null, gdy nie ma czego zmieniać - wtedy pole zostaje takie,
      * jakie przyszło z klawiatury i nic nie gubi kursora.
      */
     fun onTyped(previous: String, typed: TextFieldValue): TextFieldValue? {
@@ -290,7 +290,7 @@ fun TextEditor(
         /*
           W widoku blokowym znaczników nie widać, więc zmiany przebudowujące
           treść idą przez model. Inaczej Compose kasuje i rozcina znaki
-          ZAPISU — połówka znacznika przestaje być znacznikiem i wychodzi
+          ZAPISU - połówka znacznika przestaje być znacznikiem i wychodzi
           na wierzch jako goły tekst. W widoku surowego Markdownu znaczniki
           są widoczne i pisze się je wprost, więc tam nic nie pośredniczy.
         */
@@ -407,7 +407,7 @@ fun TextEditor(
                 onNoteSize = model::setFontSize,
                 onFragmentSize = { delta ->
                     // Rośnie SAM fragment. Bez zaznaczenia wielkość czeka na
-                    // tekst, który człowiek zaraz napisze — całej notatki
+                    // tekst, który człowiek zaraz napisze - całej notatki
                     // nie rusza, od tego jest osobny przycisk obok.
                     //
                     // Czekać ma jednak na CO: bez kursora w notatce nie ma
@@ -437,7 +437,7 @@ fun TextEditor(
                     if (task != null) {
                         /*
                           Kursor stoi w zadaniu. Nagłówek, cytat i punkt to
-                          budowa wiersza, tak samo jak kwadracik — doklejone do
+                          budowa wiersza, tak samo jak kwadracik - doklejone do
                           treści zadania dawały „- [ ] > cytat", czyli znacznik
                           na wierzchu w środku listy. Wiersz może być albo
                           zadaniem, albo cytatem, więc zadanie ustępuje miejsca.
@@ -454,7 +454,7 @@ fun TextEditor(
                     }
                 },
                 onInsert = { fragment, stepBack -> format { TextFormat.insert(it, fragment, stepBack) } },
-                // Okno koloru to osobne okno — pole traci skupienie i zaznaczenie
+                // Okno koloru to osobne okno - pole traci skupienie i zaznaczenie
                 // zwija się, zanim człowiek wybierze barwę. Dlatego pasek bierze
                 // zrzut pola PRZED otwarciem okna i to jemu nadaje kolor.
                 currentField = { cursorField },
@@ -480,7 +480,7 @@ fun TextEditor(
                     .fillMaxSize()
                     .background(colors.sheet)
                     // Pole treści to powierzchnia pisania rysikiem
-                    // (tablet zamienia kreski na litery) — tu rysik drga.
+                    // (tablet zamienia kreski na litery) - tu rysik drga.
                     .penWritingSurface(context)
                     .imePadding(),
             ) {
@@ -597,11 +597,11 @@ private fun FormatBar(
     appearance: TextContent,
     blockMode: Boolean,
     recentColors: List<Int>,
-    /** Czy format będzie miał tekst pisany od kursora — po tym zapalają się przyciski. */
+    /** Czy format będzie miał tekst pisany od kursora - po tym zapalają się przyciski. */
     isActive: (SpanType) -> Boolean,
     /** Wielkość pisma fragmentu pod kursorem. */
     fragmentSize: Float,
-    /** Wielkość pisma całej notatki — osobna rzecz, osobny przycisk. */
+    /** Wielkość pisma całej notatki - osobna rzecz, osobny przycisk. */
     noteSize: Float,
     onBlockMode: (Boolean) -> Unit,
     onFont: (NoteFont) -> Unit,
@@ -615,7 +615,7 @@ private fun FormatBar(
     onToggle: (SpanType) -> Unit,
     onBeforeLine: (String) -> Unit,
     onInsert: (fragment: String, stepBack: Int) -> Unit,
-    /** Pole z zaznaczeniem w chwili naciśnięcia — zrzut na czas okna koloru. */
+    /** Pole z zaznaczeniem w chwili naciśnięcia - zrzut na czas okna koloru. */
     currentField: () -> TextFieldValue,
     /** Nadaje kolor zaznaczeniu ze zrzutu (zaznaczenie w polu już nie żyje). */
     onApplyColour: (snapshot: TextFieldValue, argb: Int) -> Unit,
@@ -657,7 +657,7 @@ private fun FormatBar(
 
             Divider()
 
-            // Wielkość pisma CAŁEJ notatki — pod osobnym przyciskiem, żeby
+            // Wielkość pisma CAŁEJ notatki - pod osobnym przyciskiem, żeby
             // nie mieszała się z wielkością zaznaczonego fragmentu.
             IconAction(
                 icon = KajetIcons.TextSize,
@@ -680,13 +680,13 @@ private fun FormatBar(
             Divider()
 
             // Barwa samego zaznaczenia. Barwa CAŁEJ notatki stoi osobno,
-            // pod przyciskiem obok — mieszanie ich dawało notatkę, w której
+            // pod przyciskiem obok - mieszanie ich dawało notatkę, w której
             // pokolorowanie słowa przemalowywało całą stronę.
             IconAction(
                 icon = KajetIcons.TextColour,
                 description = words.colourSelection,
                 onClick = {
-                    // Zrzut zaznaczenia PRZED otwarciem okna — samo okno
+                    // Zrzut zaznaczenia PRZED otwarciem okna - samo okno
                     // zabiera skupienie i zaznaczenie znika.
                     selectionSnapshot = currentField()
                     selectionColour = true
@@ -770,7 +770,7 @@ private fun FormatBar(
         }
 
         // Wielkość pisma całej notatki. Osobny rząd, bo to osobna rzecz niż
-        // wielkość zaznaczonego fragmentu — mieszanie ich dawało notatkę,
+        // wielkość zaznaczonego fragmentu - mieszanie ich dawało notatkę,
         // w której powiększenie słowa skalowało całą stronę.
         if (notePicker) {
             Row(
@@ -801,7 +801,7 @@ private fun FormatBar(
 
                 Divider()
 
-                // Barwa CAŁEJ notatki — tutaj, a nie w pasku obok barwy
+                // Barwa CAŁEJ notatki - tutaj, a nie w pasku obok barwy
                 // zaznaczenia, żeby nie dało się ich pomylić.
                 Text(
                     text = words.colourWholeNote,
@@ -922,7 +922,7 @@ private fun FormatBar(
         //
         // Okno otwiera się na barwie, którą zaznaczony fragment już ma. Wcześniej
         // zaczynało od zera, a zero znaczyło „nic nie wybrano" i przy zamykaniu
-        // nie działo się NIC — także wtedy, gdy barwa była wybrana, a potem
+        // nie działo się NIC - także wtedy, gdy barwa była wybrana, a potem
         // trafiona jeszcze raz ta sama.
         val startColour = TextFormat.colorIn(selectionSnapshot)
             ?: appearance.textColor.takeIf { it != 0 }
@@ -959,7 +959,7 @@ private fun Divider() {
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnym
   rzędzie FormatBar odcinał się od tła desk i na telefonie łamał etykiety
   („Domyślna", „Domyślny kolor", „Rozumiem"). Tu ten sam krój i gęstość
   co etykiety paska, bez ramki.

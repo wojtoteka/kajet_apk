@@ -8,7 +8,7 @@ import android.content.SharedPreferences
  *
  * Kasowanie idzie przez SAF i potrafi się nie udać z powodów, na które nikt tu
  * nie ma wpływu: karta pamięci akurat odpięta, plik otwarty przez inny program,
- * odebrane prawo do katalogu. Wcześniej taki wynik przepadał — [DiskFiles]
+ * odebrane prawo do katalogu. Wcześniej taki wynik przepadał - [DiskFiles]
  * oddaje wprawdzie `Boolean`, ale żadne z trzech miejsc kasujących go nie
  * czytało, więc po nieudanej próbie zostawał plik, o którym nikt już nie
  * wiedział: bez wiersza w spisie i bez wpisu w koszu.

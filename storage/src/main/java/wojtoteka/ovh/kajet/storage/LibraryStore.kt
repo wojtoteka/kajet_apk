@@ -102,7 +102,7 @@ class LibraryStore(
                     colorId = meta?.colorId,
                     iconId = meta?.iconId,
                     // Liczymy to, co widać w folderze. Plik z jego barwą i ikoną
-                    // to nie wpis — przez niego pusty folder meldował „1 wpis".
+                    // to nie wpis - przez niego pusty folder meldował „1 wpis".
                     childCount = file.listFiles().count { child ->
                         val childName = child.name
                         childName != null &&
@@ -146,7 +146,7 @@ class LibraryStore(
         name: String,
         colorId: String = "grafit",
         iconId: String = "folder",
-        // Folder przysłany z chmury przynosi swój identyfikator — ten sam,
+        // Folder przysłany z chmury przynosi swój identyfikator - ten sam,
         // pod którym żyje na serwerze i na innych urządzeniach.
         id: String? = null,
     ): LibraryItem {
@@ -360,7 +360,7 @@ class LibraryStore(
     }
 
     /**
-     * Nowy plik tekstowy o zadanej nazwie i treści — dla plików z kodem
+     * Nowy plik tekstowy o zadanej nazwie i treści - dla plików z kodem
      * przyjeżdżających z chmury. Przy zajętej nazwie dokleja licznik.
      */
     fun createTextFile(parentPath: String, fileName: String, content: String): LibraryItem {
@@ -389,7 +389,7 @@ class LibraryStore(
 
     /**
      * Kopia pliku z zewnątrz (Udostępnij / Otwórz w) do katalogu notatek.
-     * Bajty idą strumieniem — PDF i zdjęcia nie mieszczą się w Stringu.
+     * Bajty idą strumieniem - PDF i zdjęcia nie mieszczą się w Stringu.
      */
     fun importFile(parentPath: String, fileName: String, mime: String, source: Uri): LibraryItem {
         val parent = requireFolder(parentPath)
@@ -453,7 +453,7 @@ class LibraryStore(
         /*
           Nazwa bez zmiany: nie ruszamy pliku.
 
-          Magazyn Androida nie wie, że plik zmienia nazwę sam na siebie —
+          Magazyn Androida nie wie, że plik zmienia nazwę sam na siebie -
           widzi zajętą nazwę i dokłada „ (1)". „Zmień nazwę" i „Zapisz" bez
           poprawki zmieniały więc nazwę pliku, choć nikt o to nie prosił.
         */
@@ -494,7 +494,7 @@ class LibraryStore(
         DiskFiles.copyRecursively(resolver, source, target, newName)
         DiskFiles.deleteRecursively(source)
         val newPath = if (targetFolder.isEmpty()) newName else "$targetFolder/$newName"
-        // Przeniesiony folder zmienił rodzica — synchronizacja folderów ma
+        // Przeniesiony folder zmienił rodzica - synchronizacja folderów ma
         // wiedzieć, że ta zmiana jest świeższa niż stan serwera.
         if (source.isDirectory && !FileNames.isNote(name)) {
             entry(newPath)?.let { moved ->
@@ -527,7 +527,7 @@ class LibraryStore(
         )
         DiskFiles.copyRecursively(resolver, source, target, newName)
         val newPath = if (targetFolder.isEmpty()) newName else "$targetFolder/$newName"
-        // Kopia nie może nieść tych samych identyfikatorów co oryginał — dwa
+        // Kopia nie może nieść tych samych identyfikatorów co oryginał - dwa
         // wpisy o wspólnym numerze biłyby się o jedną notatkę na serwerze.
         entry(newPath)?.takeIf { it.isDirectory }?.let { copied ->
             regenerateIdsAfterCopy(copied, markAsCopy = true)
@@ -538,7 +538,7 @@ class LibraryStore(
     /**
      * Świeże identyfikatory dla skopiowanych folderów i notatek, całą gałęzią.
      *
-     * [markAsCopy] dokłada „(kopia)" do nazwy widocznej NA LIŚCIE — i tylko
+     * [markAsCopy] dokłada „(kopia)" do nazwy widocznej NA LIŚCIE - i tylko
      * wierzchołkowi. Spis pokazuje tytuł z wnętrza pliku, a nie nazwę katalogu,
      * więc bez tego kopia i pierwowzór stały obok siebie wyglądając identycznie
      * i nie dało się rozpoznać, którą z nich się otwiera.
@@ -590,7 +590,7 @@ class LibraryStore(
 
     /**
      * Wyrzuca wpis do kosza. [fromServer] zaznacza, że stoi za tym kasowanie
-     * na serwerze, a nie ręka użytkownika — taki wpis dostaje termin, patrz
+     * na serwerze, a nie ręka użytkownika - taki wpis dostaje termin, patrz
      * [TrashEntry.fromServer].
      */
     fun moveToTrash(path: String, fromServer: Boolean = false) {
@@ -678,7 +678,7 @@ class LibraryStore(
     }
 
     /**
-     * Kasuje wpis z dysku na stałe, bez kosza — porządki zlecone przez chmurę.
+     * Kasuje wpis z dysku na stałe, bez kosza - porządki zlecone przez chmurę.
      * Zwraca false, kiedy plik został na dysku mimo próby; wołający odkłada
      * go wtedy do [DeleteRetryQueue] zamiast udawać, że go nie ma.
      */
@@ -709,10 +709,10 @@ class LibraryStore(
     /**
      * Wpis kosza, w którym leży notatka o tym identyfikatorze.
      *
-     * Kosz jest poza spisem — wyrzucenie notatki kasuje jej wiersz, a katalog
+     * Kosz jest poza spisem - wyrzucenie notatki kasuje jej wiersz, a katalog
      * `.trash` jest ukryty, więc nie wciąga go nawet przebudowa spisu. Bez tej
      * drogi kasowanie zlecone przez serwer nie miało jak dosięgnąć notatki,
-     * która wcześniej trafiła do lokalnego kosza — i tam zostawała na zawsze.
+     * która wcześniej trafiła do lokalnego kosza - i tam zostawała na zawsze.
      */
     fun trashSlotForNote(noteId: String): String? =
         trashedNoteSlots().firstOrNull { (_, id) -> id == noteId }?.first
@@ -764,7 +764,7 @@ class LibraryStore(
     }
 
     /**
-     * Identyfikatory notatek leżących we wpisie kosza — razem z notatkami
+     * Identyfikatory notatek leżących we wpisie kosza - razem z notatkami
      * schowanymi w wyrzuconych folderach. Trwałe kasowanie zgłasza je potem
      * serwerowi, żeby i tam zniknęły.
      */
@@ -792,7 +792,7 @@ class LibraryStore(
      * Kopiuje załączniki notatki leżącej w koszu do notatki pod [targetNotePath].
      *
      * Dla „Zapisz jako nową": treść notatki człowiek ma wciąż na ekranie, ale
-     * zdjęcia i rysunki leżą w katalogu, który pojechał do kosza — bez nich
+     * zdjęcia i rysunki leżą w katalogu, który pojechał do kosza - bez nich
      * nowa kopia miałaby dziury zamiast obrazków. Zwraca true, kiedy było co
      * skopiować.
      */
@@ -861,7 +861,7 @@ class LibraryStore(
 
     /**
      * Kasuje [target] leżący w [slot]. Kiedy to jest właśnie ta rzecz, którą
-     * wyrzucono do kosza, znika cały wpis razem z opisem — bez pliku i tak nie
+     * wyrzucono do kosza, znika cały wpis razem z opisem - bez pliku i tak nie
      * byłoby czego przywracać, a sam opis zostałby jako wpis nie do ruszenia.
      */
     private fun deleteFromSlot(slot: DocumentFile, target: DocumentFile): Boolean {
@@ -967,7 +967,7 @@ class LibraryStore(
             CodeLanguage.SQL -> "select '${words.greetingWord}';\n"
             /*
               MySQL-a nie da się dziś założyć z okna nowego pliku (rozszerzenie
-              sql należy do SQLite), ale gałąź musi tu być — when po języku jest
+              sql należy do SQLite), ale gałąź musi tu być - when po języku jest
               zupełny. Zapytanie stoi po MySQL-owemu, żeby przy zmianie tamtej
               decyzji nie trzeba było tu wracać.
             */

@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Sprzątanie po kasowaniu — raz na dobę, nie przy każdym uruchomieniu.
+ * Sprzątanie po kasowaniu - raz na dobę, nie przy każdym uruchomieniu.
  *
  * Trzy rzeczy, wszystkie tanie i wszystkie odkładane na później, żeby nie
  * opóźniać wejścia do aplikacji:
@@ -18,7 +18,7 @@ import java.io.File
  *  3. sieroty: wiersze spisu po nieistniejących plikach i wpisy kosza nie do
  *     przywrócenia,
  *  4. stary podręczny materiał: zdjęcia z aparatu i pliki eksportu. Te nie są
- *     przypisane do żadnej notatki — nazwa nie niesie jej identyfikatora —
+ *     przypisane do żadnej notatki - nazwa nie niesie jej identyfikatora -
  *     więc jedyne, co da się o nich powiedzieć, to jak długo leżą.
  *
  * Nic tutaj nie jest pilne i nic nie może przerwać pracy. Awaria jednego kroku
@@ -88,7 +88,7 @@ class Housekeeping(
     companion object {
         /**
          * Ile dni wpis, który trafił do kosza za serwerem, czeka, zanim zniknie
-         * z dysku. Tyle samo, ile kosz na serwerze (TRASH_DAYS=30) — żeby ten
+         * z dysku. Tyle samo, ile kosz na serwerze (TRASH_DAYS=30) - żeby ten
          * sam termin obowiązywał wszędzie i żeby dało się go zapamiętać.
          *
          * Liczone od chwili wejścia do kosza NA TYM urządzeniu, patrz
@@ -99,7 +99,7 @@ class Housekeeping(
 
         /**
          * Ile dni zostało wpisowi kosza, zanim zniknie z dysku. Null, kiedy
-         * termin go nie dotyczy — czyli gdy ktoś wyrzucił go tutaj sam.
+         * termin go nie dotyczy - czyli gdy ktoś wyrzucił go tutaj sam.
          *
          * Liczy się tu, obok samego sprzątania, żeby napis w koszu i chwila
          * skasowania nie mogły się rozjechać. Zaokrąglenie w górę: dopóki
@@ -120,7 +120,7 @@ class Housekeeping(
         /**
          * Po tylu dniach plik podręczny znika. Tydzień, bo zdjęcie zrobione
          * aparatem trafia do notatki od razu, a wyeksportowany plik człowiek
-         * odbiera z powiadomienia tego samego dnia — dłuższe trzymanie to już
+         * odbiera z powiadomienia tego samego dnia - dłuższe trzymanie to już
          * tylko zajęte miejsce.
          */
         private const val CACHE_DAYS = 7

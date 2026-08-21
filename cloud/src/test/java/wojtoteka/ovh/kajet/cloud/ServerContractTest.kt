@@ -10,7 +10,7 @@ import org.junit.Test
  *
  * Each JSON below is written exactly the way the corresponding route in
  * src/app/api/v1 builds it. When one of these tests goes red after a server
- * change, the tablet and the server have stopped speaking the same language —
+ * change, the tablet and the server have stopped speaking the same language -
  * fix the models or the route, not the test, unless the change was deliberate
  * on both sides.
  */
@@ -224,7 +224,7 @@ class ServerContractTest {
 
           Zera tu podstawić nie wolno: zero znaczy „skończył się dobrze".
           Kiedyś w tym polu stawał napis ERR_CHILD_PROCESS_STDIO_MAXBUFFER
-          udający liczbę — serwer już go nie odsyła i aplikacja nigdzie go nie
+          udający liczbę - serwer już go nie odsyła i aplikacja nigdzie go nie
           rozbiera.
         */
         val przerwany =
@@ -310,7 +310,7 @@ class ServerContractTest {
         val fields = json.parseToJsonElement(encoded).jsonObject
 
         // outgoingNoteSchema in note-write.ts: id/title/kind/content/baseVersion
-        // required, tags as an array. folderId ABSENT when null — „zostaw
+        // required, tags as an array. folderId ABSENT when null - „zostaw
         // notatkę tam, gdzie jest" (np. serwer bez obsługi folderów).
         assertThat(fields.keys).containsAtLeast("id", "title", "kind", "content", "baseVersion")
         assertThat(fields.keys).doesNotContain("folderId")
@@ -322,7 +322,7 @@ class ServerContractTest {
     fun `encodes the folder field the way folder sync expects`() {
         // Od synchronizacji folderów: notatka w folderze niesie jego
         // identyfikator, notatka w korzeniu pusty tekst (serializator gubi
-        // null, a jawny korzeń musi jakoś jechać — serwer mapuje "" na null).
+        // null, a jawny korzeń musi jakoś jechać - serwer mapuje "" na null).
         val inFolder = OutgoingNote(
             id = "n1", title = "Fizyka", kind = "TEXT",
             folderId = "f-123", content = "{}", baseVersion = 1,
@@ -342,7 +342,7 @@ class ServerContractTest {
 
     @Test
     fun `decodes the folder listing the server returns`() {
-        // GET /api/v1/folders — kształt z src/app/api/v1/folders/route.ts.
+        // GET /api/v1/folders - kształt z src/app/api/v1/folders/route.ts.
         val response = json.decodeFromString(
             FoldersResponse.serializer(),
             """{"folders":[
@@ -407,7 +407,7 @@ class ServerContractTest {
     @Test
     fun `leaves out fields it could not read from the header`() {
         // Raport bez czytelnego nagłówka. Serwer ma wszystkie pola poza
-        // `report` jako nieobowiązkowe, więc puste po prostu wypadają — nie
+        // `report` jako nieobowiązkowe, więc puste po prostu wypadają - nie
         // idą jako null, bo explicitNulls jest wyłączone.
         val body = CrashReporter.bodyOf(report = "java.lang.OutOfMemoryError")
 

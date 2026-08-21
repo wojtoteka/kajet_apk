@@ -8,7 +8,7 @@ import wojtoteka.ovh.kajet.core.ai.AiNoteKind
  * Interfejs z polami, a każdy język to obiekt, który je nadpisuje: dodanie
  * napisu to jedna linijka tutaj i jedna w każdym języku, a kompilator nie
  * pozwoli o żadnym zapomnieć. Nazwy pól opisują MIEJSCE, w którym napis stoi,
- * a nie jego treść — „save” zmieni się kiedyś na „zapisz zmiany”, ale dalej
+ * a nie jego treść - „save” zmieni się kiedyś na „zapisz zmiany”, ale dalej
  * będzie tym samym przyciskiem.
  *
  * Nie może to być klasa z napisami w konstruktorze, choć wygląda to zgrabniej.
@@ -27,7 +27,7 @@ interface Strings {
 
       Potrzebne przy wyliczeniach, które noszą swoje nazwy przy sobie (barwy
       folderów, ikony, narzędzia pisaka, języki programowania). Wpisywanie
-      trzydziestu ośmiu nazw ikon do tej klasy nic by nie dało — stoją tam,
+      trzydziestu ośmiu nazw ikon do tej klasy nic by nie dało - stoją tam,
       gdzie stoją, a stąd biorą tylko odpowiedź na pytanie „w którym języku".
     */
     val english: Boolean
@@ -687,7 +687,7 @@ interface Strings {
   Zdania z liczbą albo z nazwą w środku.
 
   Nie da się ich trzymać jako gotowych napisów, bo szyk zdania w każdym języku
-  jest inny — a sklejanie kawałków w widoku daje zdania, których nikt nie
+  jest inny - a sklejanie kawałków w widoku daje zdania, których nikt nie
   napisałby po angielsku. Stoją więc tu, przy słowniku, całe.
 */
 
@@ -707,7 +707,7 @@ fun Strings.shareMailWent(address: String): String =
  * Plik jest dłuższy, niż serwer przyjmuje do uruchomienia.
  *
  * Granicę stawia route.ts i bez tego zdania odpowiadał na to „Podaj język
- * i kod" — czyli komunikatem o czymś zupełnie innym.
+ * i kod" - czyli komunikatem o czymś zupełnie innym.
  */
 fun Strings.codeTooLong(limit: Int): String = if (english) {
     "This file is too long to run. The server takes at most $limit characters."
@@ -786,7 +786,7 @@ fun Strings.trashedAt(whenText: String, where: String): String = if (english) {
 
 /**
  * Ile zostało wpisowi w koszu, który trafił tam za serwerem. „Dzień" tylko
- * przy jedynce — po polsku każda inna liczba bierze „dni".
+ * przy jedynce - po polsku każda inna liczba bierze „dni".
  */
 fun Strings.disappearsIn(days: Int): String = when {
     days <= 0 -> if (english) "Disappears today" else "Zniknie dziś"
@@ -800,7 +800,7 @@ fun Strings.deleteForeverOf(name: String): String =
 
 /**
  * Nazwa katalogu na dysku, gdy różni się od wpisanej. Dwukropka ani ukośnika
- * nazwa pliku nie zniesie — lepiej powiedzieć to wprost, niż zostawić dwie
+ * nazwa pliku nie zniesie - lepiej powiedzieć to wprost, niż zostawić dwie
  * różne nazwy bez wyjaśnienia.
  */
 fun Strings.nameOnDiskAbout(nameOnDisk: String): String =
@@ -861,7 +861,7 @@ fun Strings.movingProgress(done: Int, total: Int): String =
     if (english) "Moving: $done of $total" else "Przenoszę: $done z $total"
 
 /**
- * Ile wpisów nie dało się ruszyć. Reszta poszła — dlatego zdanie mówi
+ * Ile wpisów nie dało się ruszyć. Reszta poszła - dlatego zdanie mówi
  * o niepowodzeniu części, a nie o niepowodzeniu całości.
  */
 fun Strings.bulkPartlyFailed(count: Int): String = if (english) {
@@ -980,7 +980,7 @@ fun Strings.handwritingSummary(strokes: Int, pages: Int): String = when {
     else -> "$handwritingLabel, $pages ${pageNoun(pages)}"
 }
 
-/** „1 kreska", „2 kreski", „5 kresek" — trzy postacie polskiej liczby mnogiej. */
+/** „1 kreska", „2 kreski", „5 kresek" - trzy postacie polskiej liczby mnogiej. */
 private fun strokeNoun(count: Int): String = when {
     count == 1 -> "kreska"
     count % 10 in 2..4 && count % 100 !in 12..14 -> "kreski"
@@ -1057,9 +1057,9 @@ fun Strings.noteGoneUnsaved(path: String): String = if (english) {
 }
 
 fun Strings.noteUnreadable(name: String?): String = if (english) {
-    "The note $name cannot be read — its file is damaged."
+    "The note $name cannot be read - its file is damaged."
 } else {
-    "Nie da się odczytać notatki $name — jej plik jest uszkodzony."
+    "Nie da się odczytać notatki $name - jej plik jest uszkodzony."
 }
 
 fun Strings.fileGone(path: String): String =
@@ -1141,7 +1141,7 @@ fun Strings.syncSummary(sent: Int, fetched: Int): String = buildString {
 
 /**
  * Odpowiedź serwera, której Kajet nie umówił sobie z nim wcześniej. Numer stanu
- * zostaje w dzienniku — na ekranie nie powiedziałby nikomu nic.
+ * zostaje w dzienniku - na ekranie nie powiedziałby nikomu nic.
  */
 @Suppress("UNUSED_PARAMETER")
 fun Strings.serverError(status: Int): String = if (english) {
@@ -1178,7 +1178,7 @@ fun Strings.minutesAgo(minutes: Long): String =
 fun Strings.hoursAgo(hours: Long): String =
     if (english) "$hours h ago" else "$hours godz. temu"
 
-/** Co stoi na urządzeniu — pod wyróżnionym numerem wersji do pobrania. */
+/** Co stoi na urządzeniu - pod wyróżnionym numerem wersji do pobrania. */
 fun Strings.updateOnThisDevice(installedVersion: String): String = if (english) {
     "This device has $installedVersion."
 } else {
@@ -1204,11 +1204,11 @@ fun Strings.pointsOf(size: String): String = if (english) "$size pt" else "$size
 
 /**
  * Procent na ekranie. Polska typografia stawia przed znakiem spację,
- * angielska nie — a oba napisy trafiają czasem na ten sam pasek.
+ * angielska nie - a oba napisy trafiają czasem na ten sam pasek.
  */
 fun Strings.percentOf(value: Int): String = if (english) "$value%" else "$value %"
 
-/** Miejsce po zdjęciu w pliku DOCX — samego obrazu ten zapis tu nie niesie. */
+/** Miejsce po zdjęciu w pliku DOCX - samego obrazu ten zapis tu nie niesie. */
 fun Strings.docxImageHere(caption: String): String = if (english) {
     "[A picture was here: $caption]"
 } else {
@@ -1348,15 +1348,15 @@ object PolishStrings : Strings {
     override val noteSaveFailed = "Nie udało się zapisać notatki."
     override val noteDeletedElsewhere = "Usunięta na innym urządzeniu"
     override val noteDeletedElsewhereAbout = "Ta notatka została usunięta na innym urządzeniu. " +
-        "Twoja wersja jest wciąż tutaj — możesz zapisać ją jako nową notatkę " +
+        "Twoja wersja jest wciąż tutaj - możesz zapisać ją jako nową notatkę " +
         "albo odrzucić zmiany."
     override val fileDeletedElsewhereAbout = "Ten plik został usunięty na innym urządzeniu. " +
-        "Twoja wersja jest wciąż tutaj — możesz zapisać ją jako nowy plik " +
+        "Twoja wersja jest wciąż tutaj - możesz zapisać ją jako nowy plik " +
         "albo odrzucić zmiany."
     override val saveAsNewNote = "Zapisz jako nową"
     override val saveAsNewFile = "Zapisz jako nowy plik"
     override val discardChanges = "Odrzuć zmiany"
-    override val saveAsNewFailed = "Nie udało się zapisać nowej kopii. Treść zostaje na ekranie — " +
+    override val saveAsNewFailed = "Nie udało się zapisać nowej kopii. Treść zostaje na ekranie - " +
         "spróbuj jeszcze raz."
     override val placeholderWord = "tekst"
     override val savingPhoto = "Zapisuję zdjęcie…"
@@ -1375,7 +1375,7 @@ object PolishStrings : Strings {
     override val shareWhatMayDo = "Co wolno z odnośnikiem"
     override val shareRightRead = "Tylko czytać"
     override val shareRightEdit = "Czytać i poprawiać"
-    override val shareEmailLabel = "Adres e-mail odbiorcy — możesz zostawić puste"
+    override val shareEmailLabel = "Adres e-mail odbiorcy - możesz zostawić puste"
     override val shareEmailAbout =
         "Puste pole daje zwykły odnośnik. Z adresem udostępnienie jest imienne: " +
         "otworzy je tylko osoba zalogowana tym adresem, a wiadomość wysyła serwer."
@@ -1433,11 +1433,11 @@ object PolishStrings : Strings {
     override val languageSystem = "Taki jak w systemie"
     override val languagePolish = "Polski"
     // Nazwy języków stoją zawsze w swoim języku: kto szuka polskiego, widzi
-    // „Polski", kto angielskiego — „English", niezależnie od bieżącej mowy.
+    // „Polski", kto angielskiego - „English", niezależnie od bieżącej mowy.
     override val languageEnglish = "English"
     override val settingsToolbarSide = "Pasek narzędzi"
     override val settingsToolbarSideAbout = "Po której stronie ekranu stoi pasek z narzędziami " +
-        "w edytorach. Leworęczni zwykle wolą prawą — dłoń nie zasłania wtedy przycisków " +
+        "w edytorach. Leworęczni zwykle wolą prawą - dłoń nie zasłania wtedy przycisków " +
         "i nic nie klika się samo."
     override val toolbarLeft = "Po lewej"
     override val toolbarRight = "Po prawej"
@@ -1817,7 +1817,7 @@ object PolishStrings : Strings {
     override val runOnServerNeedsAccount = "Uruchamianie na serwerze wymaga konta. Zaloguj się " +
         "w ustawieniach, w sekcji „Konto w chmurze”."
     override val runOnServerNeedsInternet = "Nie ma internetu, a ten język uruchamia się przez sieć. " +
-        "Kod jest zapisany — uruchomisz go, gdy sieć wróci."
+        "Kod jest zapisany - uruchomisz go, gdy sieć wróci."
     override val codeWord = "kod"
 
     override val cloudAccountOn = "Notatki trafiają też na serwer i otworzysz je na komputerze."
@@ -1838,7 +1838,7 @@ object PolishStrings : Strings {
     override val stuckAbout = "Te notatki zostały na urządzeniu. Zajrzyj do nich albo spróbuj wysłać jeszcze raz."
     override val notUploadedTag = "nie wysłano"
     override val notUploadedAbout = "Nie udało się wysłać do chmury."
-    override val stuckNothingLost = "Nic nie ginie — zmiany czekają na urządzeniu."
+    override val stuckNothingLost = "Nic nie ginie - zmiany czekają na urządzeniu."
     override val stylusAndFinger = "Rysik i palec"
     override val stylusAndFingerAbout = "Kiedy rysik dotyka ekranu, dłoń nie rysuje. Dzieje się tak " +
         "niezależnie od ustawienia poniżej."
@@ -1884,7 +1884,7 @@ object PolishStrings : Strings {
         "przycisk potwierdzenia. Możesz zmienić to później w ustawieniach."
     override val folderAccessLost = "Wskaż folder z notatkami jeszcze raz"
     override val folderAccessLostAbout = "Notatki leżą tam, gdzie były. Po reinstalacji albo kopii " +
-        "zapasowej Android nie oddaje dostępu do folderu sam — trzeba go wskazać ponownie. " +
+        "zapasowej Android nie oddaje dostępu do folderu sam - trzeba go wskazać ponownie. " +
         "Plików to nie kasuje."
     override val couldNotKeepFolderAccess = "Android nie zapisał dostępu do folderu. Wskaż go jeszcze raz."
 
@@ -1908,7 +1908,7 @@ object PolishStrings : Strings {
         "w folderze."
     override val noteOpening = "Otwieram notatkę"
     override val noEditorYet = "Kajet nie umie otworzyć tej notatki"
-    override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Zaktualizuj Kajet — nowsza " +
+    override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Zaktualizuj Kajet - nowsza " +
         "wersja może już ją znać."
     override val cannotEditAsText = "Tego pliku nie da się edytować jako tekst"
     override val cannotEditAsTextAbout =
@@ -1942,7 +1942,7 @@ object PolishStrings : Strings {
     override val documentNoBrowser = "Na tym urządzeniu nie ma przeglądarki, która otworzyłaby tę " +
         "stronę."
     override val aboutSection = "O aplikacji"
-    override val aboutSectionAbout = "Kajet — notatnik na pismo odręczne, tekst, mapy myśli i kod."
+    override val aboutSectionAbout = "Kajet - notatnik na pismo odręczne, tekst, mapy myśli i kod."
     override val appVersionWord = "Wersja"
 
     override val updateTitle = "Nowa wersja"
@@ -1977,7 +1977,7 @@ object PolishStrings : Strings {
     override val aiOffline = "KajetAI potrzebuje internetu."
     override val aiConsentTitle = "Zanim poprosisz KajetAI"
     override val aiConsentWhatHappens =
-        "Treść tej notatki – cały tekst, kod albo napisy w węzłach mapy – zostanie wysłana " +
+        "Treść tej notatki - cały tekst, kod albo napisy w węzłach mapy - zostanie wysłana " +
             "do Google, bo to jego model wprowadza zmiany. Pismo odręczne i zdjęcia nie są wysyłane."
     override val aiConsentTraining =
         "Model jest darmowy, więc Google może wykorzystać wysłaną treść do uczenia swoich " +
@@ -2066,16 +2066,16 @@ object EnglishStrings : Strings {
     override val noteSaveFailed = "Kajet could not save the note."
     override val noteDeletedElsewhere = "Deleted on another device"
     override val noteDeletedElsewhereAbout = "This note has been deleted on another device. " +
-        "Your version is still here — you can save it as a new note " +
+        "Your version is still here - you can save it as a new note " +
         "or discard the changes."
     override val fileDeletedElsewhereAbout = "This file has been deleted on another device. " +
-        "Your version is still here — you can save it as a new file " +
+        "Your version is still here - you can save it as a new file " +
         "or discard the changes."
     override val saveAsNewNote = "Save as a new note"
     override val saveAsNewFile = "Save as a new file"
     override val discardChanges = "Discard the changes"
     override val saveAsNewFailed = "Kajet could not save the new copy. Your content stays on " +
-        "screen — try again."
+        "screen - try again."
     override val placeholderWord = "text"
     override val savingPhoto = "Saving the photo…"
     override val savingDrawing = "Saving the drawing…"
@@ -2093,7 +2093,7 @@ object EnglishStrings : Strings {
     override val shareWhatMayDo = "What the link allows"
     override val shareRightRead = "Read only"
     override val shareRightEdit = "Read and edit"
-    override val shareEmailLabel = "Recipient’s e-mail — you can leave it empty"
+    override val shareEmailLabel = "Recipient’s e-mail - you can leave it empty"
     override val shareEmailAbout =
         "Leave it empty for a plain link. With an address the share is personal: " +
         "only the person signed in with it can open the note, and the server sends the message."
@@ -2150,12 +2150,12 @@ object EnglishStrings : Strings {
         "your system is set to: Polish when the system is Polish, English otherwise. " +
         "You can change that below."
     override val languageSystem = "Same as the system"
-    // Language names always speak their own language — see the Polish strings.
+    // Language names always speak their own language - see the Polish strings.
     override val languagePolish = "Polski"
     override val languageEnglish = "English"
     override val settingsToolbarSide = "Toolbar"
     override val settingsToolbarSideAbout = "Which side of the screen the editor toolbar " +
-        "sits on. Left-handed people usually prefer the right — the hand no longer covers " +
+        "sits on. Left-handed people usually prefer the right - the hand no longer covers " +
         "the buttons or taps them by accident."
     override val toolbarLeft = "On the left"
     override val toolbarRight = "On the right"
@@ -2532,7 +2532,7 @@ object EnglishStrings : Strings {
     override val runOnServerNeedsAccount = "Running on the server needs an account. Sign in under " +
         "settings, in the “Cloud account” section."
     override val runOnServerNeedsInternet = "There is no internet, and this language runs over the " +
-        "network. Your code is saved — you can run it once the network is back."
+        "network. Your code is saved - you can run it once the network is back."
     override val codeWord = "code"
 
     override val cloudAccountOn = "Your notes also go to the server, so you can open them on a computer."
@@ -2554,7 +2554,7 @@ object EnglishStrings : Strings {
     override val stuckAbout = "These notes stayed on the device. Have a look at them or try uploading again."
     override val notUploadedTag = "not uploaded"
     override val notUploadedAbout = "Could not be uploaded to the cloud."
-    override val stuckNothingLost = "Nothing is lost — the changes wait on the device."
+    override val stuckNothingLost = "Nothing is lost - the changes wait on the device."
     override val stylusAndFinger = "Stylus and finger"
     override val stylusAndFingerAbout = "While the stylus is on the screen, your palm never draws. That " +
         "always holds."
@@ -2601,7 +2601,7 @@ object EnglishStrings : Strings {
         "confirm button. You can change this later in settings."
     override val folderAccessLost = "Pick the notes folder again"
     override val folderAccessLostAbout = "Your notes are still where they were. After a reinstall or " +
-        "a backup restore, Android does not give folder access back on its own — you have to " +
+        "a backup restore, Android does not give folder access back on its own - you have to " +
         "point at the folder again. That does not delete any files."
     override val couldNotKeepFolderAccess = "Android did not keep access to the folder. Pick it again."
 
@@ -2625,7 +2625,7 @@ object EnglishStrings : Strings {
         "its folder."
     override val noteOpening = "Opening the note"
     override val noEditorYet = "Kajet cannot open this note"
-    override val noEditorYetAbout = "The note is safe on disk. Update Kajet — a newer version may " +
+    override val noEditorYetAbout = "The note is safe on disk. Update Kajet - a newer version may " +
         "know it."
     override val cannotEditAsText = "This file cannot be edited as text"
     override val cannotEditAsTextAbout =
@@ -2658,7 +2658,7 @@ object EnglishStrings : Strings {
         "document. Connect to a network and try again."
     override val documentNoBrowser = "There is no browser on this device that could open the page."
     override val aboutSection = "About"
-    override val aboutSectionAbout = "Kajet — a notebook for handwriting, text, mind maps and code."
+    override val aboutSectionAbout = "Kajet - a notebook for handwriting, text, mind maps and code."
     override val appVersionWord = "Version"
 
     override val updateTitle = "New version"
@@ -2693,7 +2693,7 @@ object EnglishStrings : Strings {
     override val aiOffline = "KajetAI needs an internet connection."
     override val aiConsentTitle = "Before you ask KajetAI"
     override val aiConsentWhatHappens =
-        "The content of this note – all the text, the code, or the labels in the map nodes – " +
+        "The content of this note - all the text, the code, or the labels in the map nodes - " +
             "will be sent to Google, because it is their model that makes the change. " +
             "Handwriting and photographs are not sent."
     override val aiConsentTraining =

@@ -50,10 +50,10 @@ interface CanvasListener {
     fun selectionMoved(dx: Float, dy: Float, finished: Boolean)
     fun viewChanged(offsetX: Float, offsetY: Float, zoom: Float)
 
-    /** Palec stuknął w zdjęcie — bez ruchu i bez rysowania. */
+    /** Palec stuknął w zdjęcie - bez ruchu i bez rysowania. */
     fun imageTapped(page: Int, id: String)
 
-    /** Stuknięcie w pole tekstowe (także CODE). Domyślnie puste — okno rysunku pól nie ma. */
+    /** Stuknięcie w pole tekstowe (także CODE). Domyślnie puste - okno rysunku pól nie ma. */
     fun textTapped(page: Int, id: String) = Unit
     fun emptyAreaTapped()
 
@@ -62,7 +62,7 @@ interface CanvasListener {
       w notatce tekstowej, a tam kształtów nie ma.
     */
 
-    /** Przeciągnięcie skończone: gotowy kształt bez nazwy — nazwę nadaje model. */
+    /** Przeciągnięcie skończone: gotowy kształt bez nazwy - nazwę nadaje model. */
     fun shapeDrawn(page: Int, shape: ShapeElement) = Unit
 
     /** Stuknięcie w kształt albo w puste miejsce ([id] równe null). */
@@ -232,7 +232,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     }
 
     /**
-     * Przywraca położenie i przybliżenie kartki zapamiętane przez ekran —
+     * Przywraca położenie i przybliżenie kartki zapamiętane przez ekran -
      * po obrocie tabletu albo po tym, jak system zabił proces w tle.
      *
      * Ustawia [fitted], żeby dopasowanie do szerokości nie nadpisało tego przy
@@ -265,7 +265,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
       Górna krawędź strony [index] w układzie dokumentu.
 
       Indeks jest przycinany do tego, co naprawdę jest na ekranie. Zaznaczenie
-      lassem zapamiętuje numer strony, a strony potrafią zniknąć spod niego —
+      lassem zapamiętuje numer strony, a strony potrafią zniknąć spod niego -
       przy kasowaniu strony albo przy scaleniu wszystkich w jedną (tryb
       przewijania). Gołe `pages[i]` leciało wtedy poza zakres WEWNĄTRZ onDraw,
       czyli przy każdym przerysowaniu kartki.
@@ -334,7 +334,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     }
 
     /*
-      Wyjątek z rysowania leci prosto na wątek główny i ubija aplikację —
+      Wyjątek z rysowania leci prosto na wątek główny i ubija aplikację -
       z tego nie ma ekranu błędu, bo to samo rysowanie jest zepsute. Kartka bez
       jednej klatki jest lepsza niż zamknięty Kajet, więc awaria rysowania
       zostaje w dzienniku, a canvas wraca do stanu sprzed próby: `restoreToCount`
@@ -416,7 +416,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             canvas.restore()
         }
 
-        // CanvasStrokeRenderer nie nakłada podanej macierzy na canvas — dostaje
+        // CanvasStrokeRenderer nie nakłada podanej macierzy na canvas - dostaje
         // ją tylko do jakości teselacji. Transformację trzeba nałożyć samemu,
         // inaczej kreski lądują w surowych współrzędnych strony: obok miejsca
         // pisania, w innej skali i znikają, gdy kartka odjedzie spod nich.
@@ -576,7 +576,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     /*
       Kartka to powierzchnia pisania: nad nią rysik ma drgać, nad paskami
-      narzędzi i menu — nie. Najechanie i zjazd zgłaszają się same; PenHaptics
+      narzędzi i menu - nie. Najechanie i zjazd zgłaszają się same; PenHaptics
       odrzuca powtórki po jednym porównaniu.
     */
     override fun onHoverEvent(event: MotionEvent): Boolean {
@@ -967,7 +967,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private fun textAt(page: Int, localX: Float, localY: Float): TextBoxElement? {
         val onScreen = pages.firstOrNull { it.index == page } ?: return null
-        // Ostatnie na spisie leży na wierzchu — tak jak przy rysowaniu.
+        // Ostatnie na spisie leży na wierzchu - tak jak przy rysowaniu.
         return onScreen.texts.lastOrNull {
             localX >= it.x && localX <= it.x + it.width &&
                 localY >= it.y && localY <= it.y + it.height
@@ -976,7 +976,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private fun shapeAt(page: Int, localX: Float, localY: Float): ShapeElement? {
         val onScreen = pages.firstOrNull { it.index == page } ?: return null
-        // Ostatni na spisie leży na wierzchu — tak jak przy rysowaniu.
+        // Ostatni na spisie leży na wierzchu - tak jak przy rysowaniu.
         return onScreen.shapes.lastOrNull {
             ShapeGeometry.hits(it, localX, localY, TAP_REACH / zoom)
         }
@@ -1016,7 +1016,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                 return
             }
             val onScreen = pages.firstOrNull { it.index == page }
-            // Ostatnie na spisie leży na wierzchu — tak jak przy rysowaniu.
+            // Ostatnie na spisie leży na wierzchu - tak jak przy rysowaniu.
             val image = onScreen?.images?.lastOrNull { image ->
                 docX >= image.x && docX <= image.x + image.width &&
                     localY >= image.y && localY <= image.y + image.height

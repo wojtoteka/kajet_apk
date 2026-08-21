@@ -58,7 +58,7 @@ import java.io.File
 
 /**
  * Podgląd pliku, którego Kajet nie edytuje: zdjęcie, PDF albo komunikat
- * przy binarce. Świadomie bez pola tekstu — surowe bajty w edytorze kodu
+ * przy binarce. Świadomie bez pola tekstu - surowe bajty w edytorze kodu
  * psuły plik przy pierwszym klawiszu.
  */
 @Composable
@@ -365,7 +365,7 @@ private class PdfSession(
 
 /**
  * Otwiera PDF poza Kajetem. Najpierw sam URI z biblioteki, a gdy system
- * tego nie weźmie — kopia w pamięci podręcznej przez FileProvider.
+ * tego nie weźmie - kopia w pamięci podręcznej przez FileProvider.
  * Bajty nie idą do edytora kodu.
  */
 private fun openPdfOutside(context: Context, source: Uri, fileName: String): String? {

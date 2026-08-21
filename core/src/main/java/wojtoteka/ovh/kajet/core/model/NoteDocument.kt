@@ -246,7 +246,7 @@ enum class ShapeKind {
     STAR,
     ;
 
-    /** Linia i strzałka mają dwa końce zamiast pola — stąd inne uchwyty i brak wypełnienia. */
+    /** Linia i strzałka mają dwa końce zamiast pola - stąd inne uchwyty i brak wypełnienia. */
     val open: Boolean get() = this == LINE || this == ARROW
 
     val labelPl: String
@@ -285,7 +285,7 @@ enum class ShapeKind {
  *
  * Kształt zamknięty ma boki dodatnie. Linia i strzałka mogą mieć [width] albo
  * [height] ujemne: ich końce to (x, y) oraz (x + width, y + height), a grot
- * strzałki siedzi na tym drugim — bez znaku nie dałoby się narysować strzałki
+ * strzałki siedzi na tym drugim - bez znaku nie dałoby się narysować strzałki
  * w lewo inaczej niż obrotem o 180 stopni.
  */
 @Serializable
@@ -301,7 +301,7 @@ data class ShapeElement(
     /** Barwa obrysu w ARGB. */
     val color: Int,
     val strokeWidth: Float = 2f,
-    /** Wypełnienie w ARGB; 0 znaczy „bez wypełnienia" — tak samo jak tło pola tekstowego. */
+    /** Wypełnienie w ARGB; 0 znaczy „bez wypełnienia" - tak samo jak tło pola tekstowego. */
     val fill: Int = 0,
     val opacity: Float = 1f,
     /** Zaokrąglenie rogu prostokąta zaokrąglonego, jako ułamek krótszego boku. */
@@ -311,7 +311,7 @@ data class ShapeElement(
     val centerY: Float get() = y + height / 2f
 
     /**
-     * Prostokąt odniesienia BEZ obrotu, z bokami ustawionymi rosnąco — linia
+     * Prostokąt odniesienia BEZ obrotu, z bokami ustawionymi rosnąco - linia
      * w lewo ma ujemną szerokość, a prostokąt obejmujący musi zostać dodatni.
      * Obrys po obrocie liczy ShapeGeometry.
      */
@@ -345,7 +345,7 @@ data class TextContent(
     val font: NoteFont = NoteFont.BODY,
     /**
      * 0 = wielkość z konta/motywu, tak samo jak na stronie. Wybrana ręcznie
-     * wielkość to 10–48. [DEFAULT_SIZE] to tylko podgląd zera — nie zapisuje
+     * wielkość to 10-48. [DEFAULT_SIZE] to tylko podgląd zera - nie zapisuje
      * się jej z powrotem, bo po synchronizacji notatka zostawała na 17 na
      * zawsze.
      */
@@ -359,7 +359,7 @@ data class TextContent(
         const val LARGEST_SIZE = 48f
 
         /**
-         * Zero zostaje zerem (motyw). Reszta wchodzi w 10–48, żeby plus/minus
+         * Zero zostaje zerem (motyw). Reszta wchodzi w 10-48, żeby plus/minus
          * nie zapisał 9 ani 49.
          */
         fun storedFontSize(points: Float): Float =

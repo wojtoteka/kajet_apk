@@ -115,7 +115,7 @@ private fun TextBoxOnSheet(
 
     /*
       Gesty czytają pole przez rememberUpdatedState. Lambda w pointerInput
-      rusza raz i żyje dalej ze starym `box` w garści — liczenie od niego
+      rusza raz i żyje dalej ze starym `box` w garści - liczenie od niego
       dawało pole drgające o jeden krok, a zapis do historii na końcu gestu
       wpisywał położenie SPRZED przeciągnięcia i cofał cały ruch.
     */
@@ -142,7 +142,7 @@ private fun TextBoxOnSheet(
                 */
                 if (edited) {
                     // Edytowane pole zabiera najechanie kartce, a pisze się
-                    // w nim rysikiem tak samo — więc też jest powierzchnią.
+                    // w nim rysikiem tak samo - więc też jest powierzchnią.
                     Modifier
                         .penWritingSurface(context)
                         .pointerInput(box.id) {
@@ -159,7 +159,7 @@ private fun TextBoxOnSheet(
                 /*
                   Wysokość wiersza w em, nie w stałych sp z kroju body/code.
 
-                  Material scala nieustawione pola z LocalTextStyle — body
+                  Material scala nieustawione pola z LocalTextStyle - body
                   ma lineHeight = 24.sp, code 22.sp. copy zostawia tę ramkę,
                   a fontSize maleje z zoomem. Compose układa glify w 24.sp
                   od góry, a pole przycina resztę: przy oddalaniu litery

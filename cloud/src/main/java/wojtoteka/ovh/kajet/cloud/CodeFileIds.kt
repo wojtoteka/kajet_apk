@@ -5,12 +5,12 @@ import android.content.SharedPreferences
 import java.util.UUID
 
 /**
- * Plik z kodem to na dysku zwykły plik tekstowy — nie niesie w sobie żadnego
+ * Plik z kodem to na dysku zwykły plik tekstowy - nie niesie w sobie żadnego
  * identyfikatora, a serwer rozpoznaje notatki wyłącznie po identyfikatorze.
  * Ten rejestr skleja jedno z drugim: każdej ścieżce pliku przypisuje stały
  * identyfikator, pod którym plik żyje na serwerze jako notatka CODE.
  *
- * Zmiana nazwy albo przeniesienie pliku poza aplikacją zrywa powiązanie —
+ * Zmiana nazwy albo przeniesienie pliku poza aplikacją zrywa powiązanie -
  * plik dostaje wtedy nowy identyfikator i na serwerze pojawia się jako nowy.
  */
 class CodeFileIds(context: Context) {
@@ -51,7 +51,7 @@ class CodeFileIds(context: Context) {
 
     /**
      * Cały rejestr odwrócony: numer notatki na serwerze wskazuje ścieżkę pliku.
-     * Do przejścia po spisie nagrobków — [pathFor] przegląda przy każdym
+     * Do przejścia po spisie nagrobków - [pathFor] przegląda przy każdym
      * pytaniu wszystkie wpisy, więc przy pięciuset nagrobkach robi z tego
      * pięćset przebiegów po tym samym.
      */
@@ -69,7 +69,7 @@ class CodeFileIds(context: Context) {
 
     /**
      * Zapamiętuje język, którym serwer nazwał ten plik. Pusty identyfikator
-     * kasuje wpis — notatka bez języka nie ma czego trzymać.
+     * kasuje wpis - notatka bez języka nie ma czego trzymać.
      */
     @Synchronized
     fun rememberLanguage(path: String, serverLanguageId: String?) {
@@ -89,7 +89,7 @@ class CodeFileIds(context: Context) {
     }
 
     /**
-     * Przepina powiązania po zmianie nazwy albo przeniesieniu — także dla
+     * Przepina powiązania po zmianie nazwy albo przeniesieniu - także dla
      * wszystkiego, co leżało w przenoszonym folderze.
      */
     @Synchronized

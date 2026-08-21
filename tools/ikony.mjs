@@ -5,7 +5,7 @@
   Dlaczego tak, a nie biblioteką: material-icons-extended jest zamrożone na
   starym zestawie Material Icons, a strona Kajetu rysuje Material Symbols.
   Ściągając te same rysunki, aplikacja i strona pokazują jedną ikonę, a projekt
-  nie zyskuje ani jednej nowej zależności — ścieżki czyta PathParser, który
+  nie zyskuje ani jednej nowej zależności - ścieżki czyta PathParser, który
   siedzi już w compose-ui-graphics.
 
   Użycie:  node tools/ikony.mjs
@@ -227,7 +227,7 @@ async function fetchPath(name) {
   const svg = await response.text();
 
   // Rysunki Material Symbols to jedna albo kilka ścieżek w układzie
-  // 0 -960 960 960. Sklejamy je w jeden ciąg — reguła wypełniania jest ta sama.
+  // 0 -960 960 960. Sklejamy je w jeden ciąg - reguła wypełniania jest ta sama.
   const parts = [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((hit) => hit[1]);
   if (parts.length === 0) throw new Error("brak ścieżki w pliku SVG");
   return parts.join(" ");
@@ -247,7 +247,7 @@ for (let i = 0; i < wanted.length; i += 8) {
       try {
         return [name, await fetchPath(name)];
       } catch (problem) {
-        missing.push(`${name} — ${problem.message}`);
+        missing.push(`${name} - ${problem.message}`);
         return [name, null];
       }
     }),
@@ -287,13 +287,13 @@ import androidx.compose.ui.unit.dp
 /*
   Ikony Material Symbols Rounded z fonts.google.com/icons.
 
-  Plik jest wypisywany przez tools/ikony.mjs — nie poprawiaj go ręcznie.
+  Plik jest wypisywany przez tools/ikony.mjs - nie poprawiaj go ręcznie.
   Żeby dołożyć albo zamienić ikonę, dopisz ją w tamtym spisie i uruchom:
 
       node tools/ikony.mjs
 
   Rysunki Google są w układzie 960 na 960, liczonym od góry w górę (y od -960
-  do 0). Dlatego każdy leży w grupie przesuniętej o 960 w dół — dzięki temu
+  do 0). Dlatego każdy leży w grupie przesuniętej o 960 w dół - dzięki temu
   ImageVector ma zwyczajny układ od lewego górnego rogu, a Icon() rysuje ikonę
   w kolorze treści, tak jak wszystkie pozostałe.
 */

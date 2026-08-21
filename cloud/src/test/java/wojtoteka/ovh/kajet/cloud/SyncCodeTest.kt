@@ -12,12 +12,12 @@ import org.robolectric.RuntimeEnvironment
 /**
  * Co synchronizacja robi z PLIKIEM Z KODEM.
  *
- * Plik z kodem to na dysku zwykły tekst bez identyfikatora — na serwerze żyje
+ * Plik z kodem to na dysku zwykły tekst bez identyfikatora - na serwerze żyje
  * jako notatka CODE, a jedno z drugim skleja [CodeFileIds]. Rozjazd w tym
  * rejestrze nie kończy się komunikatem, tylko duplikatem w bibliotece albo
  * wskrzeszonym plikiem, którego ktoś skasował na drugim urządzeniu. Dlatego
  * te testy patrzą na PLIK, KOLEJKĘ i ZAPAMIĘTANĄ WERSJĘ, a nie na to, czy
- * odpowiedź serwera dała się odczytać — od tego jest [ServerContractTest].
+ * odpowiedź serwera dała się odczytać - od tego jest [ServerContractTest].
  */
 @RunWith(RobolectricTestRunner::class)
 class SyncCodeTest {
@@ -47,7 +47,7 @@ class SyncCodeTest {
         sync = Sync(context, library, account, transport, queue, codeIds)
     }
 
-    /** Notatka CODE z serwera — treść w kształcie, który rozumie strona. */
+    /** Notatka CODE z serwera - treść w kształcie, który rozumie strona. */
     private fun serverCode(
         id: String,
         title: String = "skrypt.py",
@@ -82,7 +82,7 @@ class SyncCodeTest {
 
         val sent = transport.sentNotes.single { it.id == id }
         assertThat(sent.kind).isEqualTo("CODE")
-        // Tytułem notatki jest nazwa pliku — po niej strona buduje plik z powrotem.
+        // Tytułem notatki jest nazwa pliku - po niej strona buduje plik z powrotem.
         assertThat(sent.title).isEqualTo("skrypt.py")
         assertThat(sent.content).contains("\"source\":\"print(1)\"")
         assertThat(sent.baseVersion).isEqualTo(0)
@@ -146,7 +146,7 @@ class SyncCodeTest {
 
         sync()
 
-        // Znacznik jak w kopii notatki, tylko godzina z podkreślnikiem —
+        // Znacznik jak w kopii notatki, tylko godzina z podkreślnikiem -
         // dwukropek nie przechodzi w nazwie pliku.
         val copy = library.texts.keys.single { it != path }
         assertThat(copy).contains("(kopia z chmury, ")
@@ -168,7 +168,7 @@ class SyncCodeTest {
 
         val result = sync()
 
-        // Bez kopii nie ma rozliczenia konfliktu — inaczej treść z serwera
+        // Bez kopii nie ma rozliczenia konfliktu - inaczej treść z serwera
         // przepadłaby po cichu, a wpis wyglądałby na załatwiony.
         assertThat(result.conflicts).isEqualTo(0)
         assertThat(knownVersion(id)).isEqualTo(0)
@@ -193,7 +193,7 @@ class SyncCodeTest {
 
         sync()
 
-        // Plik skasowano gdzie indziej — idzie do lokalnego kosza zamiast
+        // Plik skasowano gdzie indziej - idzie do lokalnego kosza zamiast
         // wskrzeszać się przy każdym przelogowaniu.
         assertThat(library.trashedFilePaths).containsExactly(path)
         assertThat(library.texts).isEmpty()
@@ -293,7 +293,7 @@ class SyncCodeTest {
         val result = sync()
 
         // Rejestr zna plik, ale wersji nie znamy (np. plik przywrócony
-        // z kosza po nagrobku) — serwer nie ma prawa po cichu nadpisać.
+        // z kosza po nagrobku) - serwer nie ma prawa po cichu nadpisać.
         assertThat(library.texts[path]).isEqualTo("moja wersja")
         val copy = library.texts.keys.single { it != path }
         assertThat(copy).startsWith("szkola/skrypt (kopia z chmury")
@@ -313,7 +313,7 @@ class SyncCodeTest {
         sync()
 
         // Rozszerzenie z języka. Zanim aplikacja poznała MySQL-a, taka notatka
-        // lądowała jako zadanie.txt — bez kolorowania i bez własnej ikony.
+        // lądowała jako zadanie.txt - bez kolorowania i bez własnej ikony.
         assertThat(library.texts.keys).containsExactly("zadanie.sql")
         assertThat(codeIds.existingIdFor("zadanie.sql")).isEqualTo("c1")
     }
@@ -352,7 +352,7 @@ class SyncCodeTest {
 
         sync()
 
-        // Nic nie zapamiętano, więc rozstrzyga rozszerzenie — a .sql to SQLite.
+        // Nic nie zapamiętano, więc rozstrzyga rozszerzenie - a .sql to SQLite.
         val sent = transport.sentNotes.single { it.id == id }
         assertThat(sent.content).contains(""""language":"sqlite3"""")
     }
@@ -402,7 +402,7 @@ class SyncCodeTest {
 
         sync()
 
-        // Pustego urządzenia nie ma przed czym chronić — plik po prostu
+        // Pustego urządzenia nie ma przed czym chronić - plik po prostu
         // powstaje i od razu nosi numer oraz wersję z serwera.
         val created = library.texts.keys.single()
         assertThat(library.texts[created]).isEqualTo("print(9)")

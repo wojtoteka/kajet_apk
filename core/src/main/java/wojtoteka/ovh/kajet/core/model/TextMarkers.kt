@@ -21,7 +21,7 @@ object TextMarkers {
      * zostawała w spisie jako gołe `**`.
      *
      * To samo wyrażenie stoi w `note-title.ts` na serwerze (LEADING_SYNTAX)
-     * i musi liczyć to samo — inaczej te same notatki przetytułowywałyby się
+     * i musi liczyć to samo - inaczej te same notatki przetytułowywałyby się
      * nawzajem przy synchronizacji.
      */
     val leadingSyntax = Regex("""^\s*(#{1,6}\s+|>\s?|[-*+]\s+(\[[ xX]]\s+)?|\d+[.)]\s+)""")
@@ -32,7 +32,7 @@ object TextMarkers {
     /*
       Otwarcie i domknięcie zdejmowane OSOBNO, nie parą: stare notatki miewają
       znaczniki zagnieżdżone jeden w drugim albo osierocone domknięcia, a para
-      regexowa zostawiała je wtedy w treści — goły HTML w spisie i w indeksie.
+      regexowa zostawiała je wtedy w treści - goły HTML w spisie i w indeksie.
     */
     private val spanOpening = Regex("""<span style="(?:color|font-size):[^"]*">""")
     private val spanClosing = Regex("""</span>""")

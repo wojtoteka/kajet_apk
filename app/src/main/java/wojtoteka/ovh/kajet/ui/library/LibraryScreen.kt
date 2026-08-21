@@ -100,7 +100,7 @@ fun LibraryScreen(
     var folderLook by remember { mutableStateOf<LibraryItem?>(null) }
 
     // Okna działań zbiorczych. Stoją tu, przy pozostałych oknach, a nie
-    // w spisie — wtedy nie znikają razem z przerysowaniem paska zaznaczania.
+    // w spisie - wtedy nie znikają razem z przerysowaniem paska zaznaczania.
     var movingSelected by remember { mutableStateOf(false) }
     var trashingSelected by remember { mutableStateOf(false) }
     val selected by model.selected.collectAsStateWithLifecycle()
@@ -142,7 +142,7 @@ fun LibraryScreen(
             /*
               Co się właśnie dzieje. Zdanie przychodzi z modelu w całości,
               bo tym paskiem chodzi już nie tylko odbudowa spisu, ale też
-              zapis folderu do pliku i działania na wielu wpisach naraz —
+              zapis folderu do pliku i działania na wielu wpisach naraz -
               a doklejane „Odbudowuję spis notatek…" robiło z nich zdania
               w rodzaju „Odbudowuję spis notatek… Zapisuję folder Fizyka".
             */
@@ -164,7 +164,7 @@ fun LibraryScreen(
             }
             /*
               Notatki, które nie doszły na serwer. Sygnał stał do tej pory sam
-              na ekranie konta — trzeba było tam z własnej woli zajrzeć, więc
+              na ekranie konta - trzeba było tam z własnej woli zajrzeć, więc
               w praktyce nikt się o tym nie dowiadywał.
 
               Barwa spokojna, nie czerwona: notatki działają dalej i nic nie
@@ -277,7 +277,7 @@ fun LibraryScreen(
     }
 
     itemMenu?.let { item ->
-        // Kontekst ekranu — okno „Udostępnij" po eksporcie musi wystartować
+        // Kontekst ekranu - okno „Udostępnij" po eksporcie musi wystartować
         // z Activity, inaczej system potrafi je po cichu zdusić.
         val context = androidx.compose.ui.platform.LocalContext.current
         ItemMenu(
@@ -330,7 +330,7 @@ fun LibraryScreen(
     }
 
     // Przenoszenie zbiorcze: ten sam spis miejsc co przy jednym wpisie, tyle
-    // że bez wykluczania folderu, w którym się stoi — wykluczanie robi model,
+    // że bez wykluczania folderu, w którym się stoi - wykluczanie robi model,
     // bo tylko on wie, co dokładnie jest zaznaczone.
     if (movingSelected) {
         MoveManyDialog(
@@ -613,7 +613,7 @@ private fun FolderView(
                         item = item,
                         repo = repo,
                         // W trybie zaznaczania dotknięcie wiersza zaznacza,
-                        // a nie otwiera — inaczej pierwszy odruch wyrzucałby
+                        // a nie otwiera - inaczej pierwszy odruch wyrzucałby
                         // ze spisu w środek notatki.
                         onOpen = {
                             if (selecting) model.toggleSelected(item) else onOpen(item)
@@ -648,12 +648,12 @@ private fun FolderView(
  *
  * O układzie decyduje szerokość samej kolumny spisu, a nie szerokość ekranu.
  * Na tablecie w oknie o połowie szerokości ekran ma swoje 800 dp, ale margines
- * z ikonami i drzewo folderów zabierają z tego ponad 300 dp — na nagłówek
+ * z ikonami i drzewo folderów zabierają z tego ponad 300 dp - na nagłówek
  * zostaje mniej miejsca niż na telefonie. Nagłówek w jednym rzędzie wtedy się
  * nie mieścił: ostatni przycisk kurczył się do pustego prostokąta bez napisu,
  * a nazwa folderu do zera szerokości. Nazwa łamała się wtedy po jednej literze
  * w wierszu i rosła w dół tak, że spychała spis notatek poza dolną krawędź
- * okna — po zmniejszeniu okna zostawał sam pasek przycisków na pustym tle.
+ * okna - po zmniejszeniu okna zostawał sam pasek przycisków na pustym tle.
  */
 @Composable
 private fun FolderHeader(
@@ -693,7 +693,7 @@ private fun FolderHeader(
         LaunchedEffect(selecting) { actionScroll.scrollTo(0) }
 
         // Licznik wskazanych wpisów stoi obok nazwy folderu, drobnym pismem
-        // i zawsze w jednym wierszu — nagłówek nie może przez niego urosnąć.
+        // i zawsze w jednym wierszu - nagłówek nie może przez niego urosnąć.
         val counter: @Composable () -> Unit = {
             if (selecting) {
                 Text(
@@ -818,7 +818,7 @@ private fun FolderHeader(
  * przyciski o tej samej wysokości, więc podmiana nie rusza niczego pod spodem.
  *
  * Przy zerze wskazanych „Przenieś" i „Do kosza" stoją wygaszone, zamiast
- * znikać — znikanie zmieniałoby szerokość rzędu przy każdym zaznaczeniu.
+ * znikać - znikanie zmieniałoby szerokość rzędu przy każdym zaznaczeniu.
  * „Przenieś" jest krótkie, bez „do innego folderu": trzy pełne zdania nie
  * mieściły się w jednym rzędzie na telefonie, a dokąd przenieść i tak pyta
  * okno, które otwiera się zaraz potem.
@@ -1143,7 +1143,7 @@ private fun TrashRow(item: TrashEntry, onRestore: () -> Unit, onDelete: () -> Un
             // Wpis, który trafił do kosza dlatego, że notatka zniknęła na
             // serwerze, ma termin. Bez tego napisu przepadłby kiedyś sam i nikt
             // by nie wiedział, że w ogóle miał na coś czekać. Ostatnie dni na
-            // czerwono — wtedy warto się pospieszyć z przywróceniem.
+            // czerwono - wtedy warto się pospieszyć z przywróceniem.
             Housekeeping.daysLeft(item)?.let { days ->
                 Text(
                     text = words.disappearsIn(days),
@@ -1243,7 +1243,7 @@ private fun MoveDialog(
  *
  * Spis miejsc jest pełny, bez wykluczeń: który folder odpada (bo jest jednym
  * z zaznaczonych albo leży w środku takiego), rozstrzyga model przy samym
- * przenoszeniu. Tutaj nie da się tego zrobić uczciwie — okno widzi liczbę
+ * przenoszeniu. Tutaj nie da się tego zrobić uczciwie - okno widzi liczbę
  * zaznaczonych, a nie ich ścieżki.
  */
 @Composable
@@ -1306,7 +1306,7 @@ private fun FolderLookDialog(
     KajetDialog(words.folderLookTitle(item.name), onClose) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.colour)
-            // Kolorów jest więcej, niż mieści wąski ekran — pasek jeździ w bok.
+            // Kolorów jest więcej, niż mieści wąski ekran - pasek jeździ w bok.
             Row(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1339,7 +1339,7 @@ private fun FolderLookDialog(
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w NoticeBar
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w NoticeBar
   obok długiego zdania odcinał się od tła i na telefonie łamał etykiety
   („Spróbuj jeszcze raz", „Rozumiem"). Tu ten sam krój co etykiety paska,
   bez ramki.

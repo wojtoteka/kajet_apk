@@ -10,7 +10,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Zapis awarii do pliku — żeby po restarcie dało się przeczytać, co się
+ * Zapis awarii do pliku - żeby po restarcie dało się przeczytać, co się
  * stało, i przekleić szczegóły do zgłoszenia.
  *
  * Raporty leżą w `files/awarie/`, zostaje pięć najnowszych.
@@ -22,7 +22,7 @@ object CrashLog {
     private const val SEEN_NAME = "awaria-pokazana.txt"
 
     /**
-     * Tyle znaków opisu awarii wolno włożyć do intentu — Binder ma limit
+     * Tyle znaków opisu awarii wolno włożyć do intentu - Binder ma limit
      * ~1 MB na CAŁĄ transakcję, więc zostawiamy szeroki zapas.
      */
     const val LONGEST_EXTRA = 100_000
@@ -72,7 +72,7 @@ object CrashLog {
      */
     const val SENT_SUFFIX = ".wyslane"
 
-    /** Raporty, które jeszcze nie doszły na serwer — od najstarszego. */
+    /** Raporty, które jeszcze nie doszły na serwer - od najstarszego. */
     fun unsentCrashes(context: Context): List<File> =
         File(context.filesDir, DIR_NAME).listFiles()
             ?.filter { it.isFile && !it.name.endsWith(SENT_SUFFIX) }
@@ -83,7 +83,7 @@ object CrashLog {
         runCatching { file.renameTo(File(file.parentFile, file.name + SENT_SUFFIX)) }
             .getOrDefault(false)
 
-    /** To, co da się wyczytać z nagłówka raportu — do pól osobno na serwerze. */
+    /** To, co da się wyczytać z nagłówka raportu - do pól osobno na serwerze. */
     data class Facts(
         val appVersion: String? = null,
         val versionCode: Int? = null,
@@ -142,7 +142,7 @@ object CrashLog {
       chodzi w osobnym procesie (`:blad`), a SharedPreferences każdy proces
       trzyma u siebie w pamięci i nie widzi cudzych zapisów. Plik widzą oba.
 
-      Leży obok katalogu z raportami, nie w środku — inaczej sprzątanie starych
+      Leży obok katalogu z raportami, nie w środku - inaczej sprzątanie starych
       raportów (rotate) liczyłoby go jako raport i potrafiło skasować.
     */
     private fun seenAt(context: Context): Long =

@@ -42,8 +42,8 @@ fun SaveIndicator(
     modifier: Modifier = Modifier,
     /*
       Przy SAVED. „Zapisane" to dysk; ta flaga to chmura z kolejki:
-      true — serwer ma tę wersję, false — czeka albo brak potwierdzenia,
-      null — nie ma konta, ikony nie pokazujemy.
+      true - serwer ma tę wersję, false - czeka albo brak potwierdzenia,
+      null - nie ma konta, ikony nie pokazujemy.
     */
     inCloud: Boolean? = null,
 ) {
@@ -89,7 +89,7 @@ fun SaveIndicator(
 
           Napis stoi na końcu rzędu, a Compose mierzy dzieci bez wagi po kolei
           i ostatniemu oddaje to, co zostało. Przy długim tytule obok zostawało
-          tego kilka punktów — i „Zapisane 12:01" łamało się po jednej literze
+          tego kilka punktów - i „Zapisane 12:01" łamało się po jednej literze
           w wierszu, rosnąc w dół na pół ekranu. Ten sam błąd opisuje komentarz
           przy nagłówku folderu w LibraryScreen.
         */

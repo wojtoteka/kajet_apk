@@ -122,7 +122,7 @@ internal object PdfMarkdown {
         if (fence == "```") trimmed.startsWith("```") else trimmed == "$$"
 
     /**
-     * Zwinięta gałąź chowa dzieci — ten sam rachunek co [MindMapLayout.visible].
+     * Zwinięta gałąź chowa dzieci - ten sam rachunek co [MindMapLayout.visible].
      */
     fun visibleIds(map: MindMapContent): Set<String> {
         val byId = map.nodes.associateBy { it.id }

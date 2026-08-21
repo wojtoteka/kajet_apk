@@ -137,7 +137,7 @@ fun HandwritingEditor(
 
     /*
       Drganie przy pisaniu robi silniczek w rysiku, nie tablet. Systemowa usługa
-      Lenovo musi tylko wiedzieć, który przybór naśladować i jak mocno —
+      Lenovo musi tylko wiedzieć, który przybór naśladować i jak mocno -
       a mówimy jej to przy każdej zmianie narzędzia. Poza notatnikiem
       obowiązuje profil „długopis", więc przy wyjściu nie gasimy niczego,
       tylko wracamy do niego.
@@ -156,7 +156,7 @@ fun HandwritingEditor(
 
       System ubija Kajet zwinięty do tła, kiedy pamięć jest potrzebna czemu
       innemu. Po powrocie kartka skakała na samą górę i do dopasowania do
-      szerokości — a przy dłuższej notatce znaczyło to szukanie od nowa
+      szerokości - a przy dłuższej notatce znaczyło to szukanie od nowa
       miejsca, w którym się pisało. To samo z otwartym panelem pisaka.
     */
     var penPanel by rememberSaveable { mutableStateOf(false) }
@@ -216,7 +216,7 @@ fun HandwritingEditor(
     /*
      * Miejsce na nową rzecz: kartka i punkt w JEJ współrzędnych, tam gdzie
      * człowiek właśnie patrzy. Wcześniej wszystko szło na stronę 0 ze
-     * współrzędną całego dokumentu — na ekranie wyglądało dobrze, ale w
+     * współrzędną całego dokumentu - na ekranie wyglądało dobrze, ale w
      * pliku (i w PDF) pole lądowało kilometr pod pierwszą kartką.
      */
     val visibleSpot: () -> Triple<Int, Float, Float> = spot@{
@@ -652,7 +652,7 @@ private fun DrawingRail(
     onFavorite: () -> Unit,
     onExport: () -> Unit,
     onBack: () -> Unit,
-    /** Szyna stoi po prawej — linia brzegowa idzie wtedy przy lewej krawędzi. */
+    /** Szyna stoi po prawej - linia brzegowa idzie wtedy przy lewej krawędzi. */
     onRight: Boolean = false,
 ) {
     val words = LocalStrings.current
@@ -814,7 +814,7 @@ private fun NarrowToolRow(
  *
  * Na telefonie stoi w dwóch rzędach, a nie w jednym. W jednym rzędzie na
  * kolory i grubości zostawało po odliczeniu strzałki powrotu, tytułu i napisu
- * o zapisie kilkadziesiąt punktów przy prawej krawędzi — kropki ledwo tam było
+ * o zapisie kilkadziesiąt punktów przy prawej krawędzi - kropki ledwo tam było
  * widać, a trafienie w tę właściwą wymagało przewijania w bok po omacku. Teraz
  * pierwszy rząd trzyma tytuł ze stanem zapisu, a kolory i grubości dostają
  * osobny rząd na całą szerokość ekranu.
@@ -823,7 +823,7 @@ private fun NarrowToolRow(
  * końcu przewijanych kropek: to jedyne wyjście do reszty barw, więc ma być
  * pod palcem bez przewijania.
  *
- * Na tablecie zostaje jeden rząd — tam miejsca starcza.
+ * Na tablecie zostaje jeden rząd - tam miejsca starcza.
  */
 @Composable
 private fun TopBar(
@@ -947,7 +947,7 @@ private fun TopBar(
     }
 }
 
-/** Tytuł notatki wprost w pasku — kliknięcie w napis od razu go poprawia. */
+/** Tytuł notatki wprost w pasku - kliknięcie w napis od razu go poprawia. */
 @Composable
 private fun TitleField(
     title: String,
@@ -980,7 +980,7 @@ private fun TitleField(
 /**
  * Barwy i grubości bieżącego narzędzia. Gumka ma zamiast barw same wielkości.
  *
- * Stoi wprost w rzędzie, który ją wywołuje — raz w pasku tabletu, raz
+ * Stoi wprost w rzędzie, który ją wywołuje - raz w pasku tabletu, raz
  * w osobnym rzędzie na telefonie.
  */
 @Composable
@@ -1118,7 +1118,7 @@ private fun SelectionPanel(
     ) {
         Text(words.selectedStrokes(count), style = Kajet.type.label, color = Kajet.colors.text)
         /*
-          Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę —
+          Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę -
           w ciasnej karcie 44 dp odcinał się jak niedopasowany przycisk.
           Ten sam krój co licznik zaznaczenia, bez ramki.
         */
@@ -1308,7 +1308,7 @@ private fun PenPanel(
  * Panel kształtu: co się rysuje i czym.
  *
  * Zmiany idą i do ustawień narzędzia, i do kształtu wziętego właśnie do
- * poprawek — poprawienie koloru nie może znaczyć „skasuj figurę i narysuj ją
+ * poprawek - poprawienie koloru nie może znaczyć „skasuj figurę i narysuj ją
  * od nowa".
  */
 @Composable
@@ -1373,7 +1373,7 @@ private fun ShapePanel(
             readout = { words.percentOf((it * 100).roundToInt()) },
         )
 
-        // Wypełnienie tylko dla figur zamkniętych — linii i strzałki nie ma czym wypełnić.
+        // Wypełnienie tylko dla figur zamkniętych - linii i strzałki nie ma czym wypełnić.
         if (!shapes.kind.open) {
             SectionLabel(words.shapeFillLabel)
             Row(
@@ -1477,7 +1477,7 @@ private fun TextBoxFormatBar(
     ) {
         /*
           Na ~360 dp suma ikon przekracza szerokość karty i Compose przycina
-          rząd — ostatnie wyrównania i obwódka karty znikały za krawędzią.
+          rząd - ostatnie wyrównania i obwódka karty znikały za krawędzią.
           Przewijanie w bok jak w NarrowToolRow i szynie mapy myśli.
         */
         Row(
@@ -1797,7 +1797,7 @@ private fun ChoiceRow(label: String, picked: Boolean, onClick: () -> Unit) {
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnym
   rzędzie komunikatu odcinał się od tła i na telefonie łamał etykietę
   („Rozumiem"). Tu ten sam krój co treść paska, bez ramki.
 */

@@ -216,7 +216,7 @@ class LibraryStoreTest {
     }
 
     /*
-      Plik z barwą i ikoną folderu to nie wpis — przez niego pusty folder
+      Plik z barwą i ikoną folderu to nie wpis - przez niego pusty folder
       meldował na liście „1 wpis".
     */
     @Test
@@ -372,7 +372,7 @@ class LibraryStoreTest {
         store.moveToTrash(store.createNote("", "Za serwerem", NoteKind.TEXT).path, fromServer = true)
         val after = System.currentTimeMillis()
 
-        // Data z TEGO urządzenia, nie z serwera — od niej liczy się czas na
+        // Data z TEGO urządzenia, nie z serwera - od niej liczy się czas na
         // przywrócenie.
         assertThat(store.listTrash().single().deletedAt).isAtLeast(before)
         assertThat(store.listTrash().single().deletedAt).isAtMost(after)

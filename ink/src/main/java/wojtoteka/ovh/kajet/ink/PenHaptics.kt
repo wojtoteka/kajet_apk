@@ -12,27 +12,27 @@ import wojtoteka.ovh.kajet.core.model.InkTool
  * Czym rysik ma drgać i jak mocno.
  *
  * [brush] to numer przyboru, który naśladuje usługa Lenovo. [strength] jest
- * mnożnikiem względem siły podstawowej urządzenia — jedynka znaczy „tyle, ile
+ * mnożnikiem względem siły podstawowej urządzenia - jedynka znaczy „tyle, ile
  * tablet ma fabrycznie".
  */
 data class PenProfile(val brush: Int, val strength: Float)
 
 /**
- * Wibracje rysika Lenovo — wyłącznie przy pisaniu.
+ * Wibracje rysika Lenovo - wyłącznie przy pisaniu.
  *
- * Drga nie tablet — drga silniczek w samym rysiku, prowadzony po Bluetooth
+ * Drga nie tablet - drga silniczek w samym rysiku, prowadzony po Bluetooth
  * przez systemową usługę `ZuiPenHapticService`. To ten sam silniczek, który
  * daje odgłos pisania: drganie i dźwięk to jedno, nie dwie rzeczy. Usługa sama
  * pilnuje, nad którą aplikacją unosi się rysik, i sama wysyła rozkaz;
  * aplikacja nie ma jak zagrać niczego bezpośrednio. Może natomiast powiedzieć
  * TRZY rzeczy:
  *
- * - [PACKAGES] — spis aplikacji, którym rysik w ogóle odpowiada. Kajet dopisuje
+ * - [PACKAGES] - spis aplikacji, którym rysik w ogóle odpowiada. Kajet dopisuje
  *   się do niego przy wejściu do notatnika odręcznego i wypisuje przy wyjściu:
  *   drganie ma być tylko tam, gdzie rysik naprawdę pisze. (Siły zero usługa
- *   nie przyjmuje — sprawdzone na tablecie — więc spis to jedyna pewna cisza.)
- * - [BRUSH] — który przybór ma naśladować.
- * - [LEVEL] — jak mocno. Tego ustawienia NIE zapisujemy: to gałka całego
+ *   nie przyjmuje - sprawdzone na tablecie - więc spis to jedyna pewna cisza.)
+ * - [BRUSH] - który przybór ma naśladować.
+ * - [LEVEL] - jak mocno. Tego ustawienia NIE zapisujemy: to gałka całego
  *   urządzenia, ustawiona przez człowieka w ustawieniach Lenovo. Czytamy ją
  *   jako punkt odniesienia i przekazujemy własną wartość wprost do usługi,
  *   w rozkazie, który gaśnie razem z nim.
@@ -44,7 +44,7 @@ data class PenProfile(val brush: Int, val strength: Float)
  * adb shell pm grant wojtoteka.ovh.kajet android.permission.WRITE_SECURE_SETTINGS
  * ```
  *
- * Bez tego uprawnienia wszystko tu po cichu nie robi nic — pisanie działa jak
+ * Bez tego uprawnienia wszystko tu po cichu nie robi nic - pisanie działa jak
  * zawsze, tylko rysik nie drga. Na urządzeniach innych niż Lenovo tych
  * ustawień po prostu nie ma i też się nic nie dzieje.
  *
@@ -54,7 +54,7 @@ data class PenProfile(val brush: Int, val strength: Float)
  * przykryje go zasłona powiadomień (a ta NIE przechodzi przez cykl życia
  * aktywności!) i gdy rysik odjedzie od ekranu. Dlatego [MainActivity]
  * przypomina profil przy każdym zbliżeniu i dotknięciu rysika oraz przy
- * powrocie ostrości okna, a [StrokeCanvas] przed każdą kreską — wszystko to
+ * powrocie ostrości okna, a [StrokeCanvas] przed każdą kreską - wszystko to
  * kończy się natychmiast, gdy notatnik nie jest otwarty.
  *
  * ## Wątki
@@ -62,7 +62,7 @@ data class PenProfile(val brush: Int, val strength: Float)
  * Każdy odczyt i zapis to rozmowa z innym procesem. Wątek rysowania nie ma
  * prawa na nią czekać, więc wszystko idzie na własny wątek, a [enter], [use],
  * [leave] i [refresh] wracają natychmiast. To, co liczy się na wątku
- * wołającego, to same odczyty pól — bez zapytań do systemu.
+ * wołającego, to same odczyty pól - bez zapytań do systemu.
  */
 object PenHaptics {
 
@@ -76,7 +76,7 @@ object PenHaptics {
     private const val DEFAULT_LEVEL = 3
 
     /*
-      Zakres siły. Usługa Lenovo nie mówi, ile ma stopni — trójka to wartość
+      Zakres siły. Usługa Lenovo nie mówi, ile ma stopni - trójka to wartość
       fabryczna, a piątka jest górną granicą suwaka w ustawieniach Lenovo.
       Gdyby tablet miał inną skalę, przycięcie i tak nie wypuści wartości poza
       bezpieczny zakres.
@@ -99,7 +99,7 @@ object PenHaptics {
           ball_pen 0x20, pencil 0x21, chisel_marker 0x22, lenovo_pen 0x24.
 
       Gumki w tych zasobach nie ma, bo w ustawieniach Lenovo się jej nie
-      wybiera. Jej numer — 0x23, czyli luka między markerem a piórem —
+      wybiera. Jej numer - 0x23, czyli luka między markerem a piórem -
       podpatrzony w dzienniku usługi przy mazaniu w notatniku Lenovo:
           ZuiPenHapticService: setHapticContinuousParams called, id = 35
     */
@@ -124,7 +124,7 @@ object PenHaptics {
     @Volatile
     private var notebook: PenProfile? = null
 
-    /** Brzmienie zastane przy wejściu do notatnika — do oddania przy wyjściu. */
+    /** Brzmienie zastane przy wejściu do notatnika - do oddania przy wyjściu. */
     @Volatile
     private var borrowed: Int? = null
 
@@ -142,7 +142,7 @@ object PenHaptics {
     @Volatile
     private var sentLevel = -1
 
-    /** Dojście wprost do usługi rysika — sprawdzane raz, na wątku w tle. */
+    /** Dojście wprost do usługi rysika - sprawdzane raz, na wątku w tle. */
     @Volatile
     private var direct: Direct? = null
 
@@ -158,7 +158,7 @@ object PenHaptics {
 
     /**
      * Czy rysik unosi się nad kartką albo nad polem pisania. Usługa Lenovo
-     * drga nad CAŁĄ wpisaną aplikacją — paskami narzędzi i menu też — więc
+     * drga nad CAŁĄ wpisaną aplikacją - paskami narzędzi i menu też - więc
      * powierzchnie pisania zgłaszają się same ([surfaceHover]), a wszędzie
      * indziej rozkaz jest dogaszany.
      */
@@ -168,12 +168,12 @@ object PenHaptics {
     /**
      * Przybór i siła przy danym narzędziu Kajetu.
      *
-     * Lenovo daje pięć gotowych charakterów i jedną gałkę siły — „szorstkie"
+     * Lenovo daje pięć gotowych charakterów i jedną gałkę siły - „szorstkie"
      * albo „miękkie" nie da się tu zaprogramować, można tylko wybrać najbliższy
      * gotowy przybór i dobrać moc.
      *
      * Gumka jest głośniejsza od pisania i celowo: ma dać się poznać po samym
-     * dotyku, że się ściera, a nie pisze. Zakreślacz odwrotnie — szeroki,
+     * dotyku, że się ściera, a nie pisze. Zakreślacz odwrotnie - szeroki,
      * tępy, prawie płaski. Narzędzia, które nie zostawiają kreski (zaznaczanie,
      * kształty), dostają najcichszy sygnał: to praca techniczna, nie pisanie.
      */
@@ -189,7 +189,7 @@ object PenHaptics {
     /**
      * Wejście do notatki odręcznej (także okna rysowania w notatce tekstowej).
      * Zagnieżdżenia są liczone. Dopiero tutaj Kajet dopisuje się do spisu
-     * usługi — wcześniej rysik ma go nie zauważać.
+     * usługi - wcześniej rysik ma go nie zauważać.
      */
     fun enter(context: Context) {
         depth += 1
@@ -208,7 +208,7 @@ object PenHaptics {
 
     /**
      * Wyjście z notatki. Przy ostatnim: Kajet wypisuje się ze spisu usługi
-     * i oddaje brzmienie zastane przy wejściu — to ustawienia całego
+     * i oddaje brzmienie zastane przy wejściu - to ustawienia całego
      * urządzenia, więc nie zostają po nim przestawione.
      */
     fun leave(context: Context) {
@@ -239,7 +239,7 @@ object PenHaptics {
 
     /**
      * Przypomina usłudze obowiązujący profil. Poza notatnikiem kończy się na
-     * jednym porównaniu, a powtórki w krótkim odstępie są odrzucane — wołanie
+     * jednym porównaniu, a powtórki w krótkim odstępie są odrzucane - wołanie
      * tego przy każdym zbliżeniu rysika nic nie kosztuje.
      */
     fun refresh(context: Context) {
@@ -252,7 +252,7 @@ object PenHaptics {
     }
 
     /**
-     * Okno odzyskało ostrość — rozkaz mógł właśnie zgasnąć pod zasłoną
+     * Okno odzyskało ostrość - rozkaz mógł właśnie zgasnąć pod zasłoną
      * powiadomień albo oknem dialogowym. Przypomnienie idzie od razu,
      * bez czekania na odstęp.
      */
@@ -264,7 +264,7 @@ object PenHaptics {
     /**
      * Powrót do aplikacji. Ma znaczenie tylko z otwartym notatnikiem: rozkaz
      * zgasł przy zejściu w tło, a spis mógł się zmienić, gdy Kajet leżał
-     * odłożony (ustawienia Lenovo, przywrócenie kopii) — sprawdzamy od nowa.
+     * odłożony (ustawienia Lenovo, przywrócenie kopii) - sprawdzamy od nowa.
      */
     fun register(context: Context) {
         val app = context.applicationContext
@@ -272,7 +272,7 @@ object PenHaptics {
             /*
               Sprzątanie po nieczystym wyjściu. Gdy system ubije proces
               z otwartym notatnikiem, [leave] nie zdąży się wykonać i Kajet
-              zostaje w spisie usługi NA STAŁE — rysik drga wtedy nad każdym
+              zostaje w spisie usługi NA STAŁE - rysik drga wtedy nad każdym
               ekranem aplikacji. Powrót do aplikacji bez otwartego notatnika
               to pewny moment, w którym wpisu ma nie być.
             */
@@ -295,7 +295,7 @@ object PenHaptics {
     /**
      * Kajet schodzi w tło: oddaj brzmienie, jakie zastaliśmy. Usługa i tak
      * gasi wtedy haptykę sama, a znaczniki wysłanego czyścimy, żeby powrót
-     * naprawdę wysłał rozkaz od nowa. [borrowed] zostaje — notatnik wciąż
+     * naprawdę wysłał rozkaz od nowa. [borrowed] zostaje - notatnik wciąż
      * jest otwarty i przy wyjściu z niego odda dokładnie tę wartość.
      */
     fun quiet(context: Context) {
@@ -337,7 +337,7 @@ object PenHaptics {
         worker.execute { hushService(app) }
     }
 
-    /** Profil obowiązujący w tej chwili. Null poza notatnikiem — czyli cisza. */
+    /** Profil obowiązujący w tej chwili. Null poza notatnikiem - czyli cisza. */
     private fun wanted(): PenProfile? = if (depth > 0) notebook ?: WRITING else null
 
     private fun levelFor(profile: PenProfile): Int {
@@ -358,7 +358,7 @@ object PenHaptics {
         // Zmiana samej siły nie ma po co ruszać dysku.
         if (writeSetting && profile.brush != sentBrush) writeBrush(context, profile.brush)
 
-        // Rozkaz drgania idzie tylko nad kartką albo polem pisania — nad
+        // Rozkaz drgania idzie tylko nad kartką albo polem pisania - nad
         // paskami i menu ma być cisza. Wjazd nad kartkę dośle go od razu.
         if (!overSurface) return
         if (!force && profile.brush == sentBrush && level == sentLevel) return
@@ -390,13 +390,13 @@ object PenHaptics {
      *
      * To nieudokumentowane API producenta i Android potrafi zamknąć do niego
      * dostęp aplikacjom z zewnątrz. Dlatego wszystko jest w [runCatching],
-     * sprawdzamy raz, a przy odmowie zostaje droga przez ustawienia — czyli
+     * sprawdzamy raz, a przy odmowie zostaje droga przez ustawienia - czyli
      * sam wybór przyboru, bez sterowania siłą.
      */
     private fun tellService(context: Context, brush: Int, level: Int): Boolean {
         val direct = direct(context) ?: return false
         return runCatching {
-            // Trzeci parametr to jedynka — tyle wysyła usługa do rysika przy
+            // Trzeci parametr to jedynka - tyle wysyła usługa do rysika przy
             // pisaniu w notatniku Lenovo (rozkaz `[brzmienie, siła, 1, 0]`).
             direct.setParams.invoke(direct.manager, brush, level, 1) as? Boolean == true
         }.onFailure { failure ->
@@ -408,7 +408,7 @@ object PenHaptics {
      * Gasi trwający rozkaz drgania.
      *
      * Usługa zatrzymuje haptykę sama, gdy rysik przejeżdża nad cudzą
-     * aplikację — ale przejście z notatki do biblioteki to wciąż Kajet,
+     * aplikację - ale przejście z notatki do biblioteki to wciąż Kajet,
      * więc rozkaz ciągły zostawał w mocy i rysik drgał w menu głównym.
      * Zero jako parametr podpatrzone w SDK Lenovo: `PenHaptic.stopHaptic()`
      * woła `ZuiPenHapticManager.stopHaptic(0)`.
@@ -510,7 +510,7 @@ object PenHaptics {
         }
     }.onFailure { failure ->
         // Najczęściej brak WRITE_SECURE_SETTINGS. Mówimy o tym w dzienniku
-        // i idziemy dalej — drganie rysika to wygoda, nie warunek pisania.
+        // i idziemy dalej - drganie rysika to wygoda, nie warunek pisania.
         Log.i(TAG, "Rysik: nie udało się zapisać $key (${failure.javaClass.simpleName})")
     }.getOrDefault(false)
 }

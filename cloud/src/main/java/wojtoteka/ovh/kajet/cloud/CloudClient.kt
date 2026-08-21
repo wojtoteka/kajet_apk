@@ -26,7 +26,7 @@ class CloudClient(
             val message: String,
             val worthRetrying: Boolean = false,
             val mustSignIn: Boolean = false,
-            // 404 — starszy serwer może nie znać nowego punktu (np. folderów);
+            // 404 - starszy serwer może nie znać nowego punktu (np. folderów);
             // wtedy tę część synchronizacji po prostu się pomija.
             val notFound: Boolean = false,
             /** Powód podany przez serwer w polu `error`, np. „not-yours". */
@@ -92,7 +92,7 @@ class CloudClient(
             if (!withContent) append("&withContent=no")
             // Bez tego serwer oddaje tylko zwykłe notatki. Pliki z kodem jadą
             // jako notatki CODE i dostają je wyłącznie aplikacje, które o nie
-            // poproszą — starsze wersje nie umiały ich odczytać.
+            // poproszą - starsze wersje nie umiały ich odczytać.
             append("&kinds=all")
         }
         return request(
@@ -107,7 +107,7 @@ class CloudClient(
         body = json.encodeToString(note),
     )
 
-    /** Trwałe kasowanie na serwerze — z bazy, z dysku, razem z załącznikami. */
+    /** Trwałe kasowanie na serwerze - z bazy, z dysku, razem z załącznikami. */
     override suspend fun deleteNote(noteId: String): Result<SaveResponse> = request(
         url = "${account.serverUrl()}/api/v1/notes/$noteId",
         method = "DELETE",
@@ -116,7 +116,7 @@ class CloudClient(
     /**
      * Nagrobki: identyfikatory notatek skasowanych na zawsze od podanej chwili.
      *
-     * Zwykłe pobranie zmian tego nie powie — wiersza skasowanej notatki po
+     * Zwykłe pobranie zmian tego nie powie - wiersza skasowanej notatki po
      * prostu nie ma, więc „co się zmieniło od…" nigdy jej nie wymieni.
      * Starszy serwer nie zna tego punktu i odpowiada 404; wtedy zostaje
      * porównanie pełnego spisu identyfikatorów.
@@ -154,7 +154,7 @@ class CloudClient(
     )
 
     /**
-     * Wszystkie udostępnienia notatki — do panelu „Udostępnianie".
+     * Wszystkie udostępnienia notatki - do panelu „Udostępnianie".
      * Serwer oddaje też starsze pole `links`, ale panel czyta pełną listę.
      */
     suspend fun listShares(noteId: String): Result<ShareListResponse> = request(
@@ -167,7 +167,7 @@ class CloudClient(
      *
      * Serwer oddaje ten sam odnośnik przy kolejnych prośbach o zwykły link
      * o tych samych prawach, więc udostępnienie dwa razy nie mnoży wpisów.
-     * Z adresem e-mail udostępnienie jest imienne — serwer sam wysyła
+     * Z adresem e-mail udostępnienie jest imienne - serwer sam wysyła
      * wiadomość i mówi w `mailSent`, czy wyszła.
      */
     suspend fun createShare(
@@ -454,13 +454,13 @@ class CloudClient(
     }
 
     /**
-     * Odpowiedź z błędem, przetłumaczona na [Result.Error] — i JEDYNE miejsce,
+     * Odpowiedź z błędem, przetłumaczona na [Result.Error] - i JEDYNE miejsce,
      * które rozstrzyga, czy sesja jeszcze żyje.
      *
      * Serwer, który nie uznaje tokenu, kończy tu każdą prośbę: pobranie zmian,
      * wysyłkę, załącznik, uruchomienie kodu. Sesja gaśnie więc od razu przy
      * pierwszej takiej odpowiedzi i wszystkie ekrany dowiadują się o tym
-     * w tej samej chwili — czytają jeden [AccountStore.state].
+     * w tej samej chwili - czytają jeden [AccountStore.state].
      */
     private fun toError(status: Int, body: String, tokenUsed: Boolean): Result.Error {
         val fromServer = runCatching { json.decodeFromString<ServerError>(body) }.getOrNull()
@@ -510,14 +510,14 @@ class CloudClient(
          *
          * 401 zawsze: ten token już nic nie otwiera.
          *
-         * 403 znaczy na serwerze dwie różne rzeczy — zablokowane konto (czyli
+         * 403 znaczy na serwerze dwie różne rzeczy - zablokowane konto (czyli
          * też koniec sesji) albo „to nie twoja notatka" przy cudzym
          * udostępnieniu. Ślepe wylogowywanie przy każdym 403 wyrzucałoby
          * z konta przy zwykłym braku praw, dlatego liczy się powód podany
          * przez serwer.
          *
          * Prośba wysłana BEZ tokenu (logowanie hasłem, pytanie o zgodę ze
-         * strony) nie mówi nic o sesji — odmowa znaczy tam tylko tyle, że
+         * strony) nie mówi nic o sesji - odmowa znaczy tam tylko tyle, że
          * podane dane są nie te.
          */
         fun sessionDead(status: Int, code: String, tokenUsed: Boolean): Boolean {

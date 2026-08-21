@@ -41,7 +41,7 @@ object IndexText {
             .lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("![") }
-            // Linia pozioma i płot bloku kodu to sama składnia — w spisie
+            // Linia pozioma i płot bloku kodu to sama składnia - w spisie
             // wyglądały jak `---` i ```` ```python ```` wpisane w treść.
             .filter { !TextMarkers.horizontalRule.matches(it) && !it.startsWith("```") }
             /*

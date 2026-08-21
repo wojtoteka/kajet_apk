@@ -37,7 +37,7 @@ import wojtoteka.ovh.kajet.core.text.words
  * Kosz jest poza spisem, więc jedyny sposób, żeby się dowiedzieć, co w nim
  * jest, to przeczytać z dysku content.json każdej leżącej tam notatki. Przy
  * przechodzeniu długiego spisu nagrobków robienie tego raz na nagrobek
- * kosztowałoby setki odczytów przez SAF za każdą synchronizację — i to
+ * kosztowałoby setki odczytów przez SAF za każdą synchronizację - i to
  * głównie dla notatek, których na urządzeniu w ogóle nie ma. Dlatego zdjęcie
  * robi się raz na przebieg i wędruje dalej.
  *
@@ -54,10 +54,10 @@ data class TrashContents(
 
 /** Co synchronizacja zrobiła z notatką, którą serwer zgłosił jako skasowaną. */
 enum class ServerDeletion {
-    /** Leżała w koszu — zniknęła doszczętnie. */
+    /** Leżała w koszu - zniknęła doszczętnie. */
     ERASED,
 
-    /** Była widoczna w bibliotece — poszła do kosza, żeby dało się ją wyjąć. */
+    /** Była widoczna w bibliotece - poszła do kosza, żeby dało się ją wyjąć. */
     TRASHED,
 
     /** Nie było jej tutaj ani w bibliotece, ani w koszu. */
@@ -96,14 +96,14 @@ class LibraryRepository(
      */
     var cloudSave: CloudSaveLookup? = null
 
-    /** Notatki wyrzucone do kosza na urządzeniu — do zgłoszenia serwerowi. */
+    /** Notatki wyrzucone do kosza na urządzeniu - do zgłoszenia serwerowi. */
     var onNotesTrashed: ((noteIds: List<String>) -> Unit)? = null
 
-    /** Notatki skasowane na stałe (kosz opróżniony) — serwer też ma je usunąć. */
+    /** Notatki skasowane na stałe (kosz opróżniony) - serwer też ma je usunąć. */
     var onNotesPurged: ((noteIds: List<String>) -> Unit)? = null
 
     /**
-     * Po notatce nie ma już śladu na dysku — niech zniknie też z pamięci
+     * Po notatce nie ma już śladu na dysku - niech zniknie też z pamięci
      * chmury: zapamiętana wersja, powiązanie pliku z kodem, wpis w kolejce
      * wysyłki. Inaczej te wpisy zostawały na zawsze i potrafiły wskrzesić
      * skasowaną notatkę przy najbliższym uzgadnianiu biblioteki.
@@ -113,17 +113,17 @@ class LibraryRepository(
     /** To samo dla pliku z kodem, który chmura zna po ścieżce. */
     var onCodeErased: ((path: String) -> Unit)? = null
 
-    /** Zapisany plik z kodem — do wysłania na serwer jako notatka CODE. */
+    /** Zapisany plik z kodem - do wysłania na serwer jako notatka CODE. */
     var onCodeSaved: ((path: String) -> Unit)? = null
 
-    /** Pliki z kodem wyrzucone do kosza — do zgłoszenia serwerowi. */
+    /** Pliki z kodem wyrzucone do kosza - do zgłoszenia serwerowi. */
     var onCodeTrashed: ((paths: List<String>) -> Unit)? = null
 
-    /** Foldery wyrzucone do kosza — serwer kasuje swoje odpowiedniki. */
+    /** Foldery wyrzucone do kosza - serwer kasuje swoje odpowiedniki. */
     var onFoldersTrashed: ((folderIds: List<String>) -> Unit)? = null
 
     /**
-     * Założony, przemianowany albo przemalowany folder — jedzie do chmury od
+     * Założony, przemianowany albo przemalowany folder - jedzie do chmury od
      * razu.
      *
      * Wcześniej pusty folder czekał na serwer aż do najbliższego pełnego
@@ -133,19 +133,19 @@ class LibraryRepository(
      */
     var onFolderChanged: (() -> Unit)? = null
 
-    /** Pliki z kodem skasowane na stałe — do zgłoszenia serwerowi. */
+    /** Pliki z kodem skasowane na stałe - do zgłoszenia serwerowi. */
     var onCodePurged: ((paths: List<String>) -> Unit)? = null
 
-    /** Świeżo założony plik z kodem — dostaje w chmurze świeżą tożsamość. */
+    /** Świeżo założony plik z kodem - dostaje w chmurze świeżą tożsamość. */
     var onCodeCreated: ((path: String) -> Unit)? = null
 
-    /** Zmiana nazwy albo przeniesienie — chmura przepina swoje powiązania. */
+    /** Zmiana nazwy albo przeniesienie - chmura przepina swoje powiązania. */
     var onPathMoved: ((oldPath: String, newPath: String) -> Unit)? = null
 
     /*
       SupervisorJob pilnuje tylko, żeby awaria jednego zadania nie zabrała
       pozostałych. Sam wyjątek i tak szedł do domyślnego handlera wątku, czyli
-      ubijał aplikację. Handler zatrzymuje go tutaj — a zapis notatki w tle
+      ubijał aplikację. Handler zatrzymuje go tutaj - a zapis notatki w tle
       dzieje się właśnie wtedy, gdy ekran notatki już się zamyka.
     */
     private val backgroundScope = CoroutineScope(
@@ -173,7 +173,7 @@ class LibraryRepository(
 
     /**
      * Czy system wciąż honoruje trwałe uprawnienie do zapisanego drzewa.
-     * Sam niepusty adres w ustawieniach tego nie gwarantuje — po restore
+     * Sam niepusty adres w ustawieniach tego nie gwarantuje - po restore
      * kopii zapasowej adres wraca, a [ContentResolver.getPersistedUriPermissions]
      * jest puste.
      */
@@ -231,7 +231,7 @@ class LibraryRepository(
         item: LibraryItem,
         starredFiles: Set<String>,
     ): LibraryItem {
-        // Plik gwiazdki w sobie nie niesie — ta stoi w ustawieniach, patrz
+        // Plik gwiazdki w sobie nie niesie - ta stoi w ustawieniach, patrz
         // [KajetSettings.favoriteFiles]. Spis jest tu tylko odbiciem.
         if (item.type != ItemType.NOTE) {
             return item.copy(favorite = item.path in starredFiles)
@@ -322,7 +322,7 @@ class LibraryRepository(
         }
 
     /**
-     * Plik z Udostępnij / Otwórz w — kopia w katalogu notatek, potem ten sam
+     * Plik z Udostępnij / Otwórz w - kopia w katalogu notatek, potem ten sam
      * `open()` co w bibliotece (notatka, edytor, podgląd zdjęcia/PDF, binarka).
      */
     suspend fun importFile(
@@ -377,7 +377,7 @@ class LibraryRepository(
      * Notatka trzyma gwiazdkę we własnej treści i stamtąd jedzie ona na serwer
      * razem z zapisem. Plik z kodem nie ma w czym jej zapisać (na dysku to
      * zwykły tekst), więc jego gwiazdka stoi w ustawieniach, a na serwer
-     * dociera jako zwykłe zgłoszenie pliku do wysyłki — synchronizacja dokłada
+     * dociera jako zwykłe zgłoszenie pliku do wysyłki - synchronizacja dokłada
      * ją do notatki CODE. Do tej pory ta droga w ogóle nie istniała i gwiazdki
      * na plikach HTML czy Pythona nie dało się w aplikacji postawić.
      */
@@ -395,7 +395,7 @@ class LibraryRepository(
     private suspend fun toggleFileFavorite(path: String): Boolean {
         val after = path !in starredFiles()
         settings.setFileFavorite(path, after)
-        // Spis idzie za ustawieniami — z niego czytają „Ulubione".
+        // Spis idzie za ustawieniami - z niego czytają „Ulubione".
         dao.findByPath(path)?.let { dao.upsert(it.copy(favorite = after)) }
         refresh()
         onCodeSaved?.invoke(path)
@@ -404,12 +404,12 @@ class LibraryRepository(
 
     private suspend fun starredFiles(): Set<String> = settings.settings.first().favoriteFiles
 
-    /** Czy plik ma gwiazdkę — synchronizacja dokłada ją do notatki CODE. */
+    /** Czy plik ma gwiazdkę - synchronizacja dokłada ją do notatki CODE. */
     override suspend fun fileFavorite(path: String): Boolean = withContext(io) {
         path in starredFiles()
     }
 
-    /** Gwiazdka pliku przysłana z serwera — bez odsyłania jej z powrotem. */
+    /** Gwiazdka pliku przysłana z serwera - bez odsyłania jej z powrotem. */
     override suspend fun setFileFavoriteFromCloud(path: String, favorite: Boolean) {
         withContext(io) {
             if ((path in starredFiles()) == favorite) return@withContext
@@ -429,7 +429,7 @@ class LibraryRepository(
      * Czy wpisu nie ma już na dysku, choć sama biblioteka jest dostępna.
      *
      * Rozróżnienie ma znaczenie: odpięta karta albo cofnięte prawo do katalogu
-     * to kłopot z magazynem, a nie skasowana notatka — wtedy odpowiedź brzmi
+     * to kłopot z magazynem, a nie skasowana notatka - wtedy odpowiedź brzmi
      * „nie wiadomo", czyli false, i nikt nie pyta człowieka o los treści.
      */
     suspend fun entryVanished(path: String): Boolean = withContext(io) {
@@ -439,13 +439,13 @@ class LibraryRepository(
     }
 
     /**
-     * Zapisuje dokument jako świeżą notatkę — dla treści, której pierwowzór
+     * Zapisuje dokument jako świeżą notatkę - dla treści, której pierwowzór
      * właśnie skasowano na innym urządzeniu, a człowiek wybrał „Zapisz jako
      * nową". Dokument przychodzi już z NOWYM identyfikatorem, żeby nie
      * wskrzeszać starego: po tamtym został na serwerze nagrobek i notatka
      * pod starym numerem zniknęłaby przy najbliższej synchronizacji.
      *
-     * [assetsFromNoteId] to numer PIERWOTNEJ notatki — jej katalog zdążył
+     * [assetsFromNoteId] to numer PIERWOTNEJ notatki - jej katalog zdążył
      * trafić do lokalnego kosza razem ze zdjęciami, więc załączniki wracają
      * stamtąd do nowej kopii. Gdy kosz już ich nie ma (kasowanie doszczętne),
      * nowa notatka powstaje bez nich; treść jest ważniejsza.
@@ -458,7 +458,7 @@ class LibraryRepository(
         assetsFromNoteId: String? = null,
     ): String? = withContext(io) {
         val store = store() ?: return@withContext null
-        // Folder mógł zniknąć razem z notatką — wtedy korzeń biblioteki.
+        // Folder mógł zniknąć razem z notatką - wtedy korzeń biblioteki.
         val parent = if (store.folder(targetFolder) != null) targetFolder else ""
         val item = store.createNote(parent, document.title, document.kind)
         store.writeNote(item.path, document)
@@ -499,7 +499,7 @@ class LibraryRepository(
         onCodeSaved?.invoke(path)
     }
 
-    /** Zapis pliku przysłanego z chmury — bez odsyłania go z powrotem. */
+    /** Zapis pliku przysłanego z chmury - bez odsyłania go z powrotem. */
     override suspend fun writeTextFromCloud(path: String, content: String) = withContext(io) {
         requireStore().writeText(path, content)
         refresh()
@@ -512,7 +512,7 @@ class LibraryRepository(
     override suspend fun createTextFileFromCloud(parent: String, fileName: String, content: String): String =
         withContext(io) {
             val item = requireStore().createTextFile(parent, fileName, content)
-            // Plik pod tą samą ścieżką mógł już kiedyś mieć gwiazdkę — wraca
+            // Plik pod tą samą ścieżką mógł już kiedyś mieć gwiazdkę - wraca
             // razem z nim, bo zbiór gwiazdek przeżył jego zniknięcie.
             dao.upsertKeepingOpened(
                 item.toIndexEntry().copy(favorite = item.path in starredFiles()),
@@ -550,7 +550,7 @@ class LibraryRepository(
     ): String? = withContext(io) {
         val store = store() ?: return@withContext null
 
-        // Zwietrzały wiersz spisu — plik zniknął z dysku, a wiersz został —
+        // Zwietrzały wiersz spisu - plik zniknął z dysku, a wiersz został -
         // robił przy każdym pobraniu nową kopię notatki, zostawiając siebie
         // na miejscu, i tak w kółko. Sprzątamy, zanim cokolwiek utworzymy.
         var existing = dao.findById(document.id)
@@ -666,7 +666,7 @@ class LibraryRepository(
         val noteIds = runCatching { dao.notesUnder(path).map { it.documentId } }
             .getOrDefault(emptyList())
         val codePaths = runCatching { dao.codeFilePathsUnder(path) }.getOrDefault(emptyList())
-        // Identyfikatory folderów czytamy z folder.json PRZED wyrzuceniem —
+        // Identyfikatory folderów czytamy z folder.json PRZED wyrzuceniem -
         // z kosza już się do nich nie dostaniemy.
         val store = requireStore()
         val folderIds = runCatching {
@@ -690,7 +690,7 @@ class LibraryRepository(
         val path = requireStore().restore(id)
         reindexBranch(path)
         refresh()
-        // Przywrócone wraca też na serwer — i wychodzi z jego kosza.
+        // Przywrócone wraca też na serwer - i wychodzi z jego kosza.
         val notes = runCatching { dao.notesUnder(path) }.getOrDefault(emptyList())
         for (note in notes) {
             onNoteSaved?.invoke(note.path, note.documentId)
@@ -711,7 +711,7 @@ class LibraryRepository(
      * Kasuje wpis kosza razem z całą zawartością.
      *
      * Każda notatka i każdy plik z niego idą tą samą drogą co kasowanie
-     * zlecone przez serwer — jedna implementacja kasowania, nie dwie różne.
+     * zlecone przez serwer - jedna implementacja kasowania, nie dwie różne.
      * Zwraca true, kiedy po wpisie nic nie zostało na dysku.
      */
     private suspend fun eraseTrashSlot(id: String, alsoOnServer: Boolean): Boolean {
@@ -743,7 +743,7 @@ class LibraryRepository(
         refresh()
     }
 
-    // Kasowanie doszczętne — jedno wejście dla wszystkich dróg
+    // Kasowanie doszczętne - jedno wejście dla wszystkich dróg
 
     /**
      * Kasuje notatkę tak, żeby nic po niej nie zostało.
@@ -751,14 +751,14 @@ class LibraryRepository(
      * Szuka jej i w bibliotece, i w koszu, po czym usuwa katalog notatki z
      * dysku (a w nim content.json, kopię zapasową i cały `assets`), wiersz w
      * spisie, treść z wyszukiwarki oraz wszystko, co chmura o niej pamiętała.
-     * Nie ma znaczenia, czy to notatka tekstowa, odręczna czy mapa myśli —
+     * Nie ma znaczenia, czy to notatka tekstowa, odręczna czy mapa myśli -
      * wszystkie trzy trzymają całą treść w tym jednym katalogu.
      *
      * Nieudane kasowanie pliku nie ginie po cichu: trafia do [DeleteRetryQueue]
      * i sprzątanie sięgnie po nie jeszcze raz.
      *
      * [alsoOnServer] mówi, czy zgłosić kasowanie serwerowi. Fałsz przy
-     * kasowaniu, o którym to serwer nas powiadomił — nie ma mu czego odsyłać.
+     * kasowaniu, o którym to serwer nas powiadomił - nie ma mu czego odsyłać.
      *
      * Odświeżenie widoku robi wołający: takich kasowań potrafi przyjść naraz
      * bardzo dużo i odświeżanie po każdym z osobna tylko szarpałoby ekranem.
@@ -780,12 +780,12 @@ class LibraryRepository(
             }
             runCatching { dao.deleteBranchWithContent(indexed.path) }
             // Kasowanie zlecone przez serwer mogło właśnie zabrać notatkę
-            // spod otwartego edytora — edytor ma się o tym dowiedzieć.
+            // spod otwartego edytora - edytor ma się o tym dowiedzieć.
             if (!alsoOnServer) reportRemotelyRemoved(indexed.path)
         }
 
         // Kopia w koszu. Kosz jest poza spisem, więc trzeba go przejrzeć osobno
-        // — i to jest ta droga, której brakowało: notatka wyrzucona do kosza
+        // - i to jest ta droga, której brakowało: notatka wyrzucona do kosza
         // była dla kasowania z serwera niewidoczna i zostawała tam na zawsze.
         val slot = if (trash != null) {
             trash.noteSlots[noteId]
@@ -819,7 +819,7 @@ class LibraryRepository(
         }
         runCatching { dao.deleteBranchWithContent(path) }
         // Po pliku nie ma już śladu, więc gwiazdka nie ma czego oznaczać.
-        // Przy wyrzuceniu do kosza zostaje — przywrócenie ma ją oddać.
+        // Przy wyrzuceniu do kosza zostaje - przywrócenie ma ją oddać.
         runCatching { settings.forgetFavoriteFiles(path) }
         // Jak przy notatce: otwarty edytor kodu ma się dowiedzieć od razu.
         if (!alsoOnServer) reportRemotelyRemoved(path)
@@ -835,7 +835,7 @@ class LibraryRepository(
         }
 
         // Tak samo jak przy notatce: zgłoszenie przed sprzątaniem. Tutaj waży
-        // to podwójnie — zgłoszenie potrzebuje powiązania ścieżki z numerem
+        // to podwójnie - zgłoszenie potrzebuje powiązania ścieżki z numerem
         // notatki na serwerze, a sprzątanie właśnie to powiązanie kasuje.
         if (alsoOnServer) onCodePurged?.invoke(listOf(path))
         onCodeErased?.invoke(path)
@@ -846,7 +846,7 @@ class LibraryRepository(
 
     /**
      * Notatka skasowana gdzie indziej idzie tu do kosza. Celowo bez zgłaszania
-     * przez [onNotesTrashed] — to serwer o tym powiedział, nie ma mu czego
+     * przez [onNotesTrashed] - to serwer o tym powiedział, nie ma mu czego
      * odsyłać. Zwraca true, kiedy było co wyrzucić.
      */
     override suspend fun trashNoteFromCloud(noteId: String): Boolean = withContext(io) {
@@ -884,11 +884,11 @@ class LibraryRepository(
      *
      * Reguła jest jedna i obowiązuje w obie strony: synchronizacja kasuje z
      * urządzenia wyłącznie to, co już leży w koszu. Notatka widoczna w
-     * bibliotece nigdy nie znika sama z dysku — najwyżej trafia do kosza,
+     * bibliotece nigdy nie znika sama z dysku - najwyżej trafia do kosza,
      * skąd zawsze da się ją wyjąć. Bez tego cicha pomyłka po stronie serwera
      * albo niepełna odpowiedź kasowałaby pracę bez pytania.
      *
-     * Odświeżenie widoku robi wołający — takich zgłoszeń potrafi przyjść
+     * Odświeżenie widoku robi wołający - takich zgłoszeń potrafi przyjść
      * naraz bardzo dużo.
      */
     override suspend fun applyServerDeletion(
@@ -904,7 +904,7 @@ class LibraryRepository(
             runCatching { store.trashSlotForNote(noteId) }.getOrNull()
         }
 
-        // W koszu — znika doszczętnie. To jest naprawa objawu: dotąd notatka
+        // W koszu - znika doszczętnie. To jest naprawa objawu: dotąd notatka
         // wyrzucona do kosza (także ta, która trafiła tam za serwerem) była
         // dla kasowania niewidoczna i zostawała w koszu na zawsze.
         if (slot != null) {
@@ -912,7 +912,7 @@ class LibraryRepository(
             return@withContext ServerDeletion.ERASED
         }
 
-        // Widoczna w bibliotece — idzie do kosza, nie z dysku.
+        // Widoczna w bibliotece - idzie do kosza, nie z dysku.
         if (trashNoteFromCloud(noteId)) ServerDeletion.TRASHED else ServerDeletion.NOTHING
     }
 
@@ -958,7 +958,7 @@ class LibraryRepository(
         )
     }
 
-    /** Ścieżki wszystkich plików z kodem — do uzgadniania biblioteki z chmurą. */
+    /** Ścieżki wszystkich plików z kodem - do uzgadniania biblioteki z chmurą. */
     override suspend fun allCodeFilePaths(): List<String> = withContext(io) {
         dao.allCodeFilePaths()
     }
@@ -983,7 +983,7 @@ class LibraryRepository(
                     runCatching { store.deletePermanently(target.removePrefix(DeleteRetryQueue.PREFIX_TRASH)) }
                         .getOrDefault(false)
 
-                // Wpis w nieznanym kształcie (starszy zapis) — nie ma czego
+                // Wpis w nieznanym kształcie (starszy zapis) - nie ma czego
                 // ponawiać, a trzymanie go w nieskończoność nic nie daje.
                 else -> true
             }
@@ -1001,12 +1001,12 @@ class LibraryRepository(
      * [days] dni.
      *
      * Notatka skasowana na serwerze, a widoczna tutaj w bibliotece, idzie do
-     * kosza zamiast wprost z dysku — po to, żeby dało się ją uratować. Bez
+     * kosza zamiast wprost z dysku - po to, żeby dało się ją uratować. Bez
      * terminu zostawałaby w nim na zawsze: serwer nie ma już po niej ani
      * wiersza, ani nagrobka, więc nic o niej więcej nie powie.
      *
      * Czas liczy się od chwili, gdy wpis trafił do kosza NA TYM urządzeniu
-     * (patrz [TrashEntry.deletedAt]) — to jest czas na reakcję człowieka, a nie
+     * (patrz [TrashEntry.deletedAt]) - to jest czas na reakcję człowieka, a nie
      * czas od zdarzenia na serwerze.
      *
      * Serwerowi nic nie zgłaszamy: on tę notatkę skasował i to on zaczął całą
@@ -1024,7 +1024,7 @@ class LibraryRepository(
         for (entry in runCatching { listTrash() }.getOrDefault(emptyList())) {
             if (!entry.fromServer) continue
             // Znacznik z przyszłości (przestawiony zegar) nie jest powodem do
-            // kasowania — ten warunek go przepuszcza nietkniętego.
+            // kasowania - ten warunek go przepuszcza nietkniętego.
             if (entry.deletedAt > cutoff) continue
             if (runCatching { eraseTrashSlot(entry.id, alsoOnServer = false) }.getOrDefault(false)) {
                 removed += 1
@@ -1045,7 +1045,7 @@ class LibraryRepository(
      * Spis jest podręczny i przy zmianie wersji bazy zaczyna od zera
      * (`fallbackToDestructiveMigration`), więc taka reguła skasowałaby przy
      * pierwszym uruchomieniu po aktualizacji całą bibliotekę. Pliki są tu
-     * ważniejsze od spisu — to spis nadąża za nimi, nie odwrotnie.
+     * ważniejsze od spisu - to spis nadąża za nimi, nie odwrotnie.
      *
      * Zwraca liczbę posprzątanych rzeczy.
      */
@@ -1055,7 +1055,7 @@ class LibraryRepository(
 
         // Sprawdzenie wiersza to zejście po katalogach przez SAF, a ono przy
         // dużej bibliotece nie jest darmowe. Bierzemy więc porcję na przebieg;
-        // reszta doczeka jutra. Ile zostało — widać w dzienniku, żeby nie
+        // reszta doczeka jutra. Ile zostało - widać w dzienniku, żeby nie
         // wyglądało to na „przejrzano wszystko".
         val entries = runCatching { dao.allEntries() }.getOrDefault(emptyList())
         val portion = entries.take(MAX_ORPHAN_CHECKS)
@@ -1106,7 +1106,7 @@ class LibraryRepository(
 
     /**
      * Wszystkie foldery biblioteki razem z ich identyfikatorami z folder.json.
-     * Folder bez pliku metadanych (założony poza aplikacją) jest pomijany —
+     * Folder bez pliku metadanych (założony poza aplikacją) jest pomijany -
      * dostanie tożsamość, gdy użytkownik pierwszy raz go tknie w aplikacji.
      */
     override suspend fun allCloudFolders(): List<CloudFolder> = withContext(io) {
@@ -1125,7 +1125,7 @@ class LibraryRepository(
         }
     }
 
-    /** Nowy folder przysłany z chmury — z jej identyfikatorem, bez odsyłania. */
+    /** Nowy folder przysłany z chmury - z jej identyfikatorem, bez odsyłania. */
     override suspend fun createFolderFromCloud(
         parent: String,
         name: String,
@@ -1139,7 +1139,7 @@ class LibraryRepository(
         item.path
     }
 
-    /** Zmiana nazwy folderu przysłana z chmury — bez odsyłania jej z powrotem. */
+    /** Zmiana nazwy folderu przysłana z chmury - bez odsyłania jej z powrotem. */
     override suspend fun renameFolderFromCloud(path: String, newName: String): String = withContext(io) {
         val newPath = requireStore().rename(path, newName)
         dao.deleteBranch(path)
@@ -1149,7 +1149,7 @@ class LibraryRepository(
         newPath
     }
 
-    /** Przeniesienie folderu przysłane z chmury — bez odsyłania. */
+    /** Przeniesienie folderu przysłane z chmury - bez odsyłania. */
     override suspend fun moveFolderFromCloud(path: String, targetFolder: String): String = withContext(io) {
         val newPath = requireStore().move(path, targetFolder)
         dao.deleteBranch(path)
@@ -1165,7 +1165,7 @@ class LibraryRepository(
     }
 
     /**
-     * Notatka zmieniła folder na innym urządzeniu — tu przenosi się tak samo.
+     * Notatka zmieniła folder na innym urządzeniu - tu przenosi się tak samo.
      * Zwraca nową ścieżkę albo null, kiedy nie było czego przenosić.
      */
     override suspend fun moveNoteFromCloud(noteId: String, targetFolder: String): String? = withContext(io) {
@@ -1193,7 +1193,7 @@ class LibraryRepository(
         }
 
     // requireStore, not store(): this one is asked for by hand, from a button in
-    // settings. A silent return there looks exactly like a dead button — the
+    // settings. A silent return there looks exactly like a dead button - the
     // person taps it and nothing happens, not even a word about the folder
     // being gone. The automatic rebuild above stays silent on purpose.
     suspend fun rebuildIndex(progress: ((done: Int, total: Int) -> Unit)? = null) = withContext(io) {

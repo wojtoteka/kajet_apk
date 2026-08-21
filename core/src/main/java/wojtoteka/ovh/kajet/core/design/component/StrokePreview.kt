@@ -16,7 +16,7 @@ import wojtoteka.ovh.kajet.core.model.Rect
 /**
  * Miniatura strony.
  *
- * [outlines] to gotowe łamane kształtów — ciąg x, y, x, y… we współrzędnych
+ * [outlines] to gotowe łamane kształtów - ciąg x, y, x, y… we współrzędnych
  * strony. Kształty przychodzą policzone z zewnątrz, bo ich geometria siedzi w
  * module atramentu, a ten leży wyżej niż wygląd aplikacji.
  */
@@ -33,7 +33,7 @@ fun StrokePreview(
     val shown = if (strokes.size > maxStrokes) strokes.take(maxStrokes) else strokes
 
     // Przycięcie do własnych granic. Bez niego rysunek wychodzi poza pasek
-    // podglądu i wchodzi na datę oraz na tytuł następnej notatki — kreski
+    // podglądu i wchodzi na datę oraz na tytuł następnej notatki - kreski
     // ratowało do tej pory pomijanie punktów spod dolnej krawędzi, ale kształt
     // to jedna łamana, której w środku nie da się w ten sposób uciąć.
     Canvas(modifier.clipToBounds()) {

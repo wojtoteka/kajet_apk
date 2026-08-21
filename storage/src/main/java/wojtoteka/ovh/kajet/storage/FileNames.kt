@@ -72,7 +72,7 @@ object FileNames {
 
     /**
      * Brakujące rozszerzenie dobieramy z typu MIME. Podgląd zdjęcia i PDF
-     * patrzy na nazwę pliku, nie na typ z intencji — bez `.jpg` / `.pdf`
+     * patrzy na nazwę pliku, nie na typ z intencji - bez `.jpg` / `.pdf`
      * skopiowany plik szedłby w komunikat o binarce.
      */
     fun withMimeExtension(fileName: String, mime: String?): String {

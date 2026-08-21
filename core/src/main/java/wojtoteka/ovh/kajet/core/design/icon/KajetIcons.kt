@@ -9,13 +9,13 @@ import androidx.compose.ui.unit.dp
 /*
   Ikony Material Symbols Rounded z fonts.google.com/icons.
 
-  Plik jest wypisywany przez tools/ikony.mjs — nie poprawiaj go ręcznie.
+  Plik jest wypisywany przez tools/ikony.mjs - nie poprawiaj go ręcznie.
   Żeby dołożyć albo zamienić ikonę, dopisz ją w tamtym spisie i uruchom:
 
       node tools/ikony.mjs
 
   Rysunki Google są w układzie 960 na 960, liczonym od góry w górę (y od -960
-  do 0). Dlatego każdy leży w grupie przesuniętej o 960 w dół — dzięki temu
+  do 0). Dlatego każdy leży w grupie przesuniętej o 960 w dół - dzięki temu
   ImageVector ma zwyczajny układ od lewego górnego rogu, a Icon() rysuje ikonę
   w kolorze treści, tak jak wszystkie pozostałe.
 */

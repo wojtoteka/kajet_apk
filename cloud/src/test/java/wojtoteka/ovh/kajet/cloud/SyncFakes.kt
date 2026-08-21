@@ -7,13 +7,13 @@ import wojtoteka.ovh.kajet.storage.ServerDeletion
 import wojtoteka.ovh.kajet.storage.TrashContents
 
 /**
- * Atrapy biblioteki, serwera i konta — wspólne dla wszystkich testów
+ * Atrapy biblioteki, serwera i konta - wspólne dla wszystkich testów
  * synchronizacji ([SyncTest], [SyncCodeTest], [SyncTrashTest]).
  *
  * Stoją osobno, bo prawdziwa biblioteka to dysk przez SAF, a prawdziwy serwer
  * to HTTP; ani jednego, ani drugiego nie ma w teście jednostkowym. Prawdziwe
  * zostają kolejka (SharedPreferences przez Robolectric), rejestr plików
- * z kodem i zapamiętane wersje — bo to właśnie o nie w tych testach chodzi.
+ * z kodem i zapamiętane wersje - bo to właśnie o nie w tych testach chodzi.
  */
 internal class FakeLibrary : CloudLibrary {
 
@@ -38,10 +38,10 @@ internal class FakeLibrary : CloudLibrary {
     /** Załączniki na dysku: (ścieżka notatki, nazwa) → bajty. */
     val attachments = LinkedHashMap<Pair<String, String>, ByteArray>()
 
-    /** Co odpowiada biblioteka na nagrobek z serwera — po identyfikatorze. */
+    /** Co odpowiada biblioteka na nagrobek z serwera - po identyfikatorze. */
     val serverDeletions = mutableMapOf<String, ServerDeletion>()
 
-    /** Co odpowiada biblioteka na nagrobek pliku z kodem — po ścieżce. */
+    /** Co odpowiada biblioteka na nagrobek pliku z kodem - po ścieżce. */
     val serverCodeDeletions = mutableMapOf<String, ServerDeletion>()
 
     /** Po czym synchronizacja naprawdę kazała posprzątać. */
@@ -66,7 +66,7 @@ internal class FakeLibrary : CloudLibrary {
 
     override suspend fun allCodeFilePaths(): List<String> = texts.keys.toList()
 
-    /** Ścieżki plików z gwiazdką — synchronizacja i czyta je, i zapisuje. */
+    /** Ścieżki plików z gwiazdką - synchronizacja i czyta je, i zapisuje. */
     val starredFiles = mutableSetOf<String>()
 
     override suspend fun fileFavorite(path: String): Boolean = path in starredFiles
@@ -99,7 +99,7 @@ internal class FakeLibrary : CloudLibrary {
         content: String,
     ): String {
         if (failWrites) throw IllegalStateException("dysk odmawia")
-        // Zajętej nazwy nie nadpisujemy — prawdziwa biblioteka dokłada wtedy
+        // Zajętej nazwy nie nadpisujemy - prawdziwa biblioteka dokłada wtedy
         // licznik przed rozszerzeniem (FileNames.unique). Bez tego atrapa
         // gubiłaby po cichu plik, który miała postawić OBOK.
         val newPath = free(if (parent.isEmpty()) fileName else "$parent/$fileName")
@@ -144,7 +144,7 @@ internal class FakeLibrary : CloudLibrary {
         serverDeletionCalls += noteId
         val outcome = serverDeletions[noteId] ?: ServerDeletion.NOTHING
         // Prawdziwa biblioteka po ERASED/TRASHED nie zostawia notatki tam,
-        // gdzie była — atrapa też nie, inaczej uzgadnianie zaraz po nagrobku
+        // gdzie była - atrapa też nie, inaczej uzgadnianie zaraz po nagrobku
         // widziałoby ją znowu i wysyłało na serwer jako nowość.
         if (outcome != ServerDeletion.NOTHING) {
             notes.entries.firstOrNull { it.value.id == noteId }?.let { notes.remove(it.key) }
@@ -188,7 +188,7 @@ internal class FakeLibrary : CloudLibrary {
 
 internal class FakeTransport : CloudTransport {
 
-    /** Notatki, które „leżą na serwerze" — odda je pobieranie zmian. */
+    /** Notatki, które „leżą na serwerze" - odda je pobieranie zmian. */
     var serverNotes: List<ServerNote> = emptyList()
     var failFetch = false
 
@@ -288,7 +288,7 @@ internal class FakeTransport : CloudTransport {
 internal class FakeAccount : SyncAccount {
     private var lastSync = 0L
 
-    /** Znacznik nagrobków — jawny, żeby testy widziały, czy się przesunął. */
+    /** Znacznik nagrobków - jawny, żeby testy widziały, czy się przesunął. */
     var lastDeleted = 0L
 
     /** Które z kolei pytanie o zalogowanie ma rzucić wyjątkiem (0 = żadne). */

@@ -13,7 +13,7 @@ class TextBoxLayoutTest {
         assertThat(TextBoxLayout.LINE_RATIO).isEqualTo(1.3f)
         assertThat(linePx(1f)).isEqualTo(font * 1.3f)
         assertThat(linePx(0.77f)).isWithin(0.001f).of(linePx(1f) * 0.77f)
-        // Stale 24.sp z kroju body nie maleje z zoomem — przy 77% byloby
+        // Stale 24.sp z kroju body nie maleje z zoomem - przy 77% byloby
         // wyzsze niz sam glif i scinalo litery od gory, tak jak wezly mapy.
         assertThat(linePx(0.77f)).isLessThan(24f)
         assertThat(linePx(0.25f)).isLessThan(linePx(0.77f))
@@ -40,7 +40,7 @@ class TextBoxLayoutTest {
         val screenHeight = boxHeight * zoom
         val pad = TextBoxLayout.padPx(density, zoom)
 
-        // Dawne stale 4.dp przy gestosci 3 to 12 px z kazdej strony — wiecej
+        // Dawne stale 4.dp przy gestosci 3 to 12 px z kazdej strony - wiecej
         // niz 11 px ramki przy 25%. Skalowana wyściółka zostawia miejsce na glif.
         assertThat(4f * density).isGreaterThan(screenHeight)
         assertThat(pad * 2f).isLessThan(screenHeight)
@@ -69,7 +69,7 @@ class TextBoxLayoutTest {
                 zoom = zoom,
             )
             // Hit-box na kartce (x, y, width, height) i ramka na ekranie
-            // to te same krawedzie — tylko przeskalowane. Inaczej obrys,
+            // to te same krawedzie - tylko przeskalowane. Inaczej obrys,
             // tekst i stukniecie rozjezdzalyby sie przy przyblizaniu.
             assertThat(screen.left / zoom + offsetX).isWithin(0.001f).of(boxX)
             assertThat(screen.top / zoom + offsetY - pageTop).isWithin(0.001f).of(boxY)

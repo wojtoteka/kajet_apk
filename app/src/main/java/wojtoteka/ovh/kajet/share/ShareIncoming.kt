@@ -23,7 +23,7 @@ data class IncomingShare(
 
 /**
  * Intencja z [android.app.Activity] do nawigacji, bez wiązania ekranu
- * z aktywnością — ten sam układ co [wojtoteka.ovh.kajet.cloud.DeviceAuthBridge].
+ * z aktywnością - ten sam układ co [wojtoteka.ovh.kajet.cloud.DeviceAuthBridge].
  */
 object ShareIncoming {
     private val _pending = MutableStateFlow<IncomingShare?>(null)
@@ -42,7 +42,7 @@ object ShareIncoming {
 
     /**
      * Bierze oczekujące udostępnienie do kopii. Drugie wołanie w trakcie
-     * pierwszej wraca null — zmiana ekranu nie odpala importu drugi raz,
+     * pierwszej wraca null - zmiana ekranu nie odpala importu drugi raz,
      * zanim pierwszy zdąży skasować pending.
      *
      * Pending zostaje, dopóki kopia się nie uda: po porażce można spróbować

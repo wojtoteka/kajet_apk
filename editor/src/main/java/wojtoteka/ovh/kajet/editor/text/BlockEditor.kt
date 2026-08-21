@@ -78,7 +78,7 @@ fun BlockEditor(
     keyToFocus: String?,
     onFocusTaken: () -> Unit,
     onBlockFocused: (key: String, setField: (TextFieldValue) -> Unit) -> Unit,
-    /** Kursor ma stanąć w tym bloku — na przykład w świeżej pozycji listy. */
+    /** Kursor ma stanąć w tym bloku - na przykład w świeżej pozycji listy. */
     onFocusBlock: (key: String) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
     /**
@@ -142,7 +142,7 @@ fun BlockEditor(
                     onContent = { content ->
                         // Klawisz nowej linii w zadaniu zaczyna następne zadanie,
                         // a nie zwykły akapit. Tak działa każda lista zakupów.
-                        // Kursor musi przy tym przejść do NOWEJ pozycji — inaczej
+                        // Kursor musi przy tym przejść do NOWEJ pozycji - inaczej
                         // dalsze pisanie doklejało się do poprzedniej.
                         if (content.contains('\n')) {
                             val split = Blocks.splitTask(blocks, block.key, content)
@@ -191,7 +191,7 @@ fun BlockEditor(
 
         /*
           Reszta kartki pod tekstem. Dawniej był to sam odstęp, więc stuknięcie
-          w puste miejsce pod ostatnim akapitem nie robiło nic — a w świeżej
+          w puste miejsce pod ostatnim akapitem nie robiło nic - a w świeżej
           notatce skupienie zostawało przy tytule i pisany tekst szedł do
           tytułu. Teraz puste miejsce jest częścią kartki: dotknięcie stawia
           kursor w ostatnim akapicie, tak jak w każdym zeszycie.
@@ -263,7 +263,7 @@ private fun TextBlock(
             value = field,
             onValueChange = { typed ->
                 // Zapamiętany format nakłada się TU, na dopiero co wpisany
-                // kawałek. Pole zostaje to samo — nie ma mowy o ustawianiu
+                // kawałek. Pole zostaje to samo - nie ma mowy o ustawianiu
                 // treści od nowa, bo wtedy kursor skakałby na początek.
                 val next = onTyped(field.text, typed) ?: typed
                 field = next
@@ -273,7 +273,7 @@ private fun TextBlock(
             textStyle = style,
             // To jest cała rzecz, dzięki której nie ma osobnego podglądu:
             // pogrubienie widać pogrubione tam, gdzie się je pisze, a surowych
-            // znaczników nie widać nigdy — także pod kursorem.
+            // znaczników nie widać nigdy - także pod kursorem.
             visualTransformation = inlineStyle,
             cursorBrush = SolidColor(Kajet.colors.accent),
             modifier = Modifier
@@ -399,7 +399,7 @@ private fun TaskBlock(
  * ani serwer, ani eksport nic o tej zmianie nie muszą wiedzieć. Zmienia się
  * tylko to, co widać: siatka z komórkami do pisania.
  *
- * Pasek formatowania działa na akapity, nie na komórki — pogrubienie
+ * Pasek formatowania działa na akapity, nie na komórki - pogrubienie
  * w komórce wpisuje się na razie znacznikami, tak jak w surowym Markdownie.
  */
 @Composable
@@ -466,7 +466,7 @@ private fun TableBlock(
 
         // Na wąskim ekranie rozmiar, dodawanie i kosze nie mieszczą się obok
         // siebie. Przewijanie w bok jak w FormatBar; akcje tekstowe jak
-        // „Wyczyść" w konsoli — SecondaryButton 48 dp z obwódką łamał etykiety.
+        // „Wyczyść" w konsoli - SecondaryButton 48 dp z obwódką łamał etykiety.
         Row(
             Modifier
                 .fillMaxWidth()
@@ -572,7 +572,7 @@ private fun ImageBlock(
             failed = true
         } else {
             // Poza wątkiem głównym i w rozmiarze na ekran, nie w pełnej
-            // rozdzielczości aparatu — inaczej wstawione zdjęcie zamrażało
+            // rozdzielczości aparatu - inaczej wstawione zdjęcie zamrażało
             // przewijanie notatki, a przy kilku kończyło się brakiem pamięci.
             image = withContext(Dispatchers.IO) { Bitmaps.decode(data)?.asImageBitmap() }
             failed = image == null
@@ -734,7 +734,7 @@ private fun ImageBlock(
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnym
   rzędzie tabeli odcinał się od tła i na telefonie łamał etykiety
   („Dodaj wiersz", „Dodaj kolumnę"). Tu ten sam krój co rozmiar tabeli,
   bez ramki.

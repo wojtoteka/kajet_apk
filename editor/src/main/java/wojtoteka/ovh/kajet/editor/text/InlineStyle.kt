@@ -18,11 +18,11 @@ import androidx.compose.ui.unit.sp
  * Wygląd notatki tekstowej w polu do pisania.
  *
  * Człowiek nie ma oglądać znaczków: pogrubione ma być grube, a nie „**grube**".
- * Dlatego znaczniki są tu ZDEJMOWANE z tego, co widać — także pod kursorem.
+ * Dlatego znaczniki są tu ZDEJMOWANE z tego, co widać - także pod kursorem.
  *
  * Czyta je ten sam [RichTextCodec], którym formatuje pasek narzędzi. To jest
  * cała rzecz: jeden parser na wyświetlanie i na formatowanie, więc nie ma jak
- * się rozjechać. Wcześniej były dwa i to one puszczały do treści goły HTML —
+ * się rozjechać. Wcześniej były dwa i to one puszczały do treści goły HTML -
  * pasek pisał znacznik, którego pole do pisania nie umiało odczytać.
  *
  * Robota dzieli się na dwa przejścia:
@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
  *
  * Uwaga na [OffsetMapping]: Compose sprawdza je przy każdym naciśnięciu
  * i niespójne mapowanie wywraca całe pole. Dlatego oba przeliczenia składają
- * się z tych samych dwóch map — nie da się ich rozjechać.
+ * się z tych samych dwóch map - nie da się ich rozjechać.
  */
 class InlineStyle(
     private val textColor: Color,
@@ -49,7 +49,7 @@ class InlineStyle(
     }
 
     /**
-     * Sam wygląd, bez zdejmowania znaczników — do podglądu i do testów, które
+     * Sam wygląd, bez zdejmowania znaczników - do podglądu i do testów, które
      * pilnują, żeby ozdabianie nie ruszało treści.
      */
     fun style(source: String): AnnotatedString {
@@ -71,7 +71,7 @@ class InlineStyle(
     private class Marked {
         val spans = mutableListOf<Span>()
 
-        /** Zakresy będące wyłącznie znacznikiem — da się je schować. */
+        /** Zakresy będące wyłącznie znacznikiem - da się je schować. */
         val markers = mutableListOf<IntRange>()
 
         fun style(from: Int, to: Int, style: SpanStyle) {
@@ -87,7 +87,7 @@ class InlineStyle(
 
     /**
      * Wszystko, co ma być widać, w miarach czystego tekstu. Najpierw budowa
-     * wiersza, potem formaty fragmentu — żeby wybrana barwa wygrywała
+     * wiersza, potem formaty fragmentu - żeby wybrana barwa wygrywała
      * z barwą nagłówka, a nie odwrotnie.
      */
     private fun stylesOf(parsed: RichTextCodec.Parsed): List<Span> {
@@ -172,7 +172,7 @@ class InlineStyle(
             fontStyle = if (attrs.italic) FontStyle.Italic else null,
             textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
             background = if (attrs.highlight) highlightColor else Color.Unspecified,
-            // Wybrana barwa wygrywa z barwą kodu — kto pokolorował kawałek
+            // Wybrana barwa wygrywa z barwą kodu - kto pokolorował kawałek
             // kodu, chce go widzieć w swojej barwie.
             color = attrs.color?.let { Color(it) }
                 ?: if (attrs.code) codeColor else Color.Unspecified,
@@ -186,7 +186,7 @@ class InlineStyle(
     /**
      * Znaczniki, które nie są formatem fragmentu, tylko układem notatki:
      * nagłówki, listy, cytaty, bloki kodu, kod w zdaniu, odnośniki i zdjęcia.
-     * Formatów fragmentu już tu nie ma — zdjął je [RichTextCodec.read].
+     * Formatów fragmentu już tu nie ma - zdjął je [RichTextCodec.read].
      */
     private fun blockPass(plain: String): Marked {
         val marked = Marked()
@@ -201,7 +201,7 @@ class InlineStyle(
             val indent = line.length - trimmed.length
 
             /*
-              Wiersz znacznika chowa się RAZEM ze swoim znakiem końca linii —
+              Wiersz znacznika chowa się RAZEM ze swoim znakiem końca linii -
               inaczej po schowanym „```" zostawałby pusty wiersz i blok kodu
               rozpychałby notatkę. Znacznik otwierający zabiera koniec wiersza
               stojący ZA nim, domykający ten PRZED nim.
@@ -222,7 +222,7 @@ class InlineStyle(
                     fence = null
                 }
 
-                // Kod idzie swoją czcionką i barwą, wzór samą czcionką —
+                // Kod idzie swoją czcionką i barwą, wzór samą czcionką -
                 // to nie kod, tylko zapis matematyczny.
                 fence == "```" -> marked.style(lineStart, lineEnd, codeStyle)
                 fence == "$$" -> marked.style(lineStart, lineEnd, formulaStyle)
@@ -283,7 +283,7 @@ class InlineStyle(
     }
 
     /**
-     * Odnośniki i zdjęcia — jedyne znaczniki, jakie tu zostały. Kod w zdaniu
+     * Odnośniki i zdjęcia - jedyne znaczniki, jakie tu zostały. Kod w zdaniu
      * jest formatem fragmentu i zdjął go już [RichTextCodec.read].
      */
     private fun inlineParts(marked: Marked, text: String, from: Int) {

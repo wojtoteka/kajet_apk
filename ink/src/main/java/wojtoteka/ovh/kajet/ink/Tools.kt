@@ -32,7 +32,7 @@ enum class EditorTool {
             ERASER_PARTIAL -> "Wyciera tylko to, po czym przejedziesz."
             ERASER_STROKE -> "Kasuje całą kreskę, której dotkniesz."
             LASSO -> "Obrysuj fragment, żeby go przesunąć albo skasować."
-            RULER -> "Zamienia kreskę w prostą linię, a zamkniętą — w koło, trójkąt albo prostokąt."
+            RULER -> "Zamienia kreskę w prostą linię, a zamkniętą - w koło, trójkąt albo prostokąt."
             SHAPES -> "Przeciągnij rysik, żeby wstawić kształt. Stuknięcie bierze kształt do poprawek."
         }
 
@@ -78,7 +78,7 @@ data class PenSettings(
 /**
  * Czym rysuje się kształt: rodzaj, obrys, wypełnienie.
  *
- * [fill] równe zero znaczy „bez wypełnienia" — ta sama umowa co przy tle pola
+ * [fill] równe zero znaczy „bez wypełnienia" - ta sama umowa co przy tle pola
  * tekstowego, więc nie przybywa nowej zasady do zapamiętania.
  */
 data class ShapeSettings(

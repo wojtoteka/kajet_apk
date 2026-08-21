@@ -7,12 +7,12 @@ import android.graphics.BitmapFactory
  * Wczytywanie zdjęć do pamięci.
  *
  * Zdjęcie z aparatu tabletu to dziś kilkanaście milionów punktów. Wczytane
- * w pełnej rozdzielczości zajmuje w pamięci cztery bajty na punkt — przy 12 Mpix
+ * w pełnej rozdzielczości zajmuje w pamięci cztery bajty na punkt - przy 12 Mpix
  * to około 48 MB na JEDNO zdjęcie, przy kilku na kartce kończy się brakiem
  * pamięci i zniknięciem aplikacji. Na ekranie i tak nie widać więcej niż
  * kilku milionów punktów, więc zdjęcie idzie do pamięci zmniejszone.
  *
- * Plik na dysku zostaje nietknięty, w pełnej rozdzielczości — eksport do PDF
+ * Plik na dysku zostaje nietknięty, w pełnej rozdzielczości - eksport do PDF
  * czyta go osobno i ma z czego drukować.
  */
 object Bitmaps {
@@ -29,7 +29,7 @@ object Bitmaps {
      * Wczytuje zdjęcie zmniejszone tak, żeby jego dłuższy bok nie przekraczał
      * [longestSide]. Zwraca null, gdy bajty nie są obrazem.
      *
-     * Wołać poza wątkiem głównym — samo dekodowanie potrafi trwać ułamki
+     * Wołać poza wątkiem głównym - samo dekodowanie potrafi trwać ułamki
      * sekundy, a przy większych plikach dłużej.
      */
     fun decode(data: ByteArray, longestSide: Int = LONGEST_SIDE): Bitmap? {

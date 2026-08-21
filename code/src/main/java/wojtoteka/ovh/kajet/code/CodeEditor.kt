@@ -230,7 +230,7 @@ fun CodeEditor(
                     /*
                       Na telefonie wyjście dostaje więcej miejsca niż na
                       tablecie. Przy 800 dp wysokości 38% to niecałe 190 dp na
-                      sam wydruk programu — na tyle mało, że po jednym zdaniu
+                      sam wydruk programu - na tyle mało, że po jednym zdaniu
                       trzeba było przewijać.
                     */
                     .weight(if (narrow) 0.55f else 0.62f)
@@ -262,7 +262,7 @@ fun CodeEditor(
                         ) {
                             /*
                               Pole trzyma TextFieldValue, a nie sam napis, bo
-                              pomocnik przy pisaniu musi móc ustawić kursor —
+                              pomocnik przy pisaniu musi móc ustawić kursor -
                               po domknięciu nawiasu ma on zostać W ŚRODKU pary,
                               a nie za nią.
 
@@ -282,7 +282,7 @@ fun CodeEditor(
                                 cursorBrush = SolidColor(colors.accent),
                                 /*
                                   Klawiatura ma trzymać ręce przy sobie.
-                                  Autokorekta robiła z „def proba(" — „def
+                                  Autokorekta robiła z „def proba(" - „def
                                   próba(", czyli z poprawnego Pythona błąd,
                                   a wielka litera po kropce psuła nazwy pól.
                                   W kodzie liczy się znak w znak to, co
@@ -319,7 +319,7 @@ fun CodeEditor(
 
             HorizontalRule()
             /*
-              Pod HTML-em stoi konsola, a nie wynik uruchomienia — w tym samym
+              Pod HTML-em stoi konsola, a nie wynik uruchomienia - w tym samym
               miejscu, co przy pozostałych językach. Zakładki „Wynik", „Błędy"
               i „Wejście" byłyby przy stronie zawsze puste, bo HTML-a się nie
               uruchamia; ogląda się go.
@@ -350,7 +350,7 @@ fun CodeEditor(
 
 /**
  * Podgląd strony HTML wprost z edytora. Treść ładuje się z pamięci, bez
- * adresu bazowego — strona może dociągać rzeczy z internetu, ale nie widzi
+ * adresu bazowego - strona może dociągać rzeczy z internetu, ale nie widzi
  * plików urządzenia.
  *
  * Płótno jest białe jak w przeglądarce: niesformatowany znacznik ma ciemny
@@ -360,7 +360,7 @@ fun CodeEditor(
  * Odcięcie stoi na pustym adresie bazowym w [android.webkit.WebView
  * .loadDataWithBaseURL]: strona ma wtedy źródło nieokreślone, więc nie sięga
  * ani do ciasteczek Kajetu, ani do notatek obok. Konsola niczego z tego nie
- * rozluźnia — WebView oddaje jej wiersze sam i nic nie wraca w drugą stronę.
+ * rozluźnia - WebView oddaje jej wiersze sam i nic nie wraca w drugą stronę.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -371,7 +371,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                 /*
                   Rozmiar z góry, jeszcze przed pierwszym ładowaniem. Bez tego
                   widok mierzy się sam, a punktem wyjścia jest dla niego okno,
-                  nie przydzielone miejsce — stąd skok układu w trakcie
+                  nie przydzielone miejsce - stąd skok układu w trakcie
                   ładowania. Granice ustala teraz rodzic i tylko on.
                 */
                 layoutParams = ViewGroup.LayoutParams(
@@ -389,7 +389,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                       otwiera się w nowej karcie). Powód jest tu inny niż tam,
                       ale wynik musi być ten sam: bez tego kliknięcie zamieniało
                       podgląd zadania na cudzą stronę, a uczeń wracał do swojej
-                      dopiero, dopisując literę w kodzie — bo dopiero zmiana
+                      dopiero, dopisując literę w kodzie - bo dopiero zmiana
                       treści przeładowuje podgląd.
 
                       Kotwice, ścieżki względne i mailto zostają przy swoim
@@ -427,7 +427,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                 /*
                   Konsola bez wstrzykiwania czegokolwiek w cudzą stronę.
                   Tędy przychodzi log, info, warn, error i debug, a także błędy
-                  skryptów wraz z numerem wiersza i nieobsłużone obietnice —
+                  skryptów wraz z numerem wiersza i nieobsłużone obietnice -
                   czyli właśnie to, czego dopisany console.log by nie złapał.
 
                   Prawda na końcu znaczy „zajęte": bez niej te same wiersze
@@ -444,7 +444,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
                       edytora.
 
                       Bez tych trzech nadpisań samo ustawienie WebChromeClient
-                      włącza domyślne okna WebView — a strona z alertem w pętli
+                      włącza domyślne okna WebView - a strona z alertem w pętli
                       zasłoniłaby wtedy edytor razem z kodem, którego uczeń nie
                       zdążył zapisać. Wcześniej alert w podglądzie po prostu
                       przepadał, więc nikomu niczego nie ubywa: napis, który
@@ -509,7 +509,7 @@ private fun HtmlPreview(code: String, console: HtmlConsoleState) {
 /**
  * Biała, nieprzezroczysta kartka jak w przeglądarce. Domyślny HTML ma przezroczyste
  * body, więc bez tego prześwitywałby ciemny arkusz Kajetu. Ciemnienie algorytmiczne
- * WebView też by odwróciło niesformatowaną stronę w ciemnym motywie aplikacji —
+ * WebView też by odwróciło niesformatowaną stronę w ciemnym motywie aplikacji -
  * tu jest wyłączone, bo podgląd ma wyglądać jak zwykła karta, a nie jak chrome
  * edytora. Styl autora (`body { background }`) maluje się na wierzchu i wygrywa.
  */
@@ -699,7 +699,7 @@ private fun ResultPanel(
                 /*
                   Na telefonie trzy zakładki zajmują niemal całą szerokość, więc
                   wystarczy dłuższy napis, żeby ostatnia wypadła za krawędź.
-                  Pasek przewija się wtedy w bok — tak samo jak pasek pisaków
+                  Pasek przewija się wtedy w bok - tak samo jak pasek pisaków
                   w notatniku odręcznym.
                 */
                 .then(if (narrow) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
@@ -740,7 +740,7 @@ private fun ResultPanel(
             /*
               Na szerokim ekranie status stoi przy prawej krawędzi tego samego
               wiersza. Jeden wiersz i wielokropek, bo Compose oddaje ostatniemu
-              dziecku bez wagi TO, CO ZOSTAŁO po zakładkach — a zostawało
+              dziecku bez wagi TO, CO ZOSTAŁO po zakładkach - a zostawało
               czasem tyle, że napis łamał się po jednej literze i rósł w dół,
               zasłaniając wydruk programu.
             */
@@ -830,7 +830,7 @@ private fun PanelText(
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnym
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnym
   rzędzie komunikatu odcinał się od tła i na telefonie łamał etykietę
   („Rozumiem"). Tu ten sam krój co treść paska, bez ramki.
 */

@@ -51,7 +51,7 @@ class Sync(
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
     /*
-      Notatki, które wyczerpały próby wysyłki. Nie znikają z kolejki — czekają
+      Notatki, które wyczerpały próby wysyłki. Nie znikają z kolejki - czekają
       na ręczne ponowienie, a ekran konta pokazuje, że coś utknęło. Kiedyś
       taki wpis po prostu wypadał i notatka przestawała się synchronizować
       na zawsze, bez żadnego sygnału.
@@ -60,7 +60,7 @@ class Sync(
     val stuck: StateFlow<Int> = _stuck.asStateFlow()
 
     // Synchronizacja chodzi w tle i nikt na nią nie czeka. Bez tego uchwytu
-    // każdy jej błąd — zerwane połączenie, dziwna odpowiedź serwera — leci do
+    // każdy jej błąd - zerwane połączenie, dziwna odpowiedź serwera - leci do
     // systemu i zamyka całą aplikację. Notatki mają być ważniejsze od chmury,
     // więc awaria wysyłki może najwyżej zapalić komunikat.
     private val brokenSync = CoroutineExceptionHandler { _, failure ->
@@ -83,7 +83,7 @@ class Sync(
     // wyśle wszystko, co uzbierało się w kolejce, więcej nie trzeba.
     //
     // Flaga gaśnie dopiero POD zamkiem (w synchronise), nie przy starcie
-    // korutyny — inaczej okno konflacji trwałoby mikrosekundy i przez cały
+    // korutyny - inaczej okno konflacji trwałoby mikrosekundy i przez cały
     // czas trwającej synchronizacji dalej przybywałoby czekających przebiegów.
     private val syncScheduled = AtomicBoolean(false)
 
@@ -101,7 +101,7 @@ class Sync(
             // Flaga gaśnie normalnie POD zamkiem w synchronise. Wyjątek przed
             // tym miejscem zostawiał ją podniesioną na zawsze: scheduleSync
             // nie umiał już nic zaplanować i synchronizacja stawała do
-            // restartu aplikacji. Sam wyjątek idzie dalej, do [brokenSync] —
+            // restartu aplikacji. Sam wyjątek idzie dalej, do [brokenSync] -
             // wcześniej znikał tu bez śladu.
             var reachedSync = false
             try {
@@ -116,9 +116,9 @@ class Sync(
     /**
      * Ikona chmury przy „Zapisane": czy serwer ma tę notatkę, czy tylko dysk.
      *
-     * true — nie czeka w kolejce i znamy serwerową wersję.
-     * false — jest konto, ale wpis w kolejce albo brak potwierdzenia.
-     * null — wylogowany; nie twierdzimy niczego o chmurze.
+     * true - nie czeka w kolejce i znamy serwerową wersję.
+     * false - jest konto, ale wpis w kolejce albo brak potwierdzenia.
+     * null - wylogowany; nie twierdzimy niczego o chmurze.
      */
     fun cloudSave(path: String, noteId: String?): Boolean? {
         val signedIn = runCatching { account.isSignedIn() }.getOrDefault(false)
@@ -159,7 +159,7 @@ class Sync(
         scheduleSync()
     }
 
-    /** Zmiana nazwy albo przeniesienie — rejestr plików z kodem idzie w ślad. */
+    /** Zmiana nazwy albo przeniesienie - rejestr plików z kodem idzie w ślad. */
     fun reportPathMoved(oldPath: String, newPath: String) {
         runCatching { codeIds.rebind(oldPath, newPath) }
     }
@@ -174,13 +174,13 @@ class Sync(
         scheduleSync()
     }
 
-    /** Pliki z kodem skasowane na stałe — serwer też kasuje je z kosza. */
+    /** Pliki z kodem skasowane na stałe - serwer też kasuje je z kosza. */
     fun reportCodePurged(paths: List<String>) {
         if (!account.isSignedIn()) return
         for (path in paths) {
             val id = codeIds.existingIdFor(path) ?: continue
             runCatching { queue.addDeletion(id, purge = true) }
-            // Numer przestaje istnieć — nowy plik pod tą samą nazwą nie może
+            // Numer przestaje istnieć - nowy plik pod tą samą nazwą nie może
             // go odziedziczyć i wskrzesić skasowanego wpisu na serwerze.
             codeIds.remove(path)
         }
@@ -194,7 +194,7 @@ class Sync(
     }
 
     /**
-     * Synchronizuje w tle i nie każe na siebie czekać — do zawołania przy
+     * Synchronizuje w tle i nie każe na siebie czekać - do zawołania przy
      * wejściu do aplikacji. Bez tego notatki dopisane na stronie pojawiały się
      * na urządzeniu dopiero po okresowym zadaniu (co pół godziny) albo po
      * ręcznym kliknięciu „Synchronizuj teraz".
@@ -206,7 +206,7 @@ class Sync(
 
     /**
      * Pełna synchronizacja we własnym zakresie Sync, nie w zakresie ekranu.
-     * Wyjście z ekranu konta w trakcie nie przerywa wysyłki — przerwana w pół
+     * Wyjście z ekranu konta w trakcie nie przerywa wysyłki - przerwana w pół
      * kroku potrafiła zgubić zapamiętaną wersję i mnożyć kopie „(wersja z
      * serwera)".
      */
@@ -231,7 +231,7 @@ class Sync(
         _state.value = SyncState.InProgress
 
         // Odkąd pliki z kodem też się synchronizują, raz trzeba przejrzeć całe
-        // konto od początku — te utworzone na stronie przed tą zmianą mają
+        // konto od początku - te utworzone na stronie przed tą zmianą mają
         // daty sprzed zakładki i zwykłe pobranie by ich nie zobaczyło.
         if (!versions.getBoolean(KEY_FULL_FETCH_FOR_CODE, false)) {
             account.rememberSync(0)
@@ -244,7 +244,7 @@ class Sync(
         runCatching { repository.rebuildIfEmpty() }
 
         // Foldery idą przed notatkami: pobrane notatki muszą mieć już dokąd
-        // trafić, a wysyłane — znać identyfikator swojego folderu.
+        // trafić, a wysyłane - znać identyfikator swojego folderu.
         val folders = syncFolders()
 
         val sent = sendPending()
@@ -252,7 +252,7 @@ class Sync(
 
         // Notatki skasowane na serwerze na zawsze (np. „opróżnij kosz" na
         // stronie). Wiersz znika bez śladu, więc przyrostowe pobieranie nigdy
-        // się o nim nie dowie — po to serwer zostawia nagrobki.
+        // się o nim nie dowie - po to serwer zostawia nagrobki.
         val removals = fetchServerDeletions()
 
         // Droga zapasowa dla tego, po czym nagrobka nie ma: skasowań sprzed
@@ -271,17 +271,17 @@ class Sync(
         }
 
         // Uzgodnienie całej biblioteki, jak na dysku w chmurze: notatki, których
-        // serwer nie zna — także te sprzed zalogowania — dopisują się do kolejki
+        // serwer nie zna - także te sprzed zalogowania - dopisują się do kolejki
         // i jadą od razu. Kolejność ma znaczenie: najpierw pobranie zapamiętuje
         // wersje wszystkiego, co serwer już ma, więc nic mu się nie dubluje.
         /*
           Tylko po PEŁNYM pobraniu. Uzgadnianie wysyła z baseVersion = 0
-          wszystko, czego wersji nie zna — a serwer przy zerze przyjmuje
+          wszystko, czego wersji nie zna - a serwer przy zerze przyjmuje
           bezwarunkowo. Po niedokończonym pobraniu (zerwana sieć, błąd
           w połowie spisu) taka wysyłka nadpisywałaby na serwerze notatki,
           których wersji po prostu nie zdążyliśmy zapamiętać.
         */
-        // Pełne pobranie doszło do końca — od teraz brak zapamiętanej wersji
+        // Pełne pobranie doszło do końca - od teraz brak zapamiętanej wersji
         // naprawdę znaczy „serwer tej notatki nie zna" i wysyłka z zerową
         // podstawą przestaje być strzałem w ciemno (patrz sendPending).
         if (fetched.completed && !versions.getBoolean(KEY_BASELINE_FETCH, false)) {
@@ -293,7 +293,7 @@ class Sync(
         // Drugi przebieg: po konflikcie z serwerowym koszem (zapamiętana
         // wersja nagrobka pozwala od razu przywrócić), po nowościach
         // z uzgadniania i dla wpisów wstrzymanych przed pierwszym pełnym
-        // pobraniem — te jadą dopiero teraz, ze znaną podstawą.
+        // pobraniem - te jadą dopiero teraz, ze znaną podstawą.
         val sentAfter = if (settled > 0 || sent.retryNeeded || fetched.retryNeeded) {
             sendPending()
         } else {
@@ -301,7 +301,7 @@ class Sync(
         }
 
         // Wpis wstrzymany bramką mógł dopiero w drugim przebiegu odbić się
-        // od serwerowego kosza — wersja nagrobka już zapamiętana, trzeci
+        // od serwerowego kosza - wersja nagrobka już zapamiętana, trzeci
         // przebieg przywraca notatkę zamiast kazać czekać do następnego razu.
         val sentLast = if (sentAfter.retryNeeded) sendPending() else StepResult()
 
@@ -359,7 +359,7 @@ class Sync(
 
     /**
      * Uzgadnia strukturę folderów z serwerem: lokalne foldery, których serwer
-     * nie zna, jadą do niego; serwerowe, których nie ma tu — powstają lokalnie.
+     * nie zna, jadą do niego; serwerowe, których nie ma tu - powstają lokalnie.
      * Rozjazd nazwy/wyglądu/rodzica rozstrzyga świeższy znacznik czasu.
      * Starszy serwer (404) wyłącza całość na ten przebieg.
      */
@@ -373,7 +373,7 @@ class Sync(
         val listing = when (val response = client.fetchFolders()) {
             is CloudClient.Result.Error -> {
                 if (response.notFound) return@withContext StepResult()
-                // Sesję gasi CloudClient — tutaj zostaje sam stan paska.
+                // Sesję gasi CloudClient - tutaj zostaje sam stan paska.
                 if (response.mustSignIn) _state.value = SyncState.MustSignIn
                 return@withContext StepResult(
                     reason = response.message,
@@ -414,7 +414,7 @@ class Sync(
             }
         }
 
-        // Foldery skasowane na urządzeniu — kolejka trzyma ich identyfikatory.
+        // Foldery skasowane na urządzeniu - kolejka trzyma ich identyfikatory.
         for (entry in queue.all().filter { it.kind == QueueEntry.KIND_FOLDER_DELETE }) {
             when (val outcome = client.deleteFolder(entry.noteId)) {
                 is CloudClient.Result.Ok -> {
@@ -437,8 +437,8 @@ class Sync(
         for (folder in locals) {
             val onServer = serverById[folder.id]
             if (onServer == null) {
-                // Serwer znał ten folder i już go nie zna — skasowany gdzie
-                // indziej. Nieznany nigdy — świeży, jedzie na serwer.
+                // Serwer znał ten folder i już go nie zna - skasowany gdzie
+                // indziej. Nieznany nigdy - świeży, jedzie na serwer.
                 if (wasFolderSynced(folder.id)) {
                     runCatching { repository.trashFileFromCloud(folder.path) }
                         .onSuccess {
@@ -463,7 +463,7 @@ class Sync(
             if (folder.modifiedAt > onServer.updatedAt) {
                 push(folder)
             } else {
-                // Serwer jest świeższy — jego wersja wchodzi na urządzenie.
+                // Serwer jest świeższy - jego wersja wchodzi na urządzenie.
                 var path = folder.path
                 runCatching {
                     if (!sameName) path = repository.renameFolderFromCloud(path, onServer.name)
@@ -484,7 +484,7 @@ class Sync(
             }
         }
 
-        // Foldery z serwera, których nie ma lokalnie — powstają tutaj,
+        // Foldery z serwera, których nie ma lokalnie - powstają tutaj,
         // rodzice przed dziećmi.
         val missing = listing.filter { it.id !in localById }
         val pending = missing.toMutableList()
@@ -524,7 +524,7 @@ class Sync(
 
     /**
      * Pole folderu dla wysyłanej notatki. Pusty tekst znaczy „korzeń wprost"
-     * (serwer zamienia go na null); null znaczy „nie ruszaj" — tak jedzie,
+     * (serwer zamienia go na null); null znaczy „nie ruszaj" - tak jedzie,
      * gdy serwer nie zna folderów albo rodzic nie ma jeszcze tożsamości.
      */
     private fun outgoingFolderId(path: String): String? {
@@ -534,7 +534,7 @@ class Sync(
         return folderIdByPath[parent]
     }
 
-    /** Folder z serwerowym identyfikatorem — dokąd zapisać pobraną notatkę. */
+    /** Folder z serwerowym identyfikatorem - dokąd zapisać pobraną notatkę. */
     private fun folderTargetFor(folderId: String?): String? = when {
         !folderSupport -> null
         // Null na serwerze nie odróżnia „przeniesiono do korzenia" od „nigdy
@@ -557,7 +557,7 @@ class Sync(
         versions.edit().remove("$KEY_FOLDER_PREFIX$folderId").apply()
     }
 
-    /** Foldery wyrzucone do kosza na urządzeniu — serwer kasuje odpowiedniki. */
+    /** Foldery wyrzucone do kosza na urządzeniu - serwer kasuje odpowiedniki. */
     fun reportFoldersDeleted(folderIds: List<String>) {
         if (!account.isSignedIn()) return
         for (folderId in folderIds) {
@@ -584,7 +584,7 @@ class Sync(
         // i druga wysyłka w tym samym przebiegu przywróci notatkę.
         val retryNeeded: Boolean = false,
         // Czy krok obszedł wszystko, co miał obejść. Uzgadnianie biblioteki
-        // rusza tylko po pełnym pobraniu — patrz [reconcileLibrary]. Pole na
+        // rusza tylko po pełnym pobraniu - patrz [reconcileLibrary]. Pole na
         // końcu, bo wysyłka buduje ten wynik pozycyjnie.
         val completed: Boolean = true,
     )
@@ -632,10 +632,10 @@ class Sync(
         try {
             for (entry in queue.all()) {
                 // Utknięte wpisy nie dobijają się do serwera i nie blokują
-                // reszty — czekają na ręczne ponowienie z ekranu konta.
+                // reszty - czekają na ręczne ponowienie z ekranu konta.
                 if (entry.stuck) continue
                 when (entry.kind) {
-                    // Kasowania folderów obsługuje syncFolders — tu tylko nie
+                    // Kasowania folderów obsługuje syncFolders - tu tylko nie
                     // wolno ich pomylić ze zwykłą notatką.
                     QueueEntry.KIND_FOLDER_DELETE -> continue
 
@@ -666,7 +666,7 @@ class Sync(
                                     forgetVersion(entry.noteId)
                                 }
                                 if (entry.kind == QueueEntry.KIND_PURGE) {
-                                    // Po trwałym skasowaniu numer jest wolny —
+                                    // Po trwałym skasowaniu numer jest wolny -
                                     // nowy plik pod tą samą ścieżką ma dostać
                                     // świeży, a nie wskrzeszać stary wpis.
                                     codeIds.pathFor(entry.noteId)?.let { codeIds.remove(it) }
@@ -681,7 +681,7 @@ class Sync(
                     QueueEntry.KIND_CODE -> {
                         val text = runCatching { repository.readText(entry.path) }.getOrNull()
                         if (text == null) {
-                            // Plik zniknął z biblioteki (np. do kosza) — kasowanie
+                            // Plik zniknął z biblioteki (np. do kosza) - kasowanie
                             // zgłasza się osobnym wpisem, tu nie ma czego wysłać.
                             queue.remove(entry.path)
                             continue
@@ -718,7 +718,7 @@ class Sync(
                                         val onServer = response.data.onServer
                                         if (onServer?.deletedAt != null && entry.reconciled) {
                                             // Uzgadnianie trafiło na plik skasowany gdzie
-                                            // indziej — serwerowy kosz wygrywa, plik idzie
+                                            // indziej - serwerowy kosz wygrywa, plik idzie
                                             // do lokalnego kosza zamiast się wskrzeszać.
                                             // Rozliczenie dopiero PO udanym przeniesieniu:
                                             // porażka zostawiała wersję zapamiętaną, wpis
@@ -736,7 +736,7 @@ class Sync(
                                         } else if (onServer?.deletedAt != null) {
                                             // Plik leży w serwerowym koszu, a tu ktoś
                                             // go właśnie zapisał. Wersja z serwera już
-                                            // zapamiętana — ponowna wysyłka przywróci.
+                                            // zapamiętana - ponowna wysyłka przywróci.
                                             rememberVersion(entry.noteId, onServer.version)
                                             retryNeeded = true
                                         } else if (onServer != null &&
@@ -746,7 +746,7 @@ class Sync(
                                             conflicts += 1
                                             queue.removeIfUnchanged(entry)
                                         } else {
-                                            // Kopia NIE powstała (albo serwer nie dał treści) —
+                                            // Kopia NIE powstała (albo serwer nie dał treści) -
                                             // wpis zostaje, wersja niezapamiętana; po wyczerpaniu
                                             // prób wpis widać jako utknięty.
                                             reason = reason ?: words.conflictCopyFailed
@@ -757,7 +757,7 @@ class Sync(
                                         // Notatka trwale skasowana gdzie indziej.
                                         // Plik idzie do lokalnego kosza zamiast
                                         // wskrzeszać skasowane. Numer i wersja
-                                        // schodzą dopiero PO udanym przeniesieniu —
+                                        // schodzą dopiero PO udanym przeniesieniu -
                                         // bez tego plik zostawał w bibliotece jako
                                         // bezpański i wracał na serwer jako duplikat.
                                         val moved = runCatching {
@@ -823,7 +823,7 @@ class Sync(
                                         if (onServer?.deletedAt != null && entry.reconciled) {
                                             // Wpis wziął się z uzgadniania biblioteki (np.
                                             // po przelogowaniu), a serwer trzyma notatkę
-                                            // w koszu — czyli skasowano ją gdzie indziej.
+                                            // w koszu - czyli skasowano ją gdzie indziej.
                                             // Kosz wygrywa; wcześniej taka wysyłka
                                             // wskrzeszała wszystko po każdym logowaniu.
                                             // Rozliczenie dopiero PO udanym przeniesieniu.
@@ -839,7 +839,7 @@ class Sync(
                                             }
                                         } else if (onServer?.deletedAt != null) {
                                             // Notatka leży w serwerowym koszu, a lokalnie
-                                            // ktoś ją dalej pisze. Nie robimy kopii kosza —
+                                            // ktoś ją dalej pisze. Nie robimy kopii kosza -
                                             // zapamiętana wersja sprawia, że ponowna
                                             // wysyłka przywraca notatkę na serwerze.
                                             rememberVersion(document.id, onServer.version)
@@ -855,7 +855,7 @@ class Sync(
                                             conflicts += 1
                                             queue.removeIfUnchanged(entry)
                                         } else {
-                                            // Kopia NIE powstała — niczego nie udajemy: wpis
+                                            // Kopia NIE powstała - niczego nie udajemy: wpis
                                             // zostaje w kolejce, wersja niezapamiętana, konflikt
                                             // niepoliczony. Po wyczerpaniu prób wpis widać jako
                                             // utknięty na ekranie konta.
@@ -865,7 +865,7 @@ class Sync(
                                     }
                                     "gone" -> {
                                         // Notatka trwale skasowana gdzie indziej.
-                                        // Lokalna kopia idzie do kosza — stamtąd
+                                        // Lokalna kopia idzie do kosza - stamtąd
                                         // zawsze można ją wyjąć. Wersja i wpis
                                         // schodzą dopiero PO udanym przeniesieniu.
                                         val moved = runCatching {
@@ -886,7 +886,7 @@ class Sync(
                                             sent += 1
                                         } else {
                                             // Treść doszła (wersja słusznie
-                                            // zapamiętana), ale załącznik nie —
+                                            // zapamiętana), ale załącznik nie -
                                             // wpis zostaje i ponowna wysyłka
                                             // dośle brakujące po skrócie treści.
                                             reason = reason ?: words.syncAttachmentFailed
@@ -910,7 +910,7 @@ class Sync(
     /**
      * Zwraca, czy każdy załącznik z dysku naprawdę dojechał na serwer.
      * Kiedyś porażka przechodziła bez śladu i brakujący załącznik nie miał
-     * już żadnej okazji, żeby pojechać — aż do następnej zmiany notatki.
+     * już żadnej okazji, żeby pojechać - aż do następnej zmiany notatki.
      */
     private suspend fun sendAttachments(noteId: String, path: String): Boolean {
         val onDisk = runCatching { repository.attachmentNames(path) }.getOrDefault(emptyList())
@@ -925,7 +925,7 @@ class Sync(
         for (name in onDisk) {
             val data = runCatching { repository.readAttachment(path, name) }.getOrNull()
             if (data == null) {
-                // Jest na spisie, a nie daje się odczytać — nie udajemy,
+                // Jest na spisie, a nie daje się odczytać - nie udajemy,
                 // że dojechał.
                 allSent = false
                 continue
@@ -944,7 +944,7 @@ class Sync(
     private suspend fun fetchChanges(): StepResult = withContext(Dispatchers.IO) {
         // Bez katalogu na notatki nie ma dokąd ich zapisać. Wcześniej pobieranie
         // szło mimo to: każda notatka po cichu przepadała, a zakładka przesuwała
-        // się na koniec — po wskazaniu katalogu nie pobierało się już nic.
+        // się na koniec - po wskazaniu katalogu nie pobierało się już nic.
         if (!repository.hasStore()) {
             return@withContext StepResult(
                 reason = words.noNotesDirToSave,
@@ -960,14 +960,14 @@ class Sync(
         var failures = 0
         var firstFailure: String? = null
         var sawEnd = false
-        // Straż nieznanej podstawy rozbroiła wpis czekający w kolejce —
+        // Straż nieznanej podstawy rozbroiła wpis czekający w kolejce -
         // wersja już zapamiętana, więc warto od razu ponowić wysyłkę.
         var resolvedPending = false
 
         /*
-          Ścieżki notatek po identyfikatorze — do straży przed nadpisaniem
+          Ścieżki notatek po identyfikatorze - do straży przed nadpisaniem
           plików o nieznanej podstawie (patrz niżej). Spis idzie z Rooma,
-          więc jest tani. Bez spisu nie ma straży — wtedy nie pobieramy
+          więc jest tani. Bez spisu nie ma straży - wtedy nie pobieramy
           wcale, zamiast nadpisywać w ciemno.
         */
         val localPathById = runCatching { repository.allNoteIds() }.getOrNull()
@@ -1001,7 +1001,7 @@ class Sync(
         }
 
         // Notatka z lokalną zmianą czekającą na wysłanie nie może zostać
-        // nadpisana treścią z serwera — konflikt ma rozstrzygnąć wysyłka
+        // nadpisana treścią z serwera - konflikt ma rozstrzygnąć wysyłka
         // (kopią „kopia z chmury" obok), nie ciche pobranie. Zakładka staje
         // przed taką notatką, żeby następny przebieg po niej wrócił.
         fun deferred(note: ServerNote) {
@@ -1039,11 +1039,11 @@ class Sync(
                     for (fromServer in page.notes) {
                         /*
                           Notatkę z czekającą wysyłką i ZNANĄ wersją zostawiamy
-                          wysyłce — konflikt rozstrzygnie kopią obok, nie ciche
+                          wysyłce - konflikt rozstrzygnie kopią obok, nie ciche
                           pobranie. Przy NIEZNANEJ wersji odroczenie nie miało
                           końca: wpis blokował zapamiętanie wersji, a wysyłka
                           szła z zerową podstawą, którą serwer przyjmuje
-                          bezwarunkowo — nadpisując nowszą wersję. Taka notatka
+                          bezwarunkowo - nadpisując nowszą wersję. Taka notatka
                           przechodzi niżej, do straży nieznanej podstawy, która
                           zapamiętuje wersję i odblokowuje obie strony.
                           Czekające kasowania i nagrobki rozstrzyga wysyłka.
@@ -1063,7 +1063,7 @@ class Sync(
                         }
 
                         // Skasowana gdzie indziej (na stronie albo na drugim
-                        // urządzeniu) — tu też idzie do kosza. Z kosza zawsze
+                        // urządzeniu) - tu też idzie do kosza. Z kosza zawsze
                         // można ją wyjąć, więc niczego nie tracimy. Nagrobek
                         // idzie PRZED strażą wersji: rozjazd zapamiętanych
                         // wersji nie ma prawa zostawić przy życiu notatki,
@@ -1081,7 +1081,7 @@ class Sync(
                                 settled(fromServer.updatedAt)
                             } else {
                                 // Zapamiętana wersja udawałaby, że nagrobek
-                                // zadziałał — notatka zostałaby przy życiu
+                                // zadziałał - notatka zostałaby przy życiu
                                 // na zawsze. Zakładka staje, następny przebieg
                                 // spróbuje jeszcze raz.
                                 Log.w(
@@ -1108,11 +1108,11 @@ class Sync(
                         }
 
                         /*
-                          Plik jest, a wersji nie znamy — podstawa nieznana
+                          Plik jest, a wersji nie znamy - podstawa nieznana
                           (reinstalacja, wyczyszczenie danych, wylogowanie).
                           Serwerowa kopia nie ma prawa po cichu nadpisać
                           takiego pliku: zgodną treść przyjmujemy za swoją,
-                          a rozjazd rozstrzygamy jak zwykły konflikt — kopia
+                          a rozjazd rozstrzygamy jak zwykły konflikt - kopia
                           serwera obok, lokalny plik nietknięty.
                         */
                         val unknownBase = if (knownVersion(fromServer.id) == 0) {
@@ -1164,7 +1164,7 @@ class Sync(
                             val write = outcome.getOrNull()
                             if (write != null) {
                                 // Gwiazdka z metadanych serwera, tak samo jak
-                                // przy zwykłej notatce — strona przełącza ją
+                                // przy zwykłej notatce - strona przełącza ją
                                 // bez ruszania treści pliku.
                                 runCatching {
                                     repository.setFileFavoriteFromCloud(
@@ -1211,7 +1211,7 @@ class Sync(
                                 fetched += 1
                                 settled(fromServer.updatedAt)
                             } else {
-                                // Załącznik nie dojechał — notatka nie liczy
+                                // Załącznik nie dojechał - notatka nie liczy
                                 // się za pobraną. Zapis po identyfikatorze jest
                                 // idempotentny, więc ponowienie nie dubluje.
                                 failed(
@@ -1284,7 +1284,7 @@ class Sync(
      * człowiek do kosza nie wyrzucił.
      *
      * Znacznik czasu przesuwa się DOPIERO po przejściu całego spisu. Przebieg
-     * urwany w połowie zaczyna następnym razem od tego samego miejsca —
+     * urwany w połowie zaczyna następnym razem od tego samego miejsca -
      * powtórne zastosowanie nagrobka niczego nie psuje, a przeskoczenie
      * choćby jednego zostawiłoby notatkę w koszu na zawsze.
      */
@@ -1308,7 +1308,7 @@ class Sync(
         while (true) {
             when (val response = client.fetchDeleted(since, afterId)) {
                 is CloudClient.Result.Error -> {
-                    // Starszy serwer nie zna tego adresu. To nie jest awaria —
+                    // Starszy serwer nie zna tego adresu. To nie jest awaria -
                     // po prostu zostaje droga zapasowa.
                     if (response.notFound) return@withContext DeletionStep(tombstonesWork = false)
                     if (response.mustSignIn) _state.value = SyncState.MustSignIn
@@ -1355,7 +1355,7 @@ class Sync(
                                 forgetVersion(id)
                             }
                             // Nie ma jej tutaj albo krok się nie udał. Wersję
-                            // zapominamy tylko wtedy, gdy naprawdę coś zaszło —
+                            // zapominamy tylko wtedy, gdy naprawdę coś zaszło -
                             // inaczej nagrobek po nieudanej próbie wyglądałby
                             // na załatwiony.
                             else -> Unit
@@ -1370,7 +1370,7 @@ class Sync(
                         break
                     }
                     if (stalled || pages >= MAX_FETCH_PAGES) {
-                        // Kursor stoi w miejscu — dalsze pytanie kręciłoby pętlą
+                        // Kursor stoi w miejscu - dalsze pytanie kręciłoby pętlą
                         // bez końca. Znacznika nie przesuwamy: spis nie został
                         // przejrzany do końca.
                         return@withContext DeletionStep(
@@ -1395,7 +1395,7 @@ class Sync(
             repository.refresh()
         }
 
-        // Nieudane sprzątnięcie nie może przesunąć znacznika — nagrobek
+        // Nieudane sprzątnięcie nie może przesunąć znacznika - nagrobek
         // zniknąłby z oczu na zawsze, a notatka zostałaby przy życiu.
         // Powtórka niczego nie psuje: następny przebieg zaczyna od tego
         // samego miejsca.
@@ -1418,21 +1418,21 @@ class Sync(
     /**
      * Droga zapasowa: uzgodnienie z pełnym spisem identyfikatorów konta.
      *
-     * Potrzebna dla tego, po czym nagrobka nie ma — notatek skasowanych zanim
+     * Potrzebna dla tego, po czym nagrobka nie ma - notatek skasowanych zanim
      * serwer nauczył się je zostawiać, i serwera, który punktu z nagrobkami
      * jeszcze nie zna. Kosztuje pobranie całego spisu konta, więc chodzi
      * rzadko: raz po aktualizacji i przy starszym serwerze.
      *
      * Ta sama reguła co przy nagrobkach: notatka z lokalnego kosza znika
      * doszczętnie, notatka widoczna w bibliotece idzie najwyżej do kosza.
-     * Kosz przeglądamy osobno, bo jest poza spisem — i to właśnie tego tu
+     * Kosz przeglądamy osobno, bo jest poza spisem - i to właśnie tego tu
      * brakowało: notatka wyrzucona do kosza była dla uzgadniania niewidoczna
      * i zostawała w nim na zawsze, choć na serwerze dawno jej nie było.
      *
      * Nietknięte zostają notatki, których serwer nigdy nie znał (brak
      * zapamiętanej wersji), i te z czekającą wysyłką.
      *
-     * Zwraca false, kiedy przebieg nie doszedł do skutku — bez pełnego spisu
+     * Zwraca false, kiedy przebieg nie doszedł do skutku - bez pełnego spisu
      * z serwera nie wolno na jego podstawie niczego kasować ani uznać, że
      * zaległości są już posprzątane.
      */
@@ -1475,7 +1475,7 @@ class Sync(
             settle(noteId, codePath = null)
         }
 
-        // Notatki leżące w koszu — poza spisem, więc osobnym przejściem.
+        // Notatki leżące w koszu - poza spisem, więc osobnym przejściem.
         for (noteId in trash.noteSlots.keys) {
             settle(noteId, codePath = null)
         }
@@ -1497,13 +1497,13 @@ class Sync(
             repository.refresh()
         }
         // Porażka choć jednego sprzątnięcia = przebieg niedokończony. Nie
-        // wolno na jego podstawie postawić znacznika zamiatania — zamknąłby
+        // wolno na jego podstawie postawić znacznika zamiatania - zamknąłby
         // drogę zapasową z niezałatwioną zaległością.
         failures == 0
     }
 
     /**
-     * Pełny spis id wszystkiego, co konto ma na serwerze — razem z nagrobkami.
+     * Pełny spis id wszystkiego, co konto ma na serwerze - razem z nagrobkami.
      * Null, gdy spisu nie udało się dostać W CAŁOŚCI: na niepełnym spisie
      * nie wolno opierać żadnego kasowania.
      */
@@ -1578,7 +1578,7 @@ class Sync(
 
     /**
      * Kopia serwerowej wersji obok lokalnego pliku. Zwraca, czy naprawdę
-     * powstała — rozliczyć konflikt (zapamiętać wersję, zdjąć wpis z kolejki)
+     * powstała - rozliczyć konflikt (zapamiętać wersję, zdjąć wpis z kolejki)
      * wolno dopiero wtedy. Kiedyś porażka przechodziła tędy bez śladu:
      * konflikt liczył się jako obsłużony, a edycja z drugiego urządzenia
      * znikała bez komunikatu.
@@ -1605,7 +1605,7 @@ class Sync(
         // Attachments live under the original server note id; the conflict copy
         // is a new local note that still points at assets/... in its content.
         if (!fetchAttachments(fromServer.id, saved, fromServer.attachments)) {
-            // Kopia już stoi i cofnąć jej nie wolno — ponowienie mnożyłoby
+            // Kopia już stoi i cofnąć jej nie wolno - ponowienie mnożyłoby
             // kopie „(kopia z chmury)". Brak załącznika zostaje w dzienniku.
             Log.w("Kajet", "Kopia konfliktu ${fromServer.id} bez części załączników")
         }
@@ -1613,20 +1613,20 @@ class Sync(
     }
 
     /**
-     * Kiedy serwer ostatnio widział tę wersję — do tytułu kopii konfliktu,
+     * Kiedy serwer ostatnio widział tę wersję - do tytułu kopii konfliktu,
      * żeby dwie kopie z różnych dni dało się odróżnić bez otwierania.
      */
     private fun serverVersionStamp(updatedAt: Long): String =
         java.text.SimpleDateFormat(
             "d MMMM, HH:mm",
-            // Nazwa miesiąca musi iść za wyborem języka w Kajecie — inaczej
+            // Nazwa miesiąca musi iść za wyborem języka w Kajecie - inaczej
             // w angielskim tytule kopii siedziało „5 sierpnia”.
             if (words.english) java.util.Locale.UK else java.util.Locale.forLanguageTag("pl-PL"),
         ).format(java.util.Date(updatedAt))
 
     /**
      * Ta sama treść mimo nieznanej podstawy. Gwiazdka nie liczy się do
-     * rozjazdu — strona przełącza ją bez przepisywania treści notatki.
+     * rozjazdu - strona przełącza ją bez przepisywania treści notatki.
      */
     private fun samePayload(local: NoteDocument, fromServer: NoteDocument): Boolean =
         local.copy(favorite = false) == fromServer.copy(favorite = false)
@@ -1661,11 +1661,11 @@ class Sync(
      *
      * Zwykle wystarczy rozszerzenie. Jest jednak jedna para, której rozszerzenie
      * nie rozstrzyga: .sql to i SQLite, i MySQL. Wygrywa wtedy język, którym
-     * serwer nazwał tę notatkę wcześniej — inaczej poprawka literówki zrobiona
+     * serwer nazwał tę notatkę wcześniej - inaczej poprawka literówki zrobiona
      * na tablecie przestawiałaby notatkę MySQL na SQLite.
      *
      * Pamięć obowiązuje tylko dopóki pasuje do nazwy pliku. Kto przemianuje
-     * zadanie.sql na zadanie.py, dostaje Pythona i tak ma być — zmiana
+     * zadanie.sql na zadanie.py, dostaje Pythona i tak ma być - zmiana
      * rozszerzenia jest świadomą zmianą języka.
      */
     private fun outgoingLanguageId(path: String, fileName: String): String {
@@ -1699,7 +1699,7 @@ class Sync(
 
     /**
      * Wynik zapisu pliku z serwera: pod jaką ścieżką plik ostatecznie leży
-     * i czy rozjazd trzeba było rozstrzygnąć kopią konfliktu obok — pętla
+     * i czy rozjazd trzeba było rozstrzygnąć kopią konfliktu obok - pętla
      * pobierania liczy po tym konflikty, a ścieżką trafia gwiazdka.
      */
     private data class CodeWrite(val path: String, val conflictCopy: Boolean = false)
@@ -1707,7 +1707,7 @@ class Sync(
     private suspend fun writeCodeFileFromCloud(fromServer: ServerNote, content: String): CodeWrite {
         val write = storeCodeFileFromCloud(fromServer, content)
         // Język zapisujemy PO udanym zapisie pliku i pod ścieżką, która
-        // naprawdę powstała — przy kopii konfliktu bywa inna niż zgadywana.
+        // naprawdę powstała - przy kopii konfliktu bywa inna niż zgadywana.
         codeIds.rememberLanguage(write.path, parseCodeContent(content)?.language)
         return write
     }
@@ -1719,12 +1719,12 @@ class Sync(
         val existingPath = codeIds.pathFor(fromServer.id)
         if (existingPath != null) {
             /*
-              Plik jest, a wersji nie znamy — podstawa nieznana. Ta sama
+              Plik jest, a wersji nie znamy - podstawa nieznana. Ta sama
               reguła co przy notatkach (straż w fetchChanges): serwer nie ma
               prawa po cichu nadpisać takiego pliku. Zgodną treść przyjmujemy
               za swoją, rozjazd dostaje kopię serwera obok, lokalny plik
               zostaje nietknięty. Nieczytelny plik zatrzymuje notatkę
-              w pobieraniu — w ciemno nie nadpisujemy.
+              w pobieraniu - w ciemno nie nadpisujemy.
             */
             if (knownVersion(fromServer.id) == 0) {
                 if (repository.readText(existingPath) == code.source) return CodeWrite(existingPath)
@@ -1735,13 +1735,13 @@ class Sync(
             }
             val written = runCatching { repository.writeTextFromCloud(existingPath, code.source) }
             if (written.isSuccess) return CodeWrite(existingPath)
-            // Pliku już nie ma pod zapamiętaną ścieżką — zakładamy go od nowa.
+            // Pliku już nie ma pod zapamiętaną ścieżką - zakładamy go od nowa.
             codeIds.remove(existingPath)
         }
 
         /*
           Mapowanie przepadło (reinstalacja, wyczyszczenie danych), ale plik
-          o tej nazwie i tej samej treści już leży w bibliotece — to ta sama
+          o tej nazwie i tej samej treści już leży w bibliotece - to ta sama
           notatka. Wiążemy je z powrotem, zamiast tworzyć obok duplikat pod
           nowym numerem.
         */
@@ -1756,7 +1756,7 @@ class Sync(
 
         /*
           Plik o tej nazwie jest, treść inna, numeru nie nosi, a wersji
-          notatki nie znamy — to ten sam plik po utracie rejestru. Jak przy
+          notatki nie znamy - to ten sam plik po utracie rejestru. Jak przy
           notatkach: lokalny plik przejmuje tożsamość, treść serwera ląduje
           obok jako kopia konfliktu. Kiedyś treść serwera dostawała bezimienne
           „(2)" wraz z numerem, a lokalny plik jechał potem na serwer jako
@@ -1784,7 +1784,7 @@ class Sync(
 
     private suspend fun trashCodeFileFromCloud(noteId: String) {
         val path = codeIds.pathFor(noteId) ?: return
-        // Wyjątek idzie wyżej — połknięty tutaj sprawiał, że nagrobek liczył
+        // Wyjątek idzie wyżej - połknięty tutaj sprawiał, że nagrobek liczył
         // się za obsłużony, choć plik dalej leżał w bibliotece.
         repository.trashFileFromCloud(path)
         // Mapowanie zostaje: przywrócenie z lokalnego kosza ma wskrzesić tę
@@ -1798,7 +1798,7 @@ class Sync(
         val fileName = path.substringAfterLast('/')
         val stem = fileName.substringBeforeLast('.', fileName)
         val extension = fileName.substringAfterLast('.', "")
-        // Dwukropek z godziny nie przejdzie w nazwie pliku — stąd podkreślnik.
+        // Dwukropek z godziny nie przejdzie w nazwie pliku - stąd podkreślnik.
         val whenChanged = serverVersionStamp(onServer.updatedAt).replace(':', '_')
         val copyName = if (extension.isEmpty()) {
             words.cloudCopyOf(stem, whenChanged)
@@ -1821,7 +1821,7 @@ class Sync(
     /**
      * Czy od zalogowania doszło do końca choć jedno pełne pobranie. Przed nim
      * wysyłka z baseVersion = 0 to strzał w ciemno: zero może znaczyć „nowa
-     * notatka", ale równie dobrze „nie znamy stanu serwera" — a serwer przy
+     * notatka", ale równie dobrze „nie znamy stanu serwera" - a serwer przy
      * zerze przyjmuje bezwarunkowo i wysyłka nadpisałaby nowszą wersję.
      * Znacznik żyje w spisie wersji, więc wylogowanie czyści go razem z nim.
      */
@@ -1836,13 +1836,13 @@ class Sync(
     }
 
     /**
-     * Po notatce nie ma już śladu na dysku — niech zniknie też z pamięci
+     * Po notatce nie ma już śladu na dysku - niech zniknie też z pamięci
      * chmury. Woła to biblioteka przez `onNoteErased`, jednym wejściem dla
      * każdej drogi kasowania.
      *
      * Zgłoszenia kasowania (kosz i trwałe) zostają w kolejce nietknięte: to
      * właśnie one mają dojechać na serwer. Znikają wpisy z treścią do
-     * wysłania — notatki już nie ma, więc nie ma czego wysyłać, a taki wpis
+     * wysłania - notatki już nie ma, więc nie ma czego wysyłać, a taki wpis
      * przy najbliższym przebiegu próbowałby ją odtworzyć.
      */
     fun forgetNote(noteId: String) {
@@ -1917,7 +1917,7 @@ class Sync(
 
         /**
          * Znacznik w spisie wersji: od zalogowania doszło do końca choć jedno
-         * pełne pobranie — patrz [baselineFetched].
+         * pełne pobranie - patrz [baselineFetched].
          */
         const val KEY_BASELINE_FETCH = "#pierwsze-pobranie-za-nami"
 

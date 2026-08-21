@@ -236,7 +236,7 @@ class BlocksTest {
 
         assertThat(after.blocks).hasSize(1)
         assertThat(after.blocks[0]).isInstanceOf(Block.Text::class.java)
-        // Kursor idzie do akapitu, który został po liście — inaczej człowiek
+        // Kursor idzie do akapitu, który został po liście - inaczej człowiek
         // wychodzi z listy i nie ma gdzie pisać dalej.
         assertThat(after.focusKey).isEqualTo(after.blocks[0].key)
     }
@@ -251,7 +251,7 @@ class BlocksTest {
 
     /*
       Nagłówek, cytat i punkt to budowa wiersza, tak samo jak kwadracik zadania.
-      Doklejone do treści zadania dawały „- [ ] > cytat" — znacznik na wierzchu
+      Doklejone do treści zadania dawały „- [ ] > cytat" - znacznik na wierzchu
       w środku listy. Wiersz może być albo zadaniem, albo cytatem.
     */
     @Test
@@ -449,13 +449,13 @@ class TextFormatTest {
     }
 
     // Podkreślenie, barwa i wielkość fragmentu nie chodzą już przez
-    // doklejanie znaczników do tekstu — idą przez model zakresów.
+    // doklejanie znaczników do tekstu - idą przez model zakresów.
     // Ich testy siedzą w TextFormatTest.kt i RichTextTest.kt.
 }
 
 /*
   Tabelka. W pliku notatki zostaje zwykłym markdownem, więc najważniejsze jest
-  to, żeby przeszła tam i z powrotem bez straty — inaczej strona i eksport
+  to, żeby przeszła tam i z powrotem bez straty - inaczej strona i eksport
   zobaczyłyby coś innego niż tablet.
 */
 class TableBlockTest {

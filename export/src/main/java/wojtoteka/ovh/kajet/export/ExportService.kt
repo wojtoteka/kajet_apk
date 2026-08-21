@@ -195,12 +195,12 @@ class ExportService(
     /*
      * Udostępnianie i otwieranie ruszają z kontekstu EKRANU, nie aplikacji.
      * Start z kontekstu aplikacji wymaga osobnego zadania, a nowsze Androidy
-     * potrafią taki start po cichu zdusić — okno „Udostępnij" po prostu się
+     * potrafią taki start po cichu zdusić - okno „Udostępnij" po prostu się
      * nie pokazuje, bez żadnego wyjątku. Druk przeszedł tę samą drogę.
      */
 
     /**
-     * Podaje dalej sam tekst — u nas odnośnik do notatki w chmurze. Ta sama
+     * Podaje dalej sam tekst - u nas odnośnik do notatki w chmurze. Ta sama
      * droga co przy pliku (systemowe „Udostępnij"), tylko bez załącznika:
      * odnośnik wkleja się wprost w wiadomość.
      * Zwraca null, gdy się udało, albo zdanie dla człowieka, gdy nie.

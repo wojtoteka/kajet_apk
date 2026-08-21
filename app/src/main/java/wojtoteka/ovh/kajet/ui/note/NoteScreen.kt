@@ -256,7 +256,7 @@ fun NoteScreen(
 /*
  * Zdjęcie potrafi ważyć kilkanaście megabajtów. Odczyt z galerii idzie przez
  * dostawcę treści (czasem po sieci, gdy to dysk w chmurze), a odpowiedź z
- * aparatu wraca na wątek głównym — czytane stamtąd wprost, zamrażało ekran na
+ * aparatu wraca na wątek głównym - czytane stamtąd wprost, zamrażało ekran na
  * czas odczytu. Stąd te dwie funkcje: całe wejście-wyjście na wątku roboczym.
  */
 

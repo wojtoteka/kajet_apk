@@ -23,7 +23,7 @@ class KajetServerRunner(private val cloud: CloudCode) : CodeRunner {
       poprawienia.
 
       Python ma offline=true (Chaquopy na tablecie), ale na telefonie i tak leci
-      tu — RunnerRegistry wybierze lokalny runner, gdy jest zarejestrowany.
+      tu - RunnerRegistry wybierze lokalny runner, gdy jest zarejestrowany.
     */
     override fun supports(language: CodeLanguage): Boolean = language.runnable
 

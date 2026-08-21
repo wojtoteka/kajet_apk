@@ -64,7 +64,7 @@ class IndexTextTest {
 
     @Test
     fun `gwiazdka bez pary zostaje trescia, nie znika w polowie`() {
-        // 2 * 3 to mnożenie, a nie początek kursywy — treść ma przeżyć w całości.
+        // 2 * 3 to mnożenie, a nie początek kursywy - treść ma przeżyć w całości.
         assertEquals("wynik 2 * 3", previewOf("wynik 2 * 3"))
     }
 }

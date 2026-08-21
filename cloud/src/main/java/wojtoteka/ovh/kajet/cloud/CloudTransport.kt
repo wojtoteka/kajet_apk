@@ -1,7 +1,7 @@
 package wojtoteka.ovh.kajet.cloud
 
 /**
- * Rozmowy synchronizacji z serwerem — i nic więcej.
+ * Rozmowy synchronizacji z serwerem - i nic więcej.
  *
  * [CloudClient] umie też logować i uruchamiać kod; chmura notatek dotyka
  * serwera wyłącznie przez tę furtkę. Testy synchronizacji podstawiają tu

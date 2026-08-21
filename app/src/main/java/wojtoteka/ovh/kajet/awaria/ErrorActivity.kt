@@ -41,13 +41,13 @@ import wojtoteka.ovh.kajet.core.text.stringsFor
 import wojtoteka.ovh.kajet.core.text.systemLanguage
 
 /**
- * Ekran po awarii — zamiast czarnego ekranu, z którego wychodziło się tylko
+ * Ekran po awarii - zamiast czarnego ekranu, z którego wychodziło się tylko
  * ubiciem aplikacji.
  *
  * Działa w OSOBNYM procesie (`:blad` w manifeście): po nieobsłużonym wyjątku
  * wątek główny starego procesu jest już martwy, więc ekran w tym samym
  * procesie mógłby w ogóle się nie narysować. Z tego samego powodu nie wolno
- * tu dotykać [wojtoteka.ovh.kajet.AppContainer] — ten ekran ma wstać zawsze,
+ * tu dotykać [wojtoteka.ovh.kajet.AppContainer] - ten ekran ma wstać zawsze,
  * nawet gdy awaria siedzi właśnie w budowie kontenera.
  */
 class ErrorActivity : ComponentActivity() {
@@ -56,7 +56,7 @@ class ErrorActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         /*
-          Raport jest pokazany dopiero teraz — kiedy ten ekran naprawdę wstał.
+          Raport jest pokazany dopiero teraz - kiedy ten ekran naprawdę wstał.
 
           Odhaczenie musi siedzieć TUTAJ, a nie przy wywołaniu startActivity:
           zablokowany start z tła nie rzuca wyjątku, więc po stronie wołającego
@@ -73,7 +73,7 @@ class ErrorActivity : ComponentActivity() {
 
         setContent {
             // Ustawienia (a z nimi wybrany język i motyw) mogą być nieosiągalne
-            // po awarii — idziemy wprost za systemem, jak ekran rozruchu.
+            // po awarii - idziemy wprost za systemem, jak ekran rozruchu.
             val words = remember { stringsFor(AppLanguage.SYSTEM, systemLanguage()) }
             KajetTheme(darkTheme = isSystemInDarkTheme()) {
                 CompositionLocalProvider(LocalStrings provides words) {
@@ -88,7 +88,7 @@ class ErrorActivity : ComponentActivity() {
     }
 
     /**
-     * Podaje opis awarii dalej systemowym „Udostępnij" — pocztą, komunikatorem,
+     * Podaje opis awarii dalej systemowym „Udostępnij" - pocztą, komunikatorem,
      * czymkolwiek. Sam tekst, bez pliku: nie trzeba wtedy dostawcy plików,
      * który po awarii może być właśnie tym, co nie działa.
      */
@@ -116,7 +116,7 @@ class ErrorActivity : ComponentActivity() {
         private const val EXTRA_DETAILS = "szczegoly"
 
         /**
-         * [report] to gotowy opis z [CrashLog.report] — z wersją aplikacji,
+         * [report] to gotowy opis z [CrashLog.report] - z wersją aplikacji,
          * modelem urządzenia i nazwą wątku. Ten sam tekst idzie do pliku, na
          * ekran i do wysyłki, żeby zgłoszenie zgadzało się z tym, co widać.
          */
@@ -166,7 +166,7 @@ private fun ErrorScreen(
         )
 
         // Restart zostaje PrimaryButton. Kopiowanie i wysyłka są akcjami
-        // tekstowymi jak „Wyczyść" w konsoli i schodzą pod spód — dwa
+        // tekstowymi jak „Wyczyść" w konsoli i schodzą pod spód - dwa
         // SecondaryButton 48 dp w jednym rzędzie nie mieszczą się na telefonie.
         PrimaryButton(text = words.errorRestart, onClick = onRestart)
         Column(
@@ -184,7 +184,7 @@ private fun ErrorScreen(
 }
 
 /*
-  Akcja tekstowa, nie SecondaryButton. Ten ma 48 dp i obwódkę — w rzędzie
+  Akcja tekstowa, nie SecondaryButton. Ten ma 48 dp i obwódkę - w rzędzie
   obok „Uruchom ponownie" odcinał się od tła i na telefonie wychodził
   poza ekran. Tu ten sam krój co etykiety, bez ramki.
 */

@@ -13,9 +13,9 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
  * Rozpoznawanie kształtów dla narzędzia „Linijka i kształty".
  *
  * Kreska OTWARTA prostuje się jak dotąd ([Strokes.straighten]). Kreska
- * ZAMKNIĘTA — końce blisko siebie — zamienia się w równą figurę: koło,
+ * ZAMKNIĘTA - końce blisko siebie - zamienia się w równą figurę: koło,
  * trójkąt albo prostokąt. Zamknięty bazgroł, który nie przypomina żadnej
- * z nich, zostaje odręczny — lepszy własny rysunek niż zgadnięty kształt.
+ * z nich, zostaje odręczny - lepszy własny rysunek niż zgadnięty kształt.
  *
  * Wynik jest zwykłą łamaną w tym samym zapisie punktów co każda kreska,
  * więc gumka, lasso i eksport działają na nim bez żadnych zmian.
@@ -42,7 +42,7 @@ object Shapes {
 
     /**
      * Zgięcie, od którego róg jest naprawdę rogiem. Uproszczone koło też ma
-     * „wierzchołki", ale łagodne (~50 stopni) — trójkąt i prostokąt mają
+     * „wierzchołki", ale łagodne (~50 stopni) - trójkąt i prostokąt mają
      * wyraźne (od 60 wzwyż). Bez tego progu kwadrat wygrywałby test koła:
      * jego odległości od środka wahają się tylko o ~11%.
      */
@@ -61,7 +61,7 @@ object Shapes {
 
         if (!isClosed(xs, ys, length)) return Strokes.straighten(stroke)
 
-        // Najpierw wyraźne rogi, potem koło — w tej kolejności, bo kwadrat
+        // Najpierw wyraźne rogi, potem koło - w tej kolejności, bo kwadrat
         // jest „okrąglejszy", niż się wydaje, i wygrywałby test koła.
         val corners = corners(xs, ys)
         val crisp = corners.size in 3..4 && turnAngles(corners).all { it >= CRISP_TURN_DEG }
@@ -69,7 +69,7 @@ object Shapes {
             crisp && corners.size == 3 -> polygon(stroke, corners)
             crisp -> rectangleOrQuad(stroke, corners)
             circleness(xs, ys) < CIRCLE_ROUNDNESS -> circle(stroke, xs, ys)
-            // Zamknięta gwiazdka czy chmurka to nie figura — zostaje odręczna.
+            // Zamknięta gwiazdka czy chmurka to nie figura - zostaje odręczna.
             else -> stroke
         }
     }
@@ -89,7 +89,7 @@ object Shapes {
         return gap <= CLOSED_GAP_RATIO * length
     }
 
-    /** Rozrzut odległości od środka ciężkości podzielony przez średnią — 0 to idealne koło. */
+    /** Rozrzut odległości od środka ciężkości podzielony przez średnią - 0 to idealne koło. */
     internal fun circleness(xs: FloatArray, ys: FloatArray): Float {
         val cx = xs.average().toFloat()
         val cy = ys.average().toFloat()
@@ -107,7 +107,7 @@ object Shapes {
 
     // --- Rogi ---
 
-    /** Douglas–Peucker: indeksy punktów, które wyznaczają kształt łamanej. */
+    /** Douglas-Peucker: indeksy punktów, które wyznaczają kształt łamanej. */
     internal fun douglasPeucker(xs: FloatArray, ys: FloatArray, epsilon: Float): List<Int> {
         val keep = BooleanArray(xs.size)
         keep[0] = true
@@ -137,7 +137,7 @@ object Shapes {
 
     /**
      * Rogi zamkniętej kreski: uproszczenie łamanej, sklejenie końców w jeden
-     * róg i odrzucenie punktów, w których kreska prawie się nie zgina —
+     * róg i odrzucenie punktów, w których kreska prawie się nie zgina -
      * kreska zaczęta w środku boku nie ma tam przecież rogu.
      */
     internal fun corners(xs: FloatArray, ys: FloatArray): List<Pair<Float, Float>> {
@@ -154,7 +154,7 @@ object Shapes {
         val epsilon = SIMPLIFY_RATIO * hypot(maxX - minX, maxY - minY)
 
         val kept = douglasPeucker(xs, ys, epsilon)
-        // Początek i koniec to ten sam róg — kreska jest zamknięta.
+        // Początek i koniec to ten sam róg - kreska jest zamknięta.
         val cyclic = ArrayList<Pair<Float, Float>>(kept.size)
         val first = kept.first()
         val last = kept.last()
@@ -199,7 +199,7 @@ object Shapes {
         radius /= xs.size
 
         // Koło zaczyna się tam, gdzie zaczęła się kreska, i biegnie w tę samą
-        // stronę — pole ze znakiem mówi, czy rysowano zgodnie z zegarem.
+        // stronę - pole ze znakiem mówi, czy rysowano zgodnie z zegarem.
         val start = atan2(ys[0] - cy, xs[0] - cx)
         var area = 0f
         for (i in xs.indices) {
@@ -276,7 +276,7 @@ object Shapes {
         val (e2x, e2y) = edge(2)
         var theta = atan2(e0y - e2y, e0x - e2x)
 
-        // Snap do poziomu/pionu — w duchu snapu 45 stopni z linijki.
+        // Snap do poziomu/pionu - w duchu snapu 45 stopni z linijki.
         val degrees = Math.toDegrees(theta.toDouble()).toFloat()
         val snapped = round(degrees / 90f) * 90f
         if (abs(degrees - snapped) <= AXIS_SNAP_DEG) {
@@ -312,7 +312,7 @@ object Shapes {
 
     /**
      * Łamana w zapisie kreski: czas biegnie wzdłuż drogi, nacisk i pochylenie
-     * przechodzą płynnie od pierwszego do ostatniego punktu ręki — jak przy
+     * przechodzą płynnie od pierwszego do ostatniego punktu ręki - jak przy
      * prostowaniu linii.
      */
     private fun polylineStroke(source: InkStroke, xs: FloatArray, ys: FloatArray): InkStroke {

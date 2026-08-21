@@ -47,14 +47,14 @@ open class NoteViewModel(
 
     /*
       Czy serwer ma tę notatkę. „Zapisane" znaczy dysk; ta flaga to osobny
-      sygnał z kolejki i zapamiętanej wersji. null — nie ma konta, ikony
+      sygnał z kolejki i zapamiętanej wersji. null - nie ma konta, ikony
       chmury nie ma.
     */
     private val _inCloud = MutableStateFlow<Boolean?>(null)
     val inCloud: StateFlow<Boolean?> = _inCloud.asStateFlow()
 
     /*
-      Notatka zniknęła z dysku na polecenie serwera — ktoś skasował ją na
+      Notatka zniknęła z dysku na polecenie serwera - ktoś skasował ją na
       innym urządzeniu, kiedy tu była otwarta. Treść na ekranie wciąż jest
       w pamięci; ekran notatki pyta wtedy człowieka, czy zapisać ją jako nową,
       czy odrzucić. Bez pytania nie wolno ani jej po cichu wskrzesić (kasujący
@@ -63,13 +63,13 @@ open class NoteViewModel(
     private val _remotelyDeleted = MutableStateFlow(false)
     val remotelyDeleted: StateFlow<Boolean> = _remotelyDeleted.asStateFlow()
 
-    /** Człowiek wybrał „Odrzuć zmiany" — zamknięcie modelu nie zapisuje w tle. */
+    /** Człowiek wybrał „Odrzuć zmiany" - zamknięcie modelu nie zapisuje w tle. */
     private var discarded = false
 
     /*
       Czy ktoś tknął pole tytułu ręcznie.
 
-      Podpowiedź z treści włącza się przy PUSTYM tytule — a skasowanie
+      Podpowiedź z treści włącza się przy PUSTYM tytule - a skasowanie
       podpowiedzianego tytułu to właśnie pusty tytuł. Autozapis rusza ułamek
       sekundy później i wpisywał podpowiedź z powrotem, więc własnego tytułu
       nie dało się wpisać: pole samo wracało do starej nazwy.
@@ -83,7 +83,7 @@ open class NoteViewModel(
     /*
       Nasłuchy ustawień mają własne handlery. Bez nich wyjątek z odczytu
       ustawień szedł prosto do domyślnego handlera wątku, czyli ubijał całą
-      aplikację przy otwartej notatce — a chodzi tu tylko o spis kolorów i
+      aplikację przy otwartej notatce - a chodzi tu tylko o spis kolorów i
       stronę paska narzędzi.
     */
     val recentColors: StateFlow<List<Int>> = MutableStateFlow<List<Int>>(emptyList()).also { state ->
@@ -92,7 +92,7 @@ open class NoteViewModel(
         }
     }.asStateFlow()
 
-    /** Pasek narzędzi po prawej stronie — ustawienie dla leworęcznych. */
+    /** Pasek narzędzi po prawej stronie - ustawienie dla leworęcznych. */
     val toolbarOnRight: StateFlow<Boolean> = MutableStateFlow(false).also { state ->
         viewModelScope.launch(failureHandler("strona paska narzędzi")) {
             settings.settings.collect {
@@ -128,7 +128,7 @@ open class NoteViewModel(
     /**
      * Ostatnia siatka pod odczytem i zapisem notatki.
      *
-     * [load] i [save] łapią `Exception`, ale nie `Error` — brak pamięci przy
+     * [load] i [save] łapią `Exception`, ale nie `Error` - brak pamięci przy
      * wielkiej notatce przechodził obok nich i ubijał aplikację. Tu zatrzymuje
      * się wszystko i zamienia w napis na pasku zapisu.
      */
@@ -141,7 +141,7 @@ open class NoteViewModel(
         viewModelScope.launch(brokenNote) { load() }
 
         // Kasowanie przysłane z serwera dzieje się w tle, pod otwartym
-        // edytorem. Dopasowanie po ścieżce, z przedrostkiem — notatka potrafi
+        // edytorem. Dopasowanie po ścieżce, z przedrostkiem - notatka potrafi
         // zniknąć także razem z całym folderem skasowanym gdzie indziej.
         viewModelScope.launch(failureHandler("nasłuch kasowania notatki $path")) {
             repo.remotelyRemovedPaths.collect { removed ->
@@ -237,11 +237,11 @@ open class NoteViewModel(
     private suspend fun save() {
         val stored = _document.value ?: return
         if (_saveState.value == SaveState.SAVED) return
-        // Pliku już nie ma — kolejne zapisy tylko mieliłyby ten sam błąd.
+        // Pliku już nie ma - kolejne zapisy tylko mieliłyby ten sam błąd.
         // Los treści rozstrzyga okno wyboru na ekranie notatki, nie autozapis.
         if (_remotelyDeleted.value) return
         val document = withSuggestedTitle(stored)
-        // Podpowiedziany tytuł ma być widoczny w polu tytułu od razu —
+        // Podpowiedziany tytuł ma być widoczny w polu tytułu od razu -
         // wprost do stanu, nie przez markChanged, bo to by kręciło zapis
         // w kółko.
         if (document !== stored) _document.value = document
@@ -262,7 +262,7 @@ open class NoteViewModel(
             _saveState.value = SaveState.ERROR
             _error.value = e.message ?: words.noteSaveFailed
             // Droga zapasowa obok nasłuchu: zapis mógł paść właśnie dlatego,
-            // że notatkę przed chwilą skasowano gdzie indziej — także wtedy,
+            // że notatkę przed chwilą skasowano gdzie indziej - także wtedy,
             // gdy emisja umknęła (np. model wstał już po kasowaniu).
             if (runCatching { repo.entryVanished(path) }.getOrDefault(false)) {
                 _remotelyDeleted.value = true
@@ -271,7 +271,7 @@ open class NoteViewModel(
     }
 
     /**
-     * Treść z ekranu zapisuje się jako świeża notatka — wybór „Zapisz jako
+     * Treść z ekranu zapisuje się jako świeża notatka - wybór „Zapisz jako
      * nową" po kasowaniu na innym urządzeniu.
      *
      * Świeży identyfikator jest nieprzypadkowy: po starym został na serwerze
@@ -280,7 +280,7 @@ open class NoteViewModel(
      * o ile jeszcze tam leżą.
      *
      * Zwraca true po udanym zapisie; false zostawia treść na ekranie i zapala
-     * komunikat — człowiek może spróbować jeszcze raz.
+     * komunikat - człowiek może spróbować jeszcze raz.
      */
     suspend fun saveAsNew(): Boolean {
         val current = _document.value ?: return false
@@ -295,7 +295,7 @@ open class NoteViewModel(
             _error.value = words.saveAsNewFailed
             return false
         }
-        // Nowa notatka jest na dysku — stara wersja z pamięci nie ma już
+        // Nowa notatka jest na dysku - stara wersja z pamięci nie ma już
         // czego pilnować i nie może się zapisać w tle pod martwą ścieżką.
         discarded = true
         _saveState.value = SaveState.SAVED
@@ -309,13 +309,13 @@ open class NoteViewModel(
     }
 
     /**
-     * Tytuł podpowiedziany z treści — jak na stronie: tylko dopóki tytuł jest
+     * Tytuł podpowiedziany z treści - jak na stronie: tylko dopóki tytuł jest
      * wciąż podstawionym „Bez tytułu" (albo pusty). Pierwsza podpowiedź go
      * nadpisuje i mechanizm sam się kończy; ręcznie wpisanej nazwy nie rusza
      * nigdy. Notatka odręczna nie ma tekstu, więc naturalnie nic się nie dzieje.
      *
      * [titleTouched] wyłącza podpowiadanie od chwili, gdy ktoś sięgnie do pola
-     * tytułu — inaczej skasowanie podpowiedzi wracało przy najbliższym zapisie.
+     * tytułu - inaczej skasowanie podpowiedzi wracało przy najbliższym zapisie.
      */
     private fun withSuggestedTitle(document: NoteDocument): NoteDocument {
         if (titleTouched) return document
@@ -382,7 +382,7 @@ open class NoteViewModel(
     override fun onCleared() {
         // Ostatnia szansa na zapis. Zakres modelu już się kończy,
         // więc zapis idzie przez repozytorium w zakresie aplikacji.
-        // Tytuł podpowiada się i tutaj — dla notatki zamkniętej tuż po
+        // Tytuł podpowiada się i tutaj - dla notatki zamkniętej tuż po
         // napisaniu pierwszego zdania.
         //
         // Notatka skasowana zdalnie i treść odrzucona świadomie zostają

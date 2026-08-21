@@ -32,12 +32,12 @@ import wojtoteka.ovh.kajet.ui.library.KajetDialog
  *
  * Kiedy synchronizacja zabiera otwartą notatkę albo plik (kasowanie przyszło
  * z serwera), treść na ekranie wciąż jest w pamięci i nie może przepaść bez
- * pytania. Osłona rysuje okno wyboru — „Zapisz jako nową" / „Odrzuć zmiany" —
+ * pytania. Osłona rysuje okno wyboru - „Zapisz jako nową" / „Odrzuć zmiany" -
  * i oddaje powrót do podania edytorowi: zwykły, dopóki nie ma o co pytać;
  * przy niezapisanej treści skasowanej rzeczy najpierw okno.
  *
  * Okno da się odłożyć stuknięciem obok (można dalej pisać), ale wraca przy
- * każdej próbie wyjścia — wybór nie może zniknąć razem z treścią.
+ * każdej próbie wyjścia - wybór nie może zniknąć razem z treścią.
  */
 @Composable
 fun remoteDeletionGuard(
@@ -59,7 +59,7 @@ fun remoteDeletionGuard(
             Text(message, style = Kajet.type.body, color = Kajet.colors.text)
             // Dwa SecondaryButton 48 dp w jednym rzędzie nie mieszczą się
             // na telefonie. Zapis zostaje PrimaryButton; odrzucenie jest
-            // akcją tekstową jak „Wyczyść" w konsoli i schodzi pod spód —
+            // akcją tekstową jak „Wyczyść" w konsoli i schodzi pod spód -
             // treść nie znika bez tego wyboru.
             Column(
                 Modifier.fillMaxWidth(),
@@ -72,7 +72,7 @@ fun remoteDeletionGuard(
                             val saved = runCatching { onSaveAsNew() }.getOrDefault(false)
                             busy = false
                             // Nieudany zapis zostawia treść na ekranie razem
-                            // z komunikatem — okno zostaje, można ponowić.
+                            // z komunikatem - okno zostaje, można ponowić.
                             if (saved) onBack()
                         }
                     }
@@ -94,7 +94,7 @@ fun remoteDeletionGuard(
     }
 }
 
-/** To samo dla trzech edytorów notatek — stan czyta wprost z modelu. */
+/** To samo dla trzech edytorów notatek - stan czyta wprost z modelu. */
 @Composable
 fun remoteDeletionGuard(model: NoteViewModel, onBack: () -> Unit): () -> Unit {
     val words = LocalStrings.current

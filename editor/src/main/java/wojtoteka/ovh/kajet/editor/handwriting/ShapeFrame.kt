@@ -35,7 +35,7 @@ import kotlin.math.roundToInt
 /**
  * Ramka WZIĘTEGO kształtu: obrys, uchwyty rozmiaru, uchwyt obrotu i kosz.
  *
- * Sam kształt rysuje kartka ([StrokeCanvas]) pod atramentem — tutaj jest tylko
+ * Sam kształt rysuje kartka ([StrokeCanvas]) pod atramentem - tutaj jest tylko
  * to, czym się go rusza, i wyłącznie dla kształtu wskazanego stuknięciem.
  * Po kształtach niewziętych pisze się jak po papierze, tak samo jak przy
  * zdjęciach ([ImageFrameOnPage]).
@@ -92,7 +92,7 @@ private fun ShapeFrame(
     /*
       Gesty czytają kształt, przybliżenie i blokadę przez rememberUpdatedState.
       Blok `pointerInput` powstaje raz na kształt i pamiętałby wartości sprzed
-      pierwszego przesunięcia — drugie chwycenie ramki cofałoby ją wtedy tam,
+      pierwszego przesunięcia - drugie chwycenie ramki cofałoby ją wtedy tam,
       gdzie leżała na początku.
     */
     val current by rememberUpdatedState(shape)
@@ -113,7 +113,7 @@ private fun ShapeFrame(
     val handles = ShapeGeometry.handlePoints(shape)
     val handleCount = handles.size / 2
 
-    // Przesuwanie: całe pole ramki. Zajmuje rysik tylko na czas poprawek —
+    // Przesuwanie: całe pole ramki. Zajmuje rysik tylko na czas poprawek -
     // po odłożeniu kształtu kartka znowu przyjmuje pismo w tym miejscu.
     Box(
         Modifier
@@ -197,7 +197,7 @@ private fun ShapeFrame(
         )
     }
 
-    // Uchwyt obrotu stoi nad górną krawędzią — jak w każdym programie do
+    // Uchwyt obrotu stoi nad górną krawędzią - jak w każdym programie do
     // rysowania, więc nikt go nie musi szukać.
     val rotateAt = rotationHandlePoint(shape, handles)
     ShapeHandle(
@@ -322,7 +322,7 @@ private fun ShapeHandle(
 
 /**
  * Miejsce uchwytu obrotu w układzie strony: środek górnej krawędzi ramki,
- * a przy linii — środek między jej końcami.
+ * a przy linii - środek między jej końcami.
  */
 private fun rotationHandlePoint(shape: ShapeElement, handles: FloatArray): Pair<Float, Float> {
     if (handles.size < 4) return shape.centerX to shape.centerY

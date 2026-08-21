@@ -36,7 +36,7 @@ enum class FingerBehavior {
 /**
  * Strona, po której stoi pasek narzędzi w edytorach. Domyślnie lewa, ale
  * leworęczni trzymają dłoń właśnie nad lewą krawędzią i klikają pasek
- * łokciem zamiast palcem — dla nich jest prawa.
+ * łokciem zamiast palcem - dla nich jest prawa.
  */
 enum class ToolbarSide {
     LEFT,
@@ -86,7 +86,7 @@ data class RememberedShape(
 
 data class KajetSettings(
     val libraryFolder: String? = null,
-    // Rysik pisze, palec przesuwa kartkę — jak w zwykłym zeszycie. Ale na
+    // Rysik pisze, palec przesuwa kartkę - jak w zwykłym zeszycie. Ale na
     // urządzeniu bez rysika ta zasada oznaczałaby, że nie da się pisać wcale,
     // więc domyślna wartość zależy od sprzętu (patrz SettingsStore).
     val fingerBehavior: FingerBehavior = FingerBehavior.SCROLL,
@@ -132,7 +132,7 @@ class SettingsStore(private val context: Context) {
     companion object {
         /**
          * Osobny plik na adres drzewa SAF. Auto Backup go pomija
-         * (`kajet_saf.xml`) — uprawnienie i tak nie wraca, a sam adres
+         * (`kajet_saf.xml`) - uprawnienie i tak nie wraca, a sam adres
          * pozwala pominąć wybór folderu i pokazać pustą bibliotekę.
          */
         const val SAF_PREFS = "kajet_saf"
@@ -185,7 +185,7 @@ class SettingsStore(private val context: Context) {
       Ustawienia z dysku.
 
       `.catch` nie jest ozdobą. Cały ekran aplikacji czeka na PIERWSZĄ wartość
-      z tego strumienia — dopóki jej nie ma, rysuje się samo tło biurka, a to
+      z tego strumienia - dopóki jej nie ma, rysuje się samo tło biurka, a to
       w ciemnym motywie wygląda dokładnie jak czarny ekran, z którego nie ma
       wyjścia. Gdyby odczyt pliku poszedł źle (uszkodzony plik, brak miejsca,
       zabrany dostęp), strumień przewróciłby się bez jednej emisji i aplikacja
@@ -290,7 +290,7 @@ class SettingsStore(private val context: Context) {
     }
 
     /**
-     * Przepina gwiazdki po zmianie nazwy albo przeniesieniu — także dla
+     * Przepina gwiazdki po zmianie nazwy albo przeniesieniu - także dla
      * wszystkiego, co leżało w przenoszonym folderze.
      */
     suspend fun moveFavoriteFiles(oldPath: String, newPath: String) {
@@ -331,7 +331,7 @@ class SettingsStore(private val context: Context) {
 
     /**
      * Przenosi adres z DataStore (kiedyś backupowany) do pliku pomijanego
-     * przez kopię zapasową. Nie wołać z wnętrza [settings] — `edit` w trakcie
+     * przez kopię zapasową. Nie wołać z wnętrza [settings] - `edit` w trakcie
      * odczytu tego samego magazynu potrafi się zaciąć.
      */
     suspend fun migrateLibraryFolderOutOfBackup() {

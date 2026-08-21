@@ -62,15 +62,15 @@ fun ItemRow(
     /** Długie przytrzymanie. Bez tego robi to samo, co trzy kropki. */
     onLongPress: (() -> Unit)? = null,
     onFavourite: (() -> Unit)? = null,
-    /** Wysyłka tej notatki wyczerpała próby — patrz [StuckNotes]. */
+    /** Wysyłka tej notatki wyczerpała próby - patrz [StuckNotes]. */
     stuck: Boolean = false,
     /*
-      Czy ten wiersz jest zaznaczony — albo null, kiedy nikt niczego nie
+      Czy ten wiersz jest zaznaczony - albo null, kiedy nikt niczego nie
       zaznacza.
 
       W trybie zaznaczania gwiazdka i trzy kropki schodzą z wiersza. Gdyby
       zostały, dotknięcie skrajem palca robiłoby coś zupełnie innego, niż
-      wygląda — a wiersz w tym trybie ma znaczyć jedno: zaznacz albo odznacz.
+      wygląda - a wiersz w tym trybie ma znaczyć jedno: zaznacz albo odznacz.
     */
     selected: Boolean? = null,
 ) {
@@ -145,7 +145,7 @@ fun ItemRow(
                   Plik z kodem: język i data ostatniej zmiany w jednym wierszu.
                   Data stoi przy każdej notatce, a przy plikach jej brakowało.
                   Było tam za to zdanie o tym, że HTML ma podgląd strony albo
-                  że program działa bez internetu — spis notatek nie jest od
+                  że program działa bez internetu - spis notatek nie jest od
                   takich objaśnień. To samo, i dokładniej, mówi nagłówek
                   otwartego pliku.
                 */
@@ -171,14 +171,14 @@ fun ItemRow(
 
             // Drobna linijka, nie ostrzeżenie na czerwono: notatka działa
             // dalej, tyle że jej zmiany nie doszły na serwer. Po zbiorczy
-            // sygnał i przycisk ponowienia — pasek nad spisem.
+            // sygnał i przycisk ponowienia - pasek nad spisem.
             if (stuck) NotUploadedTag()
         }
 
         // Gwiazdka jest osobnym przyciskiem, a nie samą ikoną. Wcześniej
         // dotknięcie jej otwierało notatkę, bo cały wiersz był klikalny.
         //
-        // Plik z kodem dostaje ją tak samo jak notatka — na stronie zawsze ją
+        // Plik z kodem dostaje ją tak samo jak notatka - na stronie zawsze ją
         // miał, a w aplikacji nie było czym oznaczyć ani pliku HTML, ani
         // Pythona. Folder zostaje bez gwiazdki: ulubione są o treści.
         if (selected == null) {
@@ -268,7 +268,7 @@ private fun NotUploadedTag() {
     ) {
         Icon(
             imageVector = KajetIcons.Offline,
-            // Opis dla czytnika ekranu niesie całe zdanie — samo „nie wysłano"
+            // Opis dla czytnika ekranu niesie całe zdanie - samo „nie wysłano"
             // wyrwane z wiersza nie mówi, o co chodzi.
             contentDescription = words.notUploadedAbout,
             tint = Kajet.colors.muted,
@@ -333,7 +333,7 @@ private fun RowMark(item: LibraryItem) {
 private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
     val words = LocalStrings.current
     var strokes by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<InkStroke>>(emptyList()) }
-    // Kształty idą do podglądu jako gotowe łamane — miniatura nie zna ich geometrii.
+    // Kształty idą do podglądu jako gotowe łamane - miniatura nie zna ich geometrii.
     var outlines by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<FloatArray>>(emptyList()) }
 
     LaunchedEffect(item.documentUri, item.updatedAt) {

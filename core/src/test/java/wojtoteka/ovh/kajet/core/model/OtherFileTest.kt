@@ -25,7 +25,7 @@ class OtherFileTest {
         assertThat(OtherFileKind.of("notatki.md")).isEqualTo(OtherFileKind.TEXT)
         assertThat(OtherFileKind.of("dane.json")).isEqualTo(OtherFileKind.TEXT)
         assertThat(OtherFileKind.of("ustawienia.yaml")).isEqualTo(OtherFileKind.TEXT)
-        // .txt jest PLAIN_TEXT w spisie języków — tu też tekst, nie binarka.
+        // .txt jest PLAIN_TEXT w spisie języków - tu też tekst, nie binarka.
         assertThat(OtherFileKind.of("dziennik.txt")).isEqualTo(OtherFileKind.TEXT)
         assertThat(OtherFileKind.of("program.py")).isEqualTo(OtherFileKind.TEXT)
     }

@@ -39,12 +39,12 @@ import wojtoteka.ovh.kajet.ui.library.KajetDialog
  * Komunikat o nowej wersji Kajetu.
  *
  * Wisi nad całą nawigacją, więc pokazuje się niezależnie od tego, na którym
- * ekranie zaczyna się praca — także przy pierwszym uruchomieniu, gdy stoi się
+ * ekranie zaczyna się praca - także przy pierwszym uruchomieniu, gdy stoi się
  * jeszcze na wyborze katalogu.
  *
  * Sprawdzenie idzie w tle i nic nie wstrzymuje: dopóki nie ma odpowiedzi,
  * ekran jest zwyczajny. Gdy odpowiedzi nie będzie w ogóle (brak sieci, martwy
- * serwer), nie dzieje się nic i nikt się o tym nie dowiaduje — to funkcja
+ * serwer), nie dzieje się nic i nikt się o tym nie dowiaduje - to funkcja
  * poboczna, nie powód do straszenia człowieka błędem.
  *
  * Zamknięcie na „Później", przyciskiem wstecz i dotknięciem obok znaczy to samo:
@@ -139,7 +139,7 @@ fun UpdateNotice() {
                             null
                         }
 
-                        // Strona się nie otworzyła, więc komunikat ZOSTAJE —
+                        // Strona się nie otworzyła, więc komunikat ZOSTAJE -
                         // inaczej człowiek zostałby z niczym i bez wyjaśnienia.
                         LinkOutcome.NO_NETWORK -> words.documentNoNetwork
                         LinkOutcome.NO_BROWSER -> words.documentNoBrowser
@@ -154,7 +154,7 @@ fun UpdateNotice() {
 /**
  * Data wystawienia po ludzku: „2 sierpnia 2026" zamiast „2026-08-02".
  *
- * Starszy serwer daty nie podaje, a nieczytelnej nie ma po co pokazywać —
+ * Starszy serwer daty nie podaje, a nieczytelnej nie ma po co pokazywać -
  * w obu przypadkach wypada z wiersza razem ze swoim oddzielaczem.
  */
 private fun readableDate(iso: String?, words: Strings): String {

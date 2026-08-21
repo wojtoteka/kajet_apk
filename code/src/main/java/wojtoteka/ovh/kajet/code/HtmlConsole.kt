@@ -40,14 +40,14 @@ import wojtoteka.ovh.kajet.core.text.codeConsoleFull
 /**
  * Konsola podglądu strony.
  *
- * W notatce „JavaScript" stoi Node — bez `document` i bez `alert` — więc szkolne
+ * W notatce „JavaScript" stoi Node - bez `document` i bez `alert` - więc szkolne
  * zadania z JavaScriptu robi się w notatce HTML. Na tablecie nie ma jak otworzyć
  * narzędzi przeglądarki, a bez nich `console.log` wpada w próżnię i zadania
  * z pętlą albo tablicą nie da się sprawdzić inaczej niż przez wypisywanie
  * wszystkiego do treści strony.
  *
  * Nic tu nie wstrzykujemy w cudzą stronę. WebView oddaje te wiersze sam, przez
- * [android.webkit.WebChromeClient.onConsoleMessage] — razem z błędami skryptów
+ * [android.webkit.WebChromeClient.onConsoleMessage] - razem z błędami skryptów
  * i nieobsłużonymi obietnicami, których żaden dopisany `console.log` i tak by
  * nie złapał.
  */
@@ -77,7 +77,7 @@ class HtmlConsoleState {
     }
 
     /**
-     * Wpis, który nie przyszedł z `console.log` — na razie tylko okna
+     * Wpis, który nie przyszedł z `console.log` - na razie tylko okna
      * `alert`, `confirm` i `prompt`, przechwycone zamiast pokazane.
      */
     fun addRaw(text: String) {
@@ -89,7 +89,7 @@ class HtmlConsoleState {
     }
 
     /**
-     * Czyszczenie. Robi to i przycisk, i każde nowe ładowanie strony — podgląd
+     * Czyszczenie. Robi to i przycisk, i każde nowe ładowanie strony - podgląd
      * odświeża się po każdej literze, więc bez tego zostałaby po nim mieszanka
      * wpisów z dziesiątek kolejnych wersji tej samej strony.
      */
@@ -103,7 +103,7 @@ class HtmlConsoleState {
          * Granica zbierania.
          *
          * Pętla z console.log wypisuje tysiące wierszy szybciej, niż da się je
-         * narysować — bez tej granicy podgląd zwieszał się razem z edytorem,
+         * narysować - bez tej granicy podgląd zwieszał się razem z edytorem,
          * a wiersz numer cztery tysiące i tak nikomu nic nie mówi.
          */
         const val LIMIT = 300
@@ -113,7 +113,7 @@ class HtmlConsoleState {
 /**
  * Jeden wiersz konsoli.
  *
- * [mark] jest po to, żeby rodzaj wpisu było widać BEZ koloru — na jasnym
+ * [mark] jest po to, żeby rodzaj wpisu było widać BEZ koloru - na jasnym
  * ekranie w słońcu i przy niedowidzeniu barw ostrzeżenie odróżnia się znakiem,
  * a nie odcieniem.
  *
@@ -144,7 +144,7 @@ data class ConsoleLine(
                 /*
                   Numer wiersza dokładamy tylko przy błędach i ostrzeżeniach.
                   Zwykły console.log też go niesie, ale przy pięćdziesięciu
-                  wypisanych liczbach pod rząd jest wyłącznie szumem — szuka
+                  wypisanych liczbach pod rząd jest wyłącznie szumem - szuka
                   się miejsca w kodzie wtedy, gdy coś poszło nie tak.
                 */
                 line = if (error || warning) message.lineNumber() else 0,
@@ -157,7 +157,7 @@ data class ConsoleLine(
 fun rememberHtmlConsole(): HtmlConsoleState = remember { HtmlConsoleState() }
 
 /**
- * Konsola pod podglądem — stoi dokładnie tam, gdzie przy pozostałych językach
+ * Konsola pod podglądem - stoi dokładnie tam, gdzie przy pozostałych językach
  * stoi wynik uruchomienia.
  */
 @Composable
@@ -190,7 +190,7 @@ fun HtmlConsolePanel(state: HtmlConsoleState, modifier: Modifier = Modifier) {
             Text(words.codeConsole, style = Kajet.type.label, color = colors.text)
             Spacer(Modifier.weight(1f))
             /*
-              Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę —
+              Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę -
               w rzędzie 44 dp odcinał się od tła desk jak osobny, niedopasowany
               przycisk. Tu ten sam krój i gęstość co „Konsola", bez ramki.
             */

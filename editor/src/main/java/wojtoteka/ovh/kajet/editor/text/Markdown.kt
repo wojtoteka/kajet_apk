@@ -178,8 +178,8 @@ object Markdown {
         // nie zamieniły się w widoczny napis z nawiasami trójkątnymi.
         //
         // W kółko aż do skutku: wzorce łapią najbardziej wewnętrzny znacznik
-        // (treść bez „<"), więc zapis zagnieżdżony — kolor w rozmiarze, kolor
-        // w podkreśleniu — rozwija się od środka, po jednym opakowaniu na
+        // (treść bez „<"), więc zapis zagnieżdżony - kolor w rozmiarze, kolor
+        // w podkreśleniu - rozwija się od środka, po jednym opakowaniu na
         // okrążenie. Bez pętli zewnętrzny znacznik straszył w podglądzie
         // jako goły HTML.
         val hidden = mutableListOf<String>()
@@ -204,7 +204,7 @@ object Markdown {
             }
         } while (prepared != previous)
 
-        // Ślady zepsutego zapisu — znacznik bez pary — nie mają straszyć
+        // Ślady zepsutego zapisu - znacznik bez pary - nie mają straszyć
         // w podglądzie: sam znacznik znika, treść zostaje.
         prepared = prepared.replace(strayOpening, "").replace("</span>", "")
 

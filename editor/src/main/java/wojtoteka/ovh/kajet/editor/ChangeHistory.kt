@@ -156,7 +156,7 @@ class ChangeHistory(private val maxSteps: Int = 120) {
 
 /**
  * Dwie zmiany tego samego kształtu pod rząd składają się w jedną, o ile żadna
- * nic nie dokłada ani nie kasuje — dopisanie kształtu zostaje osobnym krokiem,
+ * nic nie dokłada ani nie kasuje - dopisanie kształtu zostaje osobnym krokiem,
  * bo cofnięcie „przesunięcia" nie może kasować całego kształtu.
  */
 private fun ShapeChange.mergedWith(next: Change): ShapeChange? {

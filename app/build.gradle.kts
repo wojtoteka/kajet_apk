@@ -39,7 +39,7 @@ android {
         release {
             // Bez odchudzania R8. Plik reguł był pustym szablonem, a R8 zmieniał
             // nazwy klas, które kotlinx.serialization i natywny silnik kreski
-            // (androidx.ink) odnajdują po nazwie — wydanie release psuło
+            // (androidx.ink) odnajdują po nazwie - wydanie release psuło
             // logowanie, synchronizację i pisanie, choć debug działał.
             // Kilkanaście megabajtów więcej to uczciwa cena za działającą całość.
             isMinifyEnabled = false

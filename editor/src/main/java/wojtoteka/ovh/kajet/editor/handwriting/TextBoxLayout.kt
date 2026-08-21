@@ -6,11 +6,11 @@ package wojtoteka.ovh.kajet.editor.handwriting
  * Ramka, glify i wyściółka muszą iść z zoomem w tej samej proporcji.
  * Samo `fontSize * zoom` bez wysokości wiersza w em zostawia stałe 24.sp
  * z kroju body (Material scala nieustawione pola), a sztywne 4.dp
- * wyściółki zjada litery przy oddalaniu — ten sam błąd co węzły mapy myśli.
+ * wyściółki zjada litery przy oddalaniu - ten sam błąd co węzły mapy myśli.
  */
 object TextBoxLayout {
 
-    /** `line-height: 1.3` — jak węzły mapy myśli, niezależnie od zooma. */
+    /** `line-height: 1.3` - jak węzły mapy myśli, niezależnie od zooma. */
     const val LINE_RATIO = 1.3f
 
     /** Wyściółka pola przy 100%, w dp. Przy zoomie mnoży się razem z ramką. */

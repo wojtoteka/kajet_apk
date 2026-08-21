@@ -14,7 +14,7 @@ sealed interface Block {
     ) : Block
 
     /**
-     * Tabelka. Pierwszy wiersz to nagłówek — tak samo czyta ją markdown
+     * Tabelka. Pierwszy wiersz to nagłówek - tak samo czyta ją markdown
      * i tak samo pokazuje strona. W pliku zostaje zwykłym zapisem
      * markdownu (`| Kolumna | Kolumna |`), więc nic się nie zmienia ani
      * dla serwera, ani dla eksportu.
@@ -35,9 +35,9 @@ sealed interface Block {
         /**
          * Ile szerokości notatki zajmuje zdjęcie, od 0.01 do 1.
          *
-         * Kanoniczny zapis to `![opis|60%](assets/plik.png)` — tak samo
+         * Kanoniczny zapis to `![opis|60%](assets/plik.png)` - tak samo
          * na stronie. Stary zapis z tabletu, `![opis](assets/plik.png "60%")`,
-         * nadal czytamy. Przy zapisie ściągamy do 20–100%, jak serwer.
+         * nadal czytamy. Przy zapisie ściągamy do 20-100%, jak serwer.
          */
         val width: Float = FULL_WIDTH,
     ) : Block {
@@ -52,7 +52,7 @@ sealed interface Block {
     companion object {
         const val ATTACHMENT_PREFIX = "assets/"
         const val FULL_WIDTH = 1f
-        /** Najmniejsza szerokość przy zapisie i suwaku — ten sam próg co serwer. */
+        /** Najmniejsza szerokość przy zapisie i suwaku - ten sam próg co serwer. */
         const val SMALLEST_WIDTH = 0.2f
     }
 }
@@ -73,7 +73,7 @@ object Blocks {
     /** Znacznik zadania dokładany przez pasek narzędzi. */
     const val TASK_MARKER = "- [ ] "
 
-    /** Czy wiersz jest zadaniem — czyli czy zmieni budowę notatki. */
+    /** Czy wiersz jest zadaniem - czyli czy zmieni budowę notatki. */
     fun isTaskLine(line: String): Boolean = taskOnly.matches(line)
 
     /** Sama treść zadania, bez kwadracika. */
@@ -83,7 +83,7 @@ object Blocks {
     private val tableRow = Regex("""^\s*\|(.*)\|\s*$""")
 
     /**
-     * Wiersz z kreskami pod nagłówkiem — sama składnia, nie treść. Myślnik
+     * Wiersz z kreskami pod nagłówkiem - sama składnia, nie treść. Myślnik
      * musi w nim stać: bez tego pusty wiersz „|  |  |" też wyglądałby jak
      * kreski i znikałby z tabelki.
      */
@@ -122,7 +122,7 @@ object Blocks {
 
             // Tabelka: kolejne wiersze z kreskami zbierają się w jeden blok,
             // żeby dało się ją pokazać jako tabelkę, a nie jako wiersze pełne
-            // kresek. Wiersz z myślnikami to sama składnia — nie treść.
+            // kresek. Wiersz z myślnikami to sama składnia - nie treść.
             if (!inCode && tableRow.matches(line)) {
                 closeText()
                 val rows = mutableListOf<List<String>>()
@@ -262,7 +262,7 @@ object Blocks {
         if (block is Block.Table && block.key == key) change(block) else block
     }
 
-    /** Wyrównuje wiersze do tej samej liczby kolumn — tabelka ma być prostokątem. */
+    /** Wyrównuje wiersze do tej samej liczby kolumn - tabelka ma być prostokątem. */
     private fun squared(rows: List<List<String>>): List<List<String>> {
         val columns = (rows.maxOfOrNull { it.size } ?: 1).coerceAtLeast(1)
         return rows.map { row -> List(columns) { row.getOrNull(it).orEmpty() } }
@@ -371,7 +371,7 @@ object Blocks {
      *
      * Nagłówek, cytat i punkt to budowa wiersza, a nie format fragmentu:
      * doklejone do treści zadania dawały „- [ ] > cytat", czyli zadanie ze
-     * znacznikiem w środku. Wiersz może być albo zadaniem, albo cytatem —
+     * znacznikiem w środku. Wiersz może być albo zadaniem, albo cytatem -
      * pusty [marker] robi z zadania zwykły akapit.
      */
     fun taskToLine(blocks: List<Block>, key: String, marker: String): Split? {
@@ -388,7 +388,7 @@ object Blocks {
     /**
      * Miejsce do pisania na końcu notatki. Kiedy ostatni blok jest akapitem,
      * wystarczy w nim stanąć; pod listą, zdjęciem albo tabelką dokładamy pusty
-     * akapit. Do pliku on nie trafia — [join] zdejmuje puste akapity z końca.
+     * akapit. Do pliku on nie trafia - [join] zdejmuje puste akapity z końca.
      */
     fun appendParagraph(blocks: List<Block>): Split {
         val last = blocks.lastOrNull()

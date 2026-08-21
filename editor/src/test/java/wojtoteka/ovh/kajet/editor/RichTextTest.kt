@@ -105,7 +105,7 @@ class RichTextTest {
         assertThat(model.spans).containsExactly(FormatSpan(5, 12, SpanType.CODE))
         assertThat(model.toMarkdown()).isEqualTo("uzyj `println` tutaj")
 
-        // W środku kodu gwiazdki nic nie znaczą — treść zostaje znak w znak.
+        // W środku kodu gwiazdki nic nie znaczą - treść zostaje znak w znak.
         val code = RichText.parse("`**to jest kod**`")
         assertThat(code.text).isEqualTo("**to jest kod**")
         assertThat(code.spans).containsExactly(FormatSpan(0, 15, SpanType.CODE))
@@ -128,7 +128,7 @@ class RichTextTest {
 
     @Test
     fun `kursywa dziala takze w srodku slowa i przy spacji`() {
-        // „Al*a ma k*ota" — dawniej gwiazdki wychodziły na wierzch, bo przed
+        // „Al*a ma k*ota" - dawniej gwiazdki wychodziły na wierzch, bo przed
         // otwierającą stała litera.
         val glued = RichText.parse("Al*a ma k*ota")
         assertThat(glued.text).isEqualTo("Ala ma kota")
@@ -277,7 +277,7 @@ class RichTextTest {
         val model = RichText.parse(text)
 
         // Grawisy schodzą jako znacznik kodu, ale gwiazdki w środku zostają
-        // treścią — pogrubienia z nich nie ma i zapis wraca bez zmian.
+        // treścią - pogrubienia z nich nie ma i zapis wraca bez zmian.
         assertThat(model.spans.map { it.type }).containsExactly(SpanType.CODE)
         assertThat(model.toMarkdown()).isEqualTo(text)
     }

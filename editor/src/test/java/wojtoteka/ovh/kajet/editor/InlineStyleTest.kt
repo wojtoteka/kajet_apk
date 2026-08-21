@@ -188,14 +188,14 @@ class InlineStyleTest {
 
     @Test
     fun `zagniezdzone znaczniki nie pokazuja golego HTML-a`() {
-        // Kanoniczny zapis koloru z rozmiarem — i jego odwrotność ze starych notatek.
+        // Kanoniczny zapis koloru z rozmiarem - i jego odwrotność ze starych notatek.
         assertThat(
             shown("""<span style="font-size:21px"><span style="color:#665222">x</span></span>"""),
         ).isEqualTo("x")
         assertThat(
             shown("""<span style="color:#665222"><span style="font-size:21px">x</span></span>"""),
         ).isEqualTo("x")
-        // Zepsuty zapis kolor w kolorze — dokładnie to straszyło w notatkach.
+        // Zepsuty zapis kolor w kolorze - dokładnie to straszyło w notatkach.
         assertThat(
             shown("""<span style="color:#111111"><span style="color:#665222">x</span></span>"""),
         ).isEqualTo("x")
@@ -282,7 +282,7 @@ class InlineStyleTest {
 
     @Test
     fun `wzor w jednym wierszu zostaje tresci`() {
-        // „$$x$$" to nie blok, tylko zapis w wierszu — nie ma czego chować.
+        // „$$x$$" to nie blok, tylko zapis w wierszu - nie ma czego chować.
         val line = "wzor \$\$x\$\$ w zdaniu"
         assertThat(shown(line)).isEqualTo(line)
     }

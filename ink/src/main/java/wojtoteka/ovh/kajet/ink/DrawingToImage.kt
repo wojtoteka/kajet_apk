@@ -29,7 +29,7 @@ object DrawingToImage {
         val renderer = CanvasStrokeRenderer.create()
         val matrix = Matrix().apply { setScale(density, density) }
         // Renderer nie nakłada macierzy na canvas, dostaje ją tylko do jakości
-        // teselacji — skalę trzeba nałożyć samemu, inaczej rysunek ląduje
+        // teselacji - skalę trzeba nałożyć samemu, inaczej rysunek ląduje
         // pomniejszony w rogu bitmapy.
         canvas.save()
         canvas.concat(matrix)

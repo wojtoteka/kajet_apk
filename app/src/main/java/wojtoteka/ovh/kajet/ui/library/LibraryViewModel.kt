@@ -73,7 +73,7 @@ data class TreeNode(
 /*
   [saved] przeżywa śmierć procesu.
 
-  System potrafi ubić Kajet zwinięty do tła — pamięć na telefonie jest
+  System potrafi ubić Kajet zwinięty do tła - pamięć na telefonie jest
   potrzebna komuś innemu. Po powrocie ekran budował się od zera: biblioteka
   wracała do korzenia, otwarte foldery się zwijały, a wpisane szukanie znikało.
   Wyglądało to na zgubioną robotę, choć na dysku nic nie ubyło. Te cztery
@@ -162,7 +162,7 @@ class LibraryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     // Zamknięty pasek zbiorczy zostaje zamknięty, dopóki utknięte notatki są
-    // te same. Kiedy dojdzie następna, pasek wraca — inaczej jedno zamknięcie
+    // te same. Kiedy dojdzie następna, pasek wraca - inaczej jedno zamknięcie
     // zagłuszałoby wszystko, co utknie później.
     private val _stuckNoticeHidden = MutableStateFlow<Set<String>>(emptySet())
 
@@ -186,7 +186,7 @@ class LibraryViewModel(
     init {
         // Drzewo folderów po lewej. Bez handlera jeden nieczytelny folder
         // przewracał tę korutynę, a wyjątek szedł dalej i zabierał ze sobą całą
-        // aplikację — zamiast po prostu zostawić drzewo takim, jakie było.
+        // aplikację - zamiast po prostu zostawić drzewo takim, jakie było.
         viewModelScope.launch(failureHandler("drzewo folderów") { _error.value = it.message }) {
             combine(_expanded, content) { expanded, _ -> expanded }.collect { expanded ->
                 _tree.value = buildTree(expanded)
@@ -222,7 +222,7 @@ class LibraryViewModel(
 
     // Zmiana miejsca kończy zaznaczanie. Zaznaczone ścieżki zostają w innym
     // folderze, więc pasek z licznikiem mówiłby o wpisach, których na ekranie
-    // już nie widać — a to jest gotowy przepis na skasowanie nie tego.
+    // już nie widać - a to jest gotowy przepis na skasowanie nie tego.
 
     fun goTo(path: String) {
         stopSelecting()
@@ -317,7 +317,7 @@ class LibraryViewModel(
     /**
      * Wyrzuca zaznaczone do kosza, jeden po drugim.
      *
-     * Nieudany wpis nie zatrzymuje reszty — przy dwudziestu notatkach jeden
+     * Nieudany wpis nie zatrzymuje reszty - przy dwudziestu notatkach jeden
      * plik zajęty przez inny program nie ma prawa unieważnić całej roboty.
      * Ile ich było, mówi zdanie na końcu.
      */
@@ -355,7 +355,7 @@ class LibraryViewModel(
      *
      * Notatka zaznaczona razem z folderem, w którym leży, zniknie i tak razem
      * z nim. Ruszanie jej osobno oznaczałoby robotę pod ścieżką, której już
-     * nie ma — czyli błąd tam, gdzie wszystko poszło dobrze.
+     * nie ma - czyli błąd tam, gdzie wszystko poszło dobrze.
      */
     private fun topmost(paths: Set<String>): List<String> = paths
         .filterNot { path -> paths.any { it != path && path.startsWith("$it/") } }
@@ -503,7 +503,7 @@ class LibraryViewModel(
     }
 
     private fun inBackground(block: suspend () -> Unit) {
-        // `try` łapie Exception, handler dokłada resztę — z brakiem pamięci
+        // `try` łapie Exception, handler dokłada resztę - z brakiem pamięci
         // przy eksporcie wielkiego folderu włącznie.
         viewModelScope.launch(
             failureHandler("działanie w bibliotece") { failure ->
@@ -538,7 +538,7 @@ class LibraryViewModel(
         private val stuck: () -> StuckNotes? = { null },
     ) : ViewModelProvider.Factory {
         // Wariant z CreationExtras, bo tylko stamtąd da się wziąć
-        // SavedStateHandle — czyli stan, który przeżywa śmierć procesu.
+        // SavedStateHandle - czyli stan, który przeżywa śmierć procesu.
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
             LibraryViewModel(repo, export, extras.createSavedStateHandle(), stuck) as T

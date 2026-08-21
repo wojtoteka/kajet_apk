@@ -10,17 +10,17 @@ import java.net.URL
 /**
  * Pytanie do serwera, czy nie ma nowszej wersji Kajetu.
  *
- * Bez konta i bez tokenu — punkt `GET /api/v1/app/latest` odpowiada każdemu.
+ * Bez konta i bez tokenu - punkt `GET /api/v1/app/latest` odpowiada każdemu.
  * Sprawdzenie ma działać także wtedy, gdy nikt się jeszcze nie zalogował, bo
  * plik ze stroną do pobrania i tak stoi otworem.
  *
  * Celowo nie dotyka [CloudClient]: tamten wymaga zalogowania przy większości
  * zapytań i czeka na odpowiedź do minuty, a to jest funkcja poboczna, która nie
- * ma prawa niczego opóźnić. Stąd goły [HttpURLConnection] i pięć sekund — tak
+ * ma prawa niczego opóźnić. Stąd goły [HttpURLConnection] i pięć sekund - tak
  * samo jak przy wysyłce raportów o awariach ([CrashReporter]).
  *
  * ŻADNA droga stąd nie prowadzi do wyjątku ani do komunikatu o błędzie. Brak
- * sieci, martwy serwer, odpowiedź nie do odczytania — wszystko to znaczy tyle
+ * sieci, martwy serwer, odpowiedź nie do odczytania - wszystko to znaczy tyle
  * samo: [Outcome.Unknown], czyli nic się nie dzieje i człowiek pracuje dalej.
  * Jedynym miejscem, które mówi o niepowodzeniu wprost, są ustawienia, bo tam
  * człowiek sam o to poprosił.
@@ -52,7 +52,7 @@ object UpdateCheck {
      * Odpowiedź serwera ma więcej pól (skrót pliku, jego rozmiar); tu zostają
      * te, które są do czegoś potrzebne. `ignoreUnknownKeys` sprawia, że reszta
      * nie przeszkadza, a starszy serwer bez `minSupportedRelease` też się
-     * odczyta — pole ma wartość domyślną.
+     * odczyta - pole ma wartość domyślną.
      */
     @Serializable
     data class Release(
@@ -66,7 +66,7 @@ object UpdateCheck {
         val releaseDate: String? = null,
         /*
           Najstarsze wydanie obsługiwane przez serwer. Odczytujemy je i na razie
-          NIC z nim nie robimy — to zapas na aktualizację obowiązkową, gdyby
+          NIC z nim nie robimy - to zapas na aktualizację obowiązkową, gdyby
           kiedyś była potrzebna. Wymuszanie czegokolwiek wymaga osobnej decyzji,
           nie samego odczytania liczby.
         */
@@ -85,7 +85,7 @@ object UpdateCheck {
     /**
      * Wydanie ogłoszone w tym uruchomieniu. Zapytanie idzie raz i zostaje.
      *
-     * Znacznik żyje tyle, co proces aplikacji, więc powrót z tła go nie zeruje —
+     * Znacznik żyje tyle, co proces aplikacji, więc powrót z tła go nie zeruje -
      * a o to właśnie chodzi: komunikat ma wyskakiwać raz na zimny start, nie za
      * każdym razem, gdy ktoś przełączy się na Kajet z innej aplikacji.
      */
@@ -96,7 +96,7 @@ object UpdateCheck {
      * Czy człowiek zamknął już komunikat.
      *
      * Osobno od [announced], i to nie jest drobiazg. Gdyby samo pokazanie
-     * zamykało sprawę, komunikat przepadałby przy każdym odtworzeniu ekranu —
+     * zamykało sprawę, komunikat przepadałby przy każdym odtworzeniu ekranu -
      * a system potrafi odtworzyć aktywność choćby po zmianie wielkości pisma
      * czy przy włączonym „nie zachowuj aktywności". Wtedy człowiek widziałby
      * mignięcie i nic więcej. Teraz komunikat wraca dopóty, dopóki nie zostanie
@@ -118,7 +118,7 @@ object UpdateCheck {
 
     /**
      * Wynik sprawdzenia. Zapamiętany wynik oddaje bez ruszania sieci, chyba że
-     * [force] — tak robi przycisk w ustawieniach, bo tam człowiek prosi
+     * [force] - tak robi przycisk w ustawieniach, bo tam człowiek prosi
      * o sprawdzenie TERAZ.
      */
     suspend fun check(context: Context, force: Boolean = false): Outcome =
@@ -156,7 +156,7 @@ object UpdateCheck {
     }
 
     /**
-     * Komunikat zamknięty — „Później", wstecz, dotknięcie obok albo przejście
+     * Komunikat zamknięty - „Później", wstecz, dotknięcie obok albo przejście
      * do pobierania. Wraca dopiero przy następnym uruchomieniu Kajetu.
      */
     fun stopAnnouncing() {

@@ -42,7 +42,7 @@ class CodeViewModel(
      * Czy zawijanie wierszy ma być włączone od początku.
      *
      * Na telefonie tak. Wiersz kodu nie mieści się tam w szerokości ekranu,
-     * a przewijanie w bok nie daje po sobie żadnego znaku — było widać
+     * a przewijanie w bok nie daje po sobie żadnego znaku - było widać
      * `std::cout << "Cześć" << std:` i nic więcej, bez śladu, że dalej coś
      * jeszcze jest. Na tablecie wiersz się mieści, więc zostaje jak było.
      */
@@ -83,20 +83,20 @@ class CodeViewModel(
 
     /*
       Czy serwer ma ten plik. „Zapisane" znaczy dysk; ta flaga to osobny
-      sygnał z kolejki i zapamiętanej wersji. null — nie ma konta.
+      sygnał z kolejki i zapamiętanej wersji. null - nie ma konta.
     */
     private val _inCloud = MutableStateFlow<Boolean?>(null)
     val inCloud: StateFlow<Boolean?> = _inCloud.asStateFlow()
 
     /*
-      Plik zniknął z dysku na polecenie serwera — skasowany na innym
+      Plik zniknął z dysku na polecenie serwera - skasowany na innym
       urządzeniu, kiedy tu był otwarty. Kod na ekranie wciąż jest w pamięci;
       edytor pyta wtedy człowieka, czy zapisać go jako nowy plik, czy odrzucić.
     */
     private val _remotelyDeleted = MutableStateFlow(false)
     val remotelyDeleted: StateFlow<Boolean> = _remotelyDeleted.asStateFlow()
 
-    /** Człowiek wybrał „Odrzuć zmiany" — zamknięcie modelu nie zapisuje w tle. */
+    /** Człowiek wybrał „Odrzuć zmiany" - zamknięcie modelu nie zapisuje w tle. */
     private var discarded = false
 
     private val _query = MutableStateFlow("")
@@ -110,12 +110,12 @@ class CodeViewModel(
 
     /**
      * Pomoc przy pisaniu (domykanie nawiasów i znaczników). Ustawienie konta na
-     * urządzeniu — kto woli pisać wszystko sam, gasi ją w ustawieniach.
+     * urządzeniu - kto woli pisać wszystko sam, gasi ją w ustawieniach.
      */
     private val _assist = MutableStateFlow(assistEnabled)
     val assist: StateFlow<Boolean> = _assist.asStateFlow()
 
-    /** Pasek narzędzi po prawej stronie — ustawienie dla leworęcznych. */
+    /** Pasek narzędzi po prawej stronie - ustawienie dla leworęcznych. */
     private val _toolbarOnRight = MutableStateFlow(false)
     val toolbarOnRight: StateFlow<Boolean> = _toolbarOnRight.asStateFlow()
 
@@ -160,7 +160,7 @@ class CodeViewModel(
 
     /**
      * Zmiana w polu z kodem, przepuszczona przez pomocnika. Oddaje stan, który
-     * ma naprawdę wejść do pola — z domkniętym nawiasem albo znacznikiem.
+     * ma naprawdę wejść do pola - z domkniętym nawiasem albo znacznikiem.
      */
     fun onTyping(
         before: androidx.compose.ui.text.input.TextFieldValue,
@@ -267,7 +267,7 @@ class CodeViewModel(
 
     private suspend fun save() {
         if (_saved.value) return
-        // Pliku już nie ma — los kodu rozstrzyga okno wyboru, nie autozapis.
+        // Pliku już nie ma - los kodu rozstrzyga okno wyboru, nie autozapis.
         if (_remotelyDeleted.value) return
         pendingSince = 0L
         try {
@@ -289,7 +289,7 @@ class CodeViewModel(
     }
 
     /**
-     * Kod z ekranu zapisuje się jako świeży plik — wybór „Zapisz jako nowy
+     * Kod z ekranu zapisuje się jako świeży plik - wybór „Zapisz jako nowy
      * plik" po kasowaniu na innym urządzeniu. Świeża tożsamość w chmurze
      * pilnuje, żeby nie wskrzesić skasowanego wpisu na serwerze.
      */
@@ -358,7 +358,7 @@ class CodeViewModel(
 
     override fun onCleared() {
         // Plik skasowany zdalnie i treść odrzucona świadomie zostają w spokoju
-        // — zapis pod martwą ścieżką i tak by padł.
+        // - zapis pod martwą ścieżką i tak by padł.
         if (!discarded && !_remotelyDeleted.value && !_saved.value) {
             repo.writeTextInBackground(path, _code.value)
         }

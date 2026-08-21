@@ -5,7 +5,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 
 /**
- * Drobna pomoc przy pisaniu kodu — taka jak w VS Code, ale bez pisania za
+ * Drobna pomoc przy pisaniu kodu - taka jak w VS Code, ale bez pisania za
  * człowieka.
  *
  * Robi dokładnie cztery rzeczy i ani jednej więcej:
@@ -20,7 +20,7 @@ import wojtoteka.ovh.kajet.core.model.CodeLanguage
  * `if`, dostaje `if`, a nie trzy linijki, które trzeba potem czytać i kasować.
  *
  * Wszystko tutaj to czyste działania na tekście i zaznaczeniu, bez Compose'a
- * i bez stanu — dzięki temu da się to sprawdzić testami (CodeAssistTest).
+ * i bez stanu - dzięki temu da się to sprawdzić testami (CodeAssistTest).
  */
 object CodeAssist {
 
@@ -35,7 +35,7 @@ object CodeAssist {
 
     private val CLOSERS = PAIRS.values.toSet()
 
-    /** Cudzysłów jest sam sobie domknięciem — trzeba go liczyć osobno. */
+    /** Cudzysłów jest sam sobie domknięciem - trzeba go liczyć osobno. */
     private val SYMMETRIC = setOf('"', '\'', '`')
 
     /**
@@ -79,7 +79,7 @@ object CodeAssist {
         val at = after.selection.start
         if (at <= 0 || at > after.text.length) return after
 
-        // Znak, który właśnie wszedł — i pewność, że reszta tekstu się zgadza,
+        // Znak, który właśnie wszedł - i pewność, że reszta tekstu się zgadza,
         // czyli że to naprawdę było zwykłe dopisanie w tym miejscu.
         val typed = after.text[at - 1]
         val rebuilt = after.text.removeRange(at - 1, at)
@@ -87,7 +87,7 @@ object CodeAssist {
 
         val next = after.text.getOrNull(at)
 
-        // 2. Domknięcie już stoi tuż za kursorem — przechodzimy przez nie
+        // 2. Domknięcie już stoi tuż za kursorem - przechodzimy przez nie
         //    zamiast dokładać drugie. Bez tego dopisanie własnego „)" po tym,
         //    które sami dostawiliśmy, dawało „))".
         if (typed in CLOSERS && next == typed) {
@@ -119,7 +119,7 @@ object CodeAssist {
         val at = after.selection.start
         if (at < 0 || at >= before.text.length) return after
 
-        // 3. Skasowany otwierający, a tuż za kursorem stoi jego para — schodzi
+        // 3. Skasowany otwierający, a tuż za kursorem stoi jego para - schodzi
         //    razem z nim. Pusta „()" znika jednym cofnięciem, tak jak weszła.
         val removed = before.text[at]
         val partner = PAIRS[removed] ?: return after
@@ -130,7 +130,7 @@ object CodeAssist {
 
     /**
      * Czy jest gdzie domknąć. Za kursorem musi być koniec wiersza, odstęp albo
-     * inne domknięcie — inaczej wpisanie nawiasu przed istniejącym słowem
+     * inne domknięcie - inaczej wpisanie nawiasu przed istniejącym słowem
      * dokładałoby domknięcie w środku wyrażenia.
      */
     private fun roomToClose(typed: Char, next: Char?, text: String, at: Int): Boolean {
@@ -160,7 +160,7 @@ object CodeAssist {
     /**
      * Wcięcie z poprzedniego wiersza po naciśnięciu Entera. Osobno od [assist],
      * bo Enter przychodzi jako zwykły znak nowego wiersza i nie ma tu nic do
-     * domykania — jest za to co przepisać.
+     * domykania - jest za to co przepisać.
      */
     fun keepIndent(before: TextFieldValue, after: TextFieldValue): TextFieldValue {
         if (!after.selection.collapsed) return after

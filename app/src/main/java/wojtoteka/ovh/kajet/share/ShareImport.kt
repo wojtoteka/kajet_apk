@@ -18,7 +18,7 @@ import java.io.IOException
  * podgląd zdjęcia / PDF albo komunikat przy binarce.
  *
  * Przy wielu URI pierwsza udana kopia idzie do otwarcia, a [ShareImportOutcome.failed]
- * mówi, ile plików nie weszło — żeby dało się pokazać częściową porażkę.
+ * mówi, ile plików nie weszło - żeby dało się pokazać częściową porażkę.
  */
 data class ShareImportOutcome(
     val item: LibraryItem,

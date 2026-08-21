@@ -7,7 +7,7 @@ import wojtoteka.ovh.kajet.cloud.Sync
 /**
  * Notatki, które wyczerpały próby wysyłki i czekają na ręczne ponowienie.
  *
- * Sygnał o nich stał do tej pory wyłącznie na ekranie konta — trzeba było tam
+ * Sygnał o nich stał do tej pory wyłącznie na ekranie konta - trzeba było tam
  * samemu zajrzeć, żeby się o czymkolwiek dowiedzieć, więc w praktyce nikt się
  * nie dowiadywał. Biblioteka pokazuje to teraz przy konkretnej notatce.
  *
@@ -19,7 +19,7 @@ interface StuckNotes {
     /** Ile wpisów utknęło. Służy za sygnał do przeliczenia, nie do pokazania. */
     val count: StateFlow<Int>
 
-    /** Ścieżki plików, które utknęły — po nich poznaje je spis biblioteki. */
+    /** Ścieżki plików, które utknęły - po nich poznaje je spis biblioteki. */
     fun paths(): Set<String>
 
     /** Nowa pula prób dla wszystkiego, co utknęło, i od razu synchronizacja. */

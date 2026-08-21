@@ -30,7 +30,7 @@ class CloudCode(
     }
 
     /**
-     * Granice, które serwer i tak postawi — tyle że po swojemu.
+     * Granice, które serwer i tak postawi - tyle że po swojemu.
      *
      * Nadmiarowa wysyłka wraca stamtąd jako 400 ze zdaniem „Podaj język
      * i kod", bo tam wszystkie odrzucone kształty żądania mają jeden

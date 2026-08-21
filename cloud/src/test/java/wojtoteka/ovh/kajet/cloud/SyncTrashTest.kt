@@ -15,7 +15,7 @@ import wojtoteka.ovh.kajet.storage.ServerDeletion
 
 /**
  * Kosz i trwałe kasowanie: co synchronizacja robi z kolejką, zapamiętaną
- * wersją i plikiem, kiedy notatka znika — tutaj albo na serwerze.
+ * wersją i plikiem, kiedy notatka znika - tutaj albo na serwerze.
  *
  * Te dwie drogi wyglądają podobnie, a znaczą co innego: kosz zostawia na
  * serwerze nagrobek (notatkę da się jeszcze wyjąć), trwałe kasowanie usuwa
@@ -64,7 +64,7 @@ class SyncTrashTest {
     private fun knownVersion(id: String): Int =
         context.getSharedPreferences("kajet-versions", Context.MODE_PRIVATE).getInt(id, 0)
 
-    /** Wersja zapamiętana wcześniejszym przebiegiem — ten sam schowek co Sync. */
+    /** Wersja zapamiętana wcześniejszym przebiegiem - ten sam schowek co Sync. */
     private fun rememberVersion(id: String, version: Int) {
         context.getSharedPreferences("kajet-versions", Context.MODE_PRIVATE)
             .edit().putInt(id, version).commit()
@@ -88,7 +88,7 @@ class SyncTrashTest {
         // Wersję nagrobka trzeba pamiętać, inaczej najbliższe pobranie wzięłoby
         // go za nowość i notatka wróciłaby na urządzenie.
         assertThat(knownVersion(noteId)).isEqualTo(12)
-        // Kosz to nie trwałe kasowanie — adres kasujący zostaje nietknięty.
+        // Kosz to nie trwałe kasowanie - adres kasujący zostaje nietknięty.
         assertThat(transport.deletedIds).isEmpty()
         assertThat(queue.size()).isEqualTo(0)
     }
@@ -146,7 +146,7 @@ class SyncTrashTest {
 
         repeat(QueueEntry.MAX_ATTEMPTS) { sync() }
 
-        // Wpis nie znika po cichu — kiedyś znikał i notatka zostawała na
+        // Wpis nie znika po cichu - kiedyś znikał i notatka zostawała na
         // serwerze na zawsze, choć na urządzeniu jej nie było.
         assertThat(queue.size()).isEqualTo(1)
         assertThat(queue.stuckCount()).isEqualTo(1)
@@ -204,13 +204,13 @@ class SyncTrashTest {
         sync()
 
         // Nic nie udajemy: notatka na miejscu, wersja niezapomniana, wpis
-        // w kolejce z odnotowaną porażką — kiedyś wszystko schodziło mimo
+        // w kolejce z odnotowaną porażką - kiedyś wszystko schodziło mimo
         // nieudanego przeniesienia i plik zostawał bezpański.
         assertThat(library.notes).containsKey(notePath)
         assertThat(knownVersion(noteId)).isEqualTo(4)
         assertThat(queue.all().single().failedAttempts).isEqualTo(1)
 
-        // Awaria ustąpiła — wszystko dochodzi do końca.
+        // Awaria ustąpiła - wszystko dochodzi do końca.
         library.failTrash = false
         sync()
         assertThat(library.trashedNoteIds).containsExactly(noteId)
@@ -250,7 +250,7 @@ class SyncTrashTest {
 
         sync()
 
-        // Numer nie schodzi — inaczej plik dostałby świeży i wrócił na
+        // Numer nie schodzi - inaczej plik dostałby świeży i wrócił na
         // serwer jako duplikat, choć wciąż leży w bibliotece.
         assertThat(library.texts).containsKey(codePath)
         assertThat(codeIds.existingIdFor(codePath)).isEqualTo(id)
@@ -269,7 +269,7 @@ class SyncTrashTest {
 
         sync()
 
-        // Zapamiętana wersja nagrobka udawałaby, że zadziałał — notatka
+        // Zapamiętana wersja nagrobka udawałaby, że zadziałał - notatka
         // zostałaby przy życiu na zawsze.
         assertThat(library.notes).containsKey(notePath)
         assertThat(knownVersion(noteId)).isEqualTo(4)
@@ -290,7 +290,7 @@ class SyncTrashTest {
 
         sync()
 
-        // Znacznik stoi — przesunięty schowałby nagrobek na zawsze.
+        // Znacznik stoi - przesunięty schowałby nagrobek na zawsze.
         assertThat(account.lastDeleted).isEqualTo(0)
         assertThat(library.notes).containsKey(notePath)
         assertThat(knownVersion(noteId)).isEqualTo(4)
@@ -313,7 +313,7 @@ class SyncTrashTest {
         sync()
 
         // Plik z kodem poznaje się po ścieżce z rejestru, nie po identyfikatorze
-        // notatki — bez tego nagrobek trafiałby w próżnię.
+        // notatki - bez tego nagrobek trafiałby w próżnię.
         assertThat(library.serverCodeDeletionCalls).containsExactly(codePath)
         assertThat(library.serverDeletionCalls).isEmpty()
         assertThat(library.texts).doesNotContainKey(codePath)

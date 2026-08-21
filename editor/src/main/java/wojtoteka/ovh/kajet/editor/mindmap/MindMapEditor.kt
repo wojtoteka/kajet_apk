@@ -136,7 +136,7 @@ fun MindMapEditor(
       Notatka wczytuje się z dysku po pierwszym złożeniu ekranu, więc przy
       `remember` wyżej `map` jest jeszcze puste i zostawały zera. Mapa otwierała
       się przez to zawsze w lewym górnym rogu i na 100%, choć `rememberView`
-      zapisuje jedno i drugie przy każdym zejściu w tło. Raz na otwarcie —
+      zapisuje jedno i drugie przy każdym zejściu w tło. Raz na otwarcie -
       dalsze zmiany treści nie mają szarpać widokiem spod ręki.
     */
     var viewRestored by remember { mutableStateOf(false) }
@@ -180,7 +180,7 @@ fun MindMapEditor(
       Zaznaczony węzeł ma zostać widoczny.
 
       Na telefonie panel edycji wisi na dole całą szerokością i zasłania dolną
-      połowę planszy — czyli często ten węzeł, którego właśnie dotknięto.
+      połowę planszy - czyli często ten węzeł, którego właśnie dotknięto.
       Po zaznaczeniu plansza zjeżdża tak, żeby węzeł wypadł na środku tego, co
       z niej zostało. Gdy widać go w całości, nic się nie dzieje: przesuwanie
       mapy przy każdym dotknięciu byłoby gorsze od zasłoniętego węzła.
@@ -323,7 +323,7 @@ fun MindMapEditor(
           Przycięcie do granic planszy.
 
           Compose nie ucina niczego z siebie, a węzły stoją na przesunięciach
-          liczonych od położenia mapy — po przesunięciu w prawo wychodzą one na
+          liczonych od położenia mapy - po przesunięciu w prawo wychodzą one na
           minus i węzeł maluje się na pasku narzędzi. Plansza jest w rzędzie ZA
           paskiem, więc rysuje się na wierzchu i przykrywała mu ikony.
 
@@ -388,7 +388,7 @@ fun MindMapEditor(
                                 offsetX = offsetX,
                                 offsetY = offsetY,
                                 zoom = zoom,
-                                // Linia w barwie gałęzi, do której prowadzi — jak w edytorze WWW.
+                                // Linia w barwie gałęzi, do której prowadzi - jak w edytorze WWW.
                                 color = if (picked) {
                                     colors.accent
                                 } else {
@@ -523,7 +523,7 @@ fun MindMapEditor(
                     if (edge != null) {
                         val byId = map.nodes.associateBy { it.id }
                         val names = listOfNotNull(byId[edge.fromId], byId[edge.toId])
-                            .joinToString(" — ") { it.text.ifBlank { words.nodeWithoutName } }
+                            .joinToString(" - ") { it.text.ifBlank { words.nodeWithoutName } }
                         Row(
                             Modifier
                                 .align(Alignment.BottomCenter)
@@ -563,7 +563,7 @@ fun MindMapEditor(
                     Modifier
                         .align(Alignment.BottomEnd)
                         // Otwarty panel węzła zabiera dół planszy razem
-                        // z przyciskami przybliżenia — wtedy wchodzą nad niego.
+                        // z przyciskami przybliżenia - wtedy wchodzą nad niego.
                         .padding(
                             start = 12.dp,
                             end = 12.dp,
@@ -792,7 +792,7 @@ private fun NodeOnBoard(
                 .border(
                     // Węzeł pod ciągniętą linią dostaje grubszą obwódkę,
                     // żeby było widać, gdzie linia trafi po puszczeniu palca.
-                    // Obwódka trzyma barwę węzła także przy zaznaczeniu —
+                    // Obwódka trzyma barwę węzła także przy zaznaczeniu -
                     // inaczej dobieranej barwy nie było widać na żywo.
                     width = if (connectTarget) 3.dp else if (selected) 2.dp else 1.5.dp,
                     color = if (connectTarget) colors.accent else color,
@@ -831,7 +831,7 @@ private fun NodeOnBoard(
                   Wyściółka w jednostkach mapy, nie w dp.
 
                   Rozmiar węzła liczy MindMapSizes.fit, zakładając PAD_X = 20
-                  jednostek mapy — a jednostka mapy to piksel urządzenia. Sztywne
+                  jednostek mapy - a jednostka mapy to piksel urządzenia. Sztywne
                   10.dp na telefonie o gęstości 2,6 to 52 piksele zamiast 20,
                   czyli o 32 piksele mniej miejsca na hasło, niż przewidział
                   rachunek. Wiersz, który miał się zmieścić, schodził wtedy do
@@ -864,7 +864,7 @@ private fun NodeOnBoard(
 
                   `Kajet.type.body` ma lineHeight = 24.sp. copy() zostawia tę
                   wartość, a fontSize maleje z zoomem. Compose układa glify
-                  w ramce 24.sp od góry, a węzeł przycina resztę — przy 77%
+                  w ramce 24.sp od góry, a węzeł przycina resztę - przy 77%
                   hasło siedzi już przy dolnej krawędzi, przy dalszym
                   oddalaniu znika. em trzyma 1.3× fontSize na każdym zoomie.
                 */
@@ -893,7 +893,7 @@ private fun NodeOnBoard(
                     text = node.text.ifEmpty { if (node.ink.isEmpty()) words.tapTwiceToType else "" },
                     style = if (node.text.isEmpty()) style.copy(color = colors.muted) else style,
                     // Hasło dłuższe niż węzeł kończy się wielokropkiem, a nie
-                    // urwaniem w pół litery — widać wtedy, że dalej coś jest.
+                    // urwaniem w pół litery - widać wtedy, że dalej coś jest.
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1245,7 +1245,7 @@ private fun NodePanel(
 }
 
 /*
-  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę — w ciasnej
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnej
   karcie krawędzi odcinał się od tła i na telefonie łamał etykietę
   („Rozłącz"). Tu ten sam krój co nazwy węzłów, bez ramki.
 */

@@ -48,7 +48,7 @@ fun ExportDialog(
     service: ExportService,
     onClose: () -> Unit,
     /**
-     * Otwiera panel udostępniania. Null, gdy nie ma konta w chmurze — wtedy
+     * Otwiera panel udostępniania. Null, gdy nie ma konta w chmurze - wtedy
      * nie ma czym zarządzać. Okno zapisu nie zna chmury i nie ma jej znać
      * (moduł `export` nie zależy od `cloud`), więc dostaje gotowe przejście,
      * a panel montuje ekran notatki, który zna jedno i drugie.
@@ -57,7 +57,7 @@ fun ExportDialog(
 ) {
     val words = LocalStrings.current
     val scope = rememberCoroutineScope()
-    // Kontekst ekranu, nie aplikacji — systemowy druk wymaga Activity.
+    // Kontekst ekranu, nie aplikacji - systemowy druk wymaga Activity.
     val context = androidx.compose.ui.platform.LocalContext.current
     var format by remember { mutableStateOf(ExportFormat.PDF) }
     var ready by remember { mutableStateOf<File?>(null) }
@@ -69,7 +69,7 @@ fun ExportDialog(
             Modifier
                 // Na telefonie okno ma zmieścić się w ekranie, na tablecie nie
                 // rozciągać się na całą szerokość. Granica idzie PRZED
-                // wypełnieniem — po nim byłaby martwa, bo `fillMaxWidth` ustala
+                // wypełnieniem - po nim byłaby martwa, bo `fillMaxWidth` ustala
                 // szerokość sztywno i `widthIn` nie ma już czego przyciąć.
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
@@ -133,7 +133,7 @@ fun ExportDialog(
                 }
 
                 // Na telefonie wszystkie przyciski nie mieszczą się w jednym
-                // wierszu — bez zawijania ostatni był ściskany do zera.
+                // wierszu - bez zawijania ostatni był ściskany do zera.
                 FlowRow(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),

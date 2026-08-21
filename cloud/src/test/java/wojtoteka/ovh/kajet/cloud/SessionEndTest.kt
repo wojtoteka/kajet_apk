@@ -10,7 +10,7 @@ import org.junit.Test
  * w src/lib/api.ts (`missing`, `invalid`, `expired`, `blocked`) i w trasach
  * notatek oraz folderów (`not-yours`). Test pilnuje granicy między jednym
  * a drugim: pomyłka w tę stronę wyrzuca człowieka z konta przy dotknięciu
- * cudzej notatki, a w tamtą — zostawia w Ustawieniach „Zalogowano jako…"
+ * cudzej notatki, a w tamtą - zostawia w Ustawieniach „Zalogowano jako…"
  * po wylogowaniu wszystkich sesji przez stronę.
  */
 class SessionEndTest {

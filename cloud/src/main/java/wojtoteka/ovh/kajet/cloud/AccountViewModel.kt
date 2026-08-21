@@ -112,7 +112,7 @@ class AccountViewModel(
     /**
      * Opens kajet.wojtoteka.ovh in Custom Tabs so the user can sign in with
      * Google (or password) and approve this device. The app polls until a
-     * token is ready — more reliable than relying only on the deep link return.
+     * token is ready - more reliable than relying only on the deep link return.
      */
     fun signInWithBrowser() {
         cancelBrowserSignIn(clearMessage = false)
@@ -153,7 +153,7 @@ class AccountViewModel(
         }
     }
 
-    /** Deep link `kajet://auth?code=…` — resume or accelerate polling. */
+    /** Deep link `kajet://auth?code=…` - resume or accelerate polling. */
     fun onAuthDeepLink(uri: Uri?) {
         val code = uri?.getQueryParameter("code")?.trim().orEmpty()
         if (code.isBlank()) return
@@ -233,7 +233,7 @@ class AccountViewModel(
      * Odświeża stan konta prosto z serwera. Wołane przy wejściu na ekran:
      * dzięki temu zajęte miejsce jest aktualne.
      *
-     * Martwy token gasi sesję sam, w [CloudClient] — tutaj zostaje wyłącznie
+     * Martwy token gasi sesję sam, w [CloudClient] - tutaj zostaje wyłącznie
      * powiedzenie o tym na głos. Kolejka wysyłki zostaje, żeby po ponownym
      * zalogowaniu zaległe zmiany dojechały.
      */

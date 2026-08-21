@@ -33,7 +33,7 @@ class CloudSaveStateTest {
 }
 
 /**
- * [Sync.cloudSave] czyta kolejkę i zapamiętane wersje — te same, którymi
+ * [Sync.cloudSave] czyta kolejkę i zapamiętane wersje - te same, którymi
  * żyje wysyłka. Atrapa konta jest zalogowana, jak w pozostałych testach sync.
  */
 @RunWith(RobolectricTestRunner::class)

@@ -73,12 +73,12 @@ fun KajetDialog(
     /*
       Okno dialogu bierze cały ekran i samo układa w nim swoją zawartość.
 
-      decorFitsSystemWindows=false oddaje mu wgląd w klawiaturę — dzięki temu
+      decorFitsSystemWindows=false oddaje mu wgląd w klawiaturę - dzięki temu
       imePadding kurczy dialog nad nią i przyciski nie giną pod spodem. Samo
       to jednak nie wystarczy: bez usePlatformDefaultWidth=false okno zostaje
       przy swojej domyślnej wielkości, a zawartość liczy odstępy od krawędzi
       CAŁEGO ekranu. Rysunek i dotyk rozjeżdżały się wtedy o pasek stanu, czyli
-      mniej więcej o jeden wiersz menu — palec trafiał w „Zrób kopię",
+      mniej więcej o jeden wiersz menu - palec trafiał w „Zrób kopię",
       a uruchamiało się „Przenieś do folderu".
     */
     Dialog(
@@ -102,8 +102,8 @@ fun KajetDialog(
             Column(
                 modifier = Modifier
                     // Kolejność jest tu istotna i łatwo ją odwrócić. `fillMaxWidth`
-                    // daje temu, co pod spodem, szerokość sztywną — równą całemu
-                    // ekranowi — a `widthIn` postawione PO nim może już tylko
+                    // daje temu, co pod spodem, szerokość sztywną - równą całemu
+                    // ekranowi - a `widthIn` postawione PO nim może już tylko
                     // zmieścić się w tym, co dostało, więc górna granica przepadała
                     // bez śladu. Na tablecie okna szły przez to od krawędzi do
                     // krawędzi. Najpierw granica, dopiero potem wypełnienie.
@@ -181,7 +181,7 @@ fun NewFolderDialog(
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.colour)
-            // Kolorów jest więcej, niż mieści wąski ekran — pasek jeździ w bok.
+            // Kolorów jest więcej, niż mieści wąski ekran - pasek jeździ w bok.
             Row(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -444,7 +444,7 @@ fun RenameDialog(
     KajetDialog(words.rename, onClose) {
         KajetTextField(name, { name = it }, words.newName, autoFocus = true)
 
-        // Dwukropka ani ukośnika nie da się wpisać w nazwę pliku — magazyn
+        // Dwukropka ani ukośnika nie da się wpisać w nazwę pliku - magazyn
         // zamienia je na podkreślenie. Nazwa na liście zostaje wtedy taka, jak
         // wpisana, a katalog na dysku nazywa się inaczej. Lepiej powiedzieć to
         // wprost, niż zostawić dwie różne nazwy bez wyjaśnienia.

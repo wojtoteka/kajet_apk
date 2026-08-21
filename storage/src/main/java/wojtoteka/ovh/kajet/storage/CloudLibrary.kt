@@ -3,7 +3,7 @@ package wojtoteka.ovh.kajet.storage
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 
 /**
- * Wszystko, czego synchronizacja potrzebuje od biblioteki — i nic więcej.
+ * Wszystko, czego synchronizacja potrzebuje od biblioteki - i nic więcej.
  *
  * [LibraryRepository] umie znacznie więcej, ale chmura ma dotykać plików
  * wyłącznie przez tę wąską furtkę. Dzięki temu po samym interfejsie widać,
@@ -30,7 +30,7 @@ interface CloudLibrary {
     suspend fun allCodeFilePaths(): List<String>
 
     /**
-     * Czy plik ma gwiazdkę. Notatka niesie ją w treści, plik nie ma w czym —
+     * Czy plik ma gwiazdkę. Notatka niesie ją w treści, plik nie ma w czym -
      * a serwer trzyma ją przy notatce CODE tak samo jak przy każdej innej.
      */
     suspend fun fileFavorite(path: String): Boolean
@@ -45,7 +45,7 @@ interface CloudLibrary {
 
     suspend fun createTextFileFromCloud(parent: String, fileName: String, content: String): String
 
-    /** Gwiazdka pliku przysłana z serwera — bez odsyłania jej z powrotem. */
+    /** Gwiazdka pliku przysłana z serwera - bez odsyłania jej z powrotem. */
     suspend fun setFileFavoriteFromCloud(path: String, favorite: Boolean)
 
     suspend fun moveNoteFromCloud(noteId: String, targetFolder: String): String?

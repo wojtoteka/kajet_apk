@@ -8,7 +8,7 @@ import wojtoteka.ovh.kajet.cloud.CrashReporter
  *
  * Wysyłka NIE dzieje się w chwili awarii. Wtedy proces właśnie się kończy,
  * wątek główny jest martwy, a czekanie na odpowiedź serwera opóźniałoby tylko
- * pokazanie ekranu błędu — i tak czy owak nie doszłaby, gdyby akurat nie było
+ * pokazanie ekranu błędu - i tak czy owak nie doszłaby, gdyby akurat nie było
  * sieci. Raport idzie na dysk od razu, a stąd na serwer przy najbliższym
  * uruchomieniu Kajetu.
  *
@@ -43,7 +43,7 @@ object CrashUpload {
 
                 // Nie ma sieci albo serwer nie odpowiada. Kolejne raporty
                 // trafiłyby na to samo, więc kończymy i wracamy do nich przy
-                // następnym uruchomieniu — zamiast czekać po osiem sekund na
+                // następnym uruchomieniu - zamiast czekać po osiem sekund na
                 // każdy z pięciu plików.
                 CrashReporter.Outcome.RETRY -> return
             }

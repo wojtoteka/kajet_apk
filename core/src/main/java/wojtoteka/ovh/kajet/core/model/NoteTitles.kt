@@ -4,9 +4,9 @@ import wojtoteka.ovh.kajet.core.text.EnglishStrings
 import wojtoteka.ovh.kajet.core.text.PolishStrings
 
 /**
- * Tytuł podpowiedziany z treści — wierne odbicie note-title.ts z serwera.
+ * Tytuł podpowiedziany z treści - wierne odbicie note-title.ts z serwera.
  *
- * Notatka bez wpisanego tytułu nazywała się „Bez tytułu" — i przy kilkunastu
+ * Notatka bez wpisanego tytułu nazywała się „Bez tytułu" - i przy kilkunastu
  * takich notatkach spis przestawał cokolwiek mówić. Zamiast tego bierzemy
  * pierwszy wiersz treści: to prawie zawsze nagłówek albo pierwsze zdanie,
  * czyli dokładnie to, czym notatka jest. Strona robi to od dawna; tutaj to
@@ -14,12 +14,12 @@ import wojtoteka.ovh.kajet.core.text.PolishStrings
  *
  * Wpisany tytuł ZAWSZE wygrywa. Podpowiedź działa tylko, dopóki tytuł jest
  * jeszcze podstawiony ([isPlaceholder]); pierwsza trafiona podpowiedź go
- * nadpisuje i mechanizm sam się kończy — dokładnie tak jak na serwerze.
+ * nadpisuje i mechanizm sam się kończy - dokładnie tak jak na serwerze.
  */
 object NoteTitles {
 
     /**
-     * Dłuższy pierwszy wiersz obcinamy — w spisie i tak by się nie zmieścił.
+     * Dłuższy pierwszy wiersz obcinamy - w spisie i tak by się nie zmieścił.
      *
      * Osiemdziesiąt znaków zajmowało na karcie telefonu trzy wiersze i tytuł
      * zjadał całą kartę. Czterdzieści osiem mieści się w jednym wierszu
@@ -35,12 +35,12 @@ object NoteTitles {
      * tytuł.
      *
      * Autozapis rusza ułamek sekundy po pierwszym znaku. Bez tego progu notatka
-     * nazwałaby się od jednej litery i tak już zostało — a tytuł podpowiada się
+     * nazwałaby się od jednej litery i tak już zostało - a tytuł podpowiada się
      * tylko raz, przy pierwszym zapisie z podstawionym tytułem.
      */
     private const val SETTLED_LENGTH = 12
 
-    // Wspólne z podglądem notatki w spisie (IndexText) — jeden zapis składni
+    // Wspólne z podglądem notatki w spisie (IndexText) - jeden zapis składni
     // początku wiersza na całą aplikację.
     private val leadingSyntax = TextMarkers.leadingSyntax
 
@@ -61,7 +61,7 @@ object NoteTitles {
      * „Pomaganie drugiemu człowiekowi to jedna z najważn..." czyta się jak
      * usterka; ucięte na spacji czyta się jak tytuł.
      *
-     * Wyjątek: jedno słowo dłuższe niż cała granica — wtedy nie ma gdzie ciąć.
+     * Wyjątek: jedno słowo dłuższe niż cała granica - wtedy nie ma gdzie ciąć.
      */
     private fun shorten(text: String): String {
         if (text.length <= LONGEST) return text
@@ -74,7 +74,7 @@ object NoteTitles {
 
     /** Znaczniki w środku wiersza. Zdejmujemy je, zostawiając samą treść. */
     private fun withoutMarkers(line: String): String = line
-        // Barwę, rozmiar i podkreślenie zapisujemy znacznikami HTML — otwarcia
+        // Barwę, rozmiar i podkreślenie zapisujemy znacznikami HTML - otwarcia
         // i domknięcia zdejmowane osobno, żeby przeżyć też zapis zagnieżdżony.
         .replace(spanOpening, "")
         .replace(spanClosing, "")
@@ -91,7 +91,7 @@ object NoteTitles {
         .trim()
 
     /**
-     * Tytuł z treści notatki tekstowej. Null, gdy nie ma z czego go zrobić —
+     * Tytuł z treści notatki tekstowej. Null, gdy nie ma z czego go zrobić -
      * wtedy zostaje dotychczasowy podstawiony tytuł.
      */
     fun fromMarkdown(markdown: String): String? {
@@ -140,7 +140,7 @@ object NoteTitles {
 
     /**
      * Czy tytuł jest wciąż tym podstawionym przy założeniu notatki. Sprawdzamy
-     * oba języki — notatka mogła powstać przy innym ustawieniu języka, niż
+     * oba języki - notatka mogła powstać przy innym ustawieniu języka, niż
      * jest teraz.
      */
     fun isPlaceholder(title: String): Boolean {

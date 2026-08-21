@@ -129,12 +129,12 @@ fun SettingsScreen(
       Nowa wersja w sekcji „O aplikacji".
 
       [updateFound] trzyma wydanie do pobrania i stoi na ekranie tak długo, jak
-      długo ono na serwerze jest — nie trzeba w tym celu niczego naciskać.
+      długo ono na serwerze jest - nie trzeba w tym celu niczego naciskać.
       Sprawdzenie idzie samo przy wejściu w ustawienia i zwykle nie rusza
       nawet sieci: wynik z ostatniej godziny leży w pamięci ([UpdateCheck]).
 
       Wcześniej o nowym wydaniu mówił wyłącznie komunikat przy uruchomieniu,
-      raz na zimny start. Kto go zamknął, nie miał go już gdzie odszukać —
+      raz na zimny start. Kto go zamknął, nie miał go już gdzie odszukać -
       ustawienia milczały, dopóki nie nacisnęło się „Sprawdź aktualizacje".
 
       [updateAnswer] zostaje na odpowiedzi, dla których nie ma paska: „masz
@@ -365,7 +365,7 @@ fun SettingsScreen(
                     )
                 }
                 if (rebuildProgress != null) {
-                    // Zdanie przychodzi z biblioteki w całości — patrz
+                    // Zdanie przychodzi z biblioteki w całości - patrz
                     // LibraryViewModel.rebuildIndex.
                     InlineNotice(
                         icon = KajetIcons.Restore,
@@ -553,7 +553,7 @@ fun SettingsScreen(
                 )
 
                 // Pasek stoi tu sam z siebie, dopóki nowsze wydanie czeka na
-                // serwerze — z numerem wersji i drogą do pobrania pod ręką.
+                // serwerze - z numerem wersji i drogą do pobrania pod ręką.
                 updateFound?.let { release ->
                     InlineNotice(
                         icon = KajetIcons.Export,
@@ -590,7 +590,7 @@ fun SettingsScreen(
 
                                 UpdateCheck.Outcome.UpToDate -> {
                                     // Wydanie zeszło z serwera albo właśnie
-                                    // je zainstalowano — pasek nie ma już
+                                    // je zainstalowano - pasek nie ma już
                                     // czego zapowiadać.
                                     updateFound = null
                                     updateAnswer = words.upToDate

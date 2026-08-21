@@ -17,13 +17,13 @@ import wojtoteka.ovh.kajet.core.model.TextMarkers
  * Dokładnie ten zapis czyta i pisze serwer (`src/lib/rich-text.ts`), więc
  * format pliku zostaje bez zmian. Zmienia się to, co dzieje się w pamięci:
  * edytor nie dokleja już znaczników do ciągu znaków, tylko czyta treść na
- * [RichText] — czysty tekst plus lista zakresów — przestawia zakresy i składa
+ * [RichText] - czysty tekst plus lista zakresów - przestawia zakresy i składa
  * zapis z powrotem. Dzięki temu znaczniki nie mają jak się zagnieździć,
  * osierocić ani wyjść poza zaznaczenie.
  *
  * Czego ten model NIE obejmuje: nagłówków, list, zadań, cytatów, tabel,
  * odnośników, zdjęć, wzorów i bloków kodu. To budowa notatki, nie format
- * fragmentu — zostaje w treści znak w znak i zajmują się nią [Blocks]
+ * fragmentu - zostaje w treści znak w znak i zajmują się nią [Blocks]
  * oraz [InlineStyle].
  */
 enum class SpanType {
@@ -36,7 +36,7 @@ enum class SpanType {
     HIGHLIGHT,
 
     /**
-     * Kod w zdaniu — `tak`. W środku znaczniki nic nie znaczą, więc treść
+     * Kod w zdaniu - `tak`. W środku znaczniki nic nie znaczą, więc treść
      * takiego kawałka zostaje znak w znak.
      */
     CODE,
@@ -50,8 +50,8 @@ enum class SpanType {
  * Zakres jednego formatu: od [start] włącznie do [end] bez.
  *
  * [value] ma znaczenie wyłącznie dla dwóch rodzajów:
- *   [SpanType.COLOR] — barwa jako „#RRGGBB",
- *   [SpanType.SIZE]  — wielkość pisma w pikselach, na przykład „21".
+ *   [SpanType.COLOR] - barwa jako „#RRGGBB",
+ *   [SpanType.SIZE]  - wielkość pisma w pikselach, na przykład „21".
  * Dla pozostałych zostaje pusty.
  */
 data class FormatSpan(
@@ -70,7 +70,7 @@ data class RichText(
     /** Zapis do pliku notatki i na serwer. */
     fun toMarkdown(): String = RichTextCodec.write(this).markdown
 
-    /** Formaty obejmujące CAŁY zakres [from] do [to]; przy pustym — te pod kursorem. */
+    /** Formaty obejmujące CAŁY zakres [from] do [to]; przy pustym - te pod kursorem. */
     fun formatsIn(from: Int, to: Int): Set<FormatSpan> {
         val start = from.coerceIn(0, text.length)
         val end = to.coerceIn(start, text.length)
@@ -83,7 +83,7 @@ data class RichText(
     }
 
     /**
-     * Formaty pod kursorem. Liczy się znak PRZED kursorem — tak samo jak
+     * Formaty pod kursorem. Liczy się znak PRZED kursorem - tak samo jak
      * w każdym innym notatniku: kto stanie za pogrubionym słowem i zacznie
      * pisać, pisze dalej pogrubione.
      */
@@ -106,7 +106,7 @@ data class RichText(
  * W środku model żyje jako „każdy znak ma swój zestaw formatów" ([Attrs]).
  * Taki zapis nie umie być niepoprawny: nie ma w nim zagnieżdżeń, osieroconych
  * domknięć ani zakresów zachodzących na siebie krzywo. Lista [FormatSpan] to
- * ten sam stan podany na zewnątrz — powstaje z ciągów znaków o tych samych
+ * ten sam stan podany na zewnątrz - powstaje z ciągów znaków o tych samych
  * formatach i wraca do nich tak samo.
  */
 object RichTextCodec {
@@ -200,7 +200,7 @@ object RichTextCodec {
     private const val UNDERLINE_CLOSING = "</u>"
     private const val UNKNOWN_OPENING = "<span "
 
-    /** Najdłuższy możliwy znacznik — tyle wystarczy obejrzeć przy czytaniu. */
+    /** Najdłuższy możliwy znacznik - tyle wystarczy obejrzeć przy czytaniu. */
     private const val LONGEST_TAG = 48
 
     private val colorOpening = Regex("""^<span style="color:(#[0-9a-fA-F]{6,8})">""")
@@ -209,7 +209,7 @@ object RichTextCodec {
     /**
      * Początek wiersza, który jest budową notatki, a nie treścią: kratki
      * nagłówka, znak listy, kwadracik zadania, znak cytatu. Zostaje w treści
-     * znak w znak — inaczej gwiazdka listy „* mleko" udawałaby kursywę.
+     * znak w znak - inaczej gwiazdka listy „* mleko" udawałaby kursywę.
      *
      * Kratki biorą się w pętli (`(?:#{1,6} )+`), bo przełączanie H1/H2/H3
      * potrafiło zostawić „## # Tytuł". Jedna kratka zostawiałaby wewnętrzne
@@ -218,8 +218,8 @@ object RichTextCodec {
     private val blockPrefix = Regex("""^\s*(?:(?:#{1,6} )+|> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
 
     /**
-     * Czy [marker] to kratki nagłówka z paska (H1–H6, ze spacją).
-     * Inne znaczniki wiersza — lista, cytat — idą inną drogą.
+     * Czy [marker] to kratki nagłówka z paska (H1-H6, ze spacją).
+     * Inne znaczniki wiersza - lista, cytat - idą inną drogą.
      */
     fun isHeadingMarker(marker: String): Boolean {
         if (!marker.endsWith(' ')) return false
@@ -228,7 +228,7 @@ object RichTextCodec {
     }
 
     /**
-     * Długość kratek na początku [line] — także poskładanych z kilku
+     * Długość kratek na początku [line] - także poskładanych z kilku
      * naciśnięć H1/H2/H3 („## # Tytuł"). Zero, gdy wiersz nie jest nagłówkiem.
      * Wcięcie trzeba zdjąć wcześniej: tu liczy się od pierwszego znaku.
      */
@@ -247,7 +247,7 @@ object RichTextCodec {
                 consumed = i
                 continue
             }
-            // Ogonek bez spacji po już zdjętej kratce („## #") — to nadal
+            // Ogonek bez spacji po już zdjętej kratce („## #") - to nadal
             // znacznik, nie treść. Samo „###" bez spacji zostaje tekstem.
             if (consumed > 0 && i == line.length) consumed = i
             break
@@ -259,7 +259,7 @@ object RichTextCodec {
     fun opensFence(trimmed: String): String? = when {
         trimmed.startsWith("```") -> "```"
         // Sam „$$" w wierszu. Wzór wpisany w jednym wierszu („$$x$$") to nie
-        // blok, tylko treść — zostaje tam, gdzie stoi.
+        // blok, tylko treść - zostaje tam, gdzie stoi.
         trimmed == "$$" -> "$$"
         else -> null
     }
@@ -296,7 +296,7 @@ object RichTextCodec {
     fun read(markdown: String): Parsed {
         val sink = Sink(markdown.length)
         // Blok kodu albo wzoru: „```" lub „$$". W środku znaczniki nic nie
-        // znaczą — gwiazdka we wzorze to mnożenie, a nie kursywa.
+        // znaczą - gwiazdka we wzorze to mnożenie, a nie kursywa.
         var fence: String? = null
         var at = 0
 
@@ -351,7 +351,7 @@ object RichTextCodec {
         /*
           Ile nieznanych znaczników <span ...> stoi otwartych w tym wierszu.
           Ich domknięcia mają zostać w treści razem z nimi, a nie zniknąć jako
-          osierocone — inaczej z notatki wyparowałby kawałek cudzego zapisu.
+          osierocone - inaczej z notatki wyparowałby kawałek cudzego zapisu.
         */
         unknown: IntArray,
     ) {
@@ -417,7 +417,7 @@ object RichTextCodec {
                 unknown[0]--
                 return 0
             }
-            // Osierocone domknięcie — ślad po zepsutym zapisie. Znika.
+            // Osierocone domknięcie - ślad po zepsutym zapisie. Znika.
             sink.mark(at, at + CLOSING.length)
             return CLOSING.length
         }
@@ -457,7 +457,7 @@ object RichTextCodec {
         }
 
         sink.mark(at, innerFrom)
-        // Znacznik bez domknięcia działa do końca wiersza — tak czytały go
+        // Znacznik bez domknięcia działa do końca wiersza - tak czytały go
         // stare notatki i tak czyta je strona.
         val innerTo = close ?: to
         scan(text, innerFrom, innerTo, next, sink, unknown)
@@ -501,7 +501,7 @@ object RichTextCodec {
         text: String,
         at: Int,
         to: Int,
-        /** Początek czytanego kawałka — patrz [opensItalic]. */
+        /** Początek czytanego kawałka - patrz [opensItalic]. */
         regionFrom: Int,
         base: Attrs,
         sink: Sink,
@@ -525,7 +525,7 @@ object RichTextCodec {
     }
 
     /**
-     * Pojedyncza gwiazdka zaczyna kursywę tylko poza słowem — inaczej
+     * Pojedyncza gwiazdka zaczyna kursywę tylko poza słowem - inaczej
      * „2 * 3 * 4" wracałoby z notatki pochyłe.
      *
      * Gwiazdka tuż za inną gwiazdką normalnie nie otwiera niczego, ale na
@@ -536,7 +536,7 @@ object RichTextCodec {
         if (text.startsWith("**", at)) return false
         val before = if (at > 0) text[at - 1] else ' '
         // Gwiazdka tuż za inną gwiazdką to nie kursywa, tylko reszta pary.
-        // Gwiazdka w środku słowa kursywę otwiera — tak liczy to i serwer,
+        // Gwiazdka w środku słowa kursywę otwiera - tak liczy to i serwer,
         // i CommonMark, a bez tego „Al*a ma k*ota" pokazywało gołe gwiazdki.
         if (at > regionFrom && before == '*') return false
         val after = if (at + 1 < to) text[at + 1] else return false
@@ -565,7 +565,7 @@ object RichTextCodec {
                 at += marker.length
                 continue
             }
-            // Pojedyncza gwiazdka nie domyka się o podwójną — ale tylko wtedy,
+            // Pojedyncza gwiazdka nie domyka się o podwójną - ale tylko wtedy,
             // gdy ta druga naprawdę należy jeszcze do czytanego kawałka.
             val glued = marker == "*" &&
                 ((at > from && text[at - 1] == '*') || (at + 1 < to && text[at + 1] == '*'))
@@ -582,7 +582,7 @@ object RichTextCodec {
 
     /**
      * Warstwy od najbardziej zewnętrznej. Porządek jest stały, więc ten sam
-     * stan zawsze daje ten sam zapis — na tym stoi bezstratność. Rozmiar
+     * stan zawsze daje ten sam zapis - na tym stoi bezstratność. Rozmiar
      * stoi na zewnątrz barwy, dokładnie tak jak pisze serwer.
      */
     private val layers = listOf(
@@ -738,7 +738,7 @@ object RichTextCodec {
         val start = from.coerceIn(0, attrs.size)
         val end = to.coerceIn(start, attrs.size)
         for (i in start until end) {
-            // Znak nowej linii nie nosi formatów — znaczniki żyją w wierszu.
+            // Znak nowej linii nie nosi formatów - znaczniki żyją w wierszu.
             if (plain.getOrNull(i) == '\n') continue
             attrs[i] = transform(attrs[i])
         }

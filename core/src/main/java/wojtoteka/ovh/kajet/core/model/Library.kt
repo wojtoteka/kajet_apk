@@ -11,7 +11,7 @@ data class FolderMeta(
     val colorId: String = "grafit",
     val iconId: String = "folder",
     val createdAt: Long = 0L,
-    // Ostatnia zmiana nazwy albo wyglądu — synchronizacja folderów porównuje
+    // Ostatnia zmiana nazwy albo wyglądu - synchronizacja folderów porównuje
     // to ze znacznikiem serwera, żeby wiedzieć, która strona jest świeższa.
     // Stare pliki nie mają tego pola (zero = serwer wygrywa).
     val modifiedAt: Long = 0L,
@@ -51,7 +51,7 @@ data class LibraryItem(
 /*
   Ikony folderów.
 
-  Nazwy stoją tu, przy ikonach, a nie w słowniku napisów — trzydzieści osiem
+  Nazwy stoją tu, przy ikonach, a nie w słowniku napisów - trzydzieści osiem
   pozycji rozdętoby go bez żadnego zysku, a nazwa ikony nigdy nie zmieni się
   bez zmiany samej ikony. Który język wybrać, mówi `Strings.english`.
 */

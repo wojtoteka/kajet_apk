@@ -205,7 +205,7 @@ object SyntaxHighlight {
         )
         CodeLanguage.SQL -> SQL_COMMON
         /*
-          MySQL to wspólny trzon SQL-a i to, czego SQLite nie zna — a właśnie te
+          MySQL to wspólny trzon SQL-a i to, czego SQLite nie zna - a właśnie te
           słowa uczeń przepisuje z lekcji: SHOW TABLES, AUTO_INCREMENT,
           ENGINE=InnoDB, typy kolumn.
         */

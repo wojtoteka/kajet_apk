@@ -252,7 +252,7 @@ fun ColourDot(
     Box(
         modifier
             .size(44.dp)
-            // Kropka koloru nie przejmuje skupienia — patrz IconAction:
+            // Kropka koloru nie przejmuje skupienia - patrz IconAction:
             // inaczej zwijałaby zaznaczenie w polu tekstu.
             .focusProperties { canFocus = false }
             .clickable(onClickLabel = description, onClick = onClick),

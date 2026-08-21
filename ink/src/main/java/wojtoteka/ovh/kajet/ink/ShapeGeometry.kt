@@ -24,7 +24,7 @@ import kotlin.math.sin
  * kartka na ekranie, eksport do PDF i miniatura w bibliotece. Dzięki temu
  * elipsa w pliku PDF ma ten sam obrys co elipsa pod rysikiem.
  *
- * Rachunki na punktach są zwykłym Kotlinem — bez [Path] i bez [Canvas] — więc
+ * Rachunki na punktach są zwykłym Kotlinem - bez [Path] i bez [Canvas] - więc
  * dają się sprawdzić testem jednostkowym. Rysowanie siedzi niżej, w
  * [ShapePainter].
  */
@@ -51,7 +51,7 @@ object ShapeGeometry {
 
     /**
      * Wierzchołki kształtu PRZED obrotem, w układzie strony: x, y, x, y…
-     * Elipsa i prostokąt zaokrąglony dostają wielokąt przybliżający — do
+     * Elipsa i prostokąt zaokrąglony dostają wielokąt przybliżający - do
      * trafiania w kształt to wystarcza, a rysunek i tak idzie przez [Path].
      */
     fun localPoints(shape: ShapeElement): FloatArray {
@@ -120,7 +120,7 @@ object ShapeGeometry {
         return points
     }
 
-    /** Wierzchołki po obrocie — tak, jak kształt leży na stronie. */
+    /** Wierzchołki po obrocie - tak, jak kształt leży na stronie. */
     fun points(shape: ShapeElement): FloatArray {
         val points = localPoints(shape)
         rotateInPlace(points, shape.centerX, shape.centerY, shape.rotation)
@@ -130,7 +130,7 @@ object ShapeGeometry {
     /**
      * Punkty uchwytów: cztery rogi prostokąta odniesienia, a przy linii i
      * strzałce dwa końce. Kolejność rogów: lewy górny, prawy górny, prawy
-     * dolny, lewy dolny — uchwyt naprzeciwko to `(i + 2) % 4`.
+     * dolny, lewy dolny - uchwyt naprzeciwko to `(i + 2) % 4`.
      */
     fun handlePoints(shape: ShapeElement): FloatArray {
         val points = if (shape.kind.open) {
@@ -148,7 +148,7 @@ object ShapeGeometry {
         return points
     }
 
-    /** Prostokąt obejmujący kształt PO obrocie — do rysowania i do wzrostu strony. */
+    /** Prostokąt obejmujący kształt PO obrocie - do rysowania i do wzrostu strony. */
     fun bounds(shape: ShapeElement): Rect {
         val points = points(shape)
         var minX = Float.MAX_VALUE
@@ -172,7 +172,7 @@ object ShapeGeometry {
     /**
      * Czy punkt trafia w kształt.
      *
-     * Kształt wypełniony bierze się całym polem, pusty tylko obrysem — inaczej
+     * Kształt wypełniony bierze się całym polem, pusty tylko obrysem - inaczej
      * duży prostokąt narysowany wokół notatek łapałby każde stuknięcie
      * wymierzone w pismo pod nim.
      */
@@ -232,7 +232,7 @@ object ShapeGeometry {
     // --- Rysowanie przeciągnięciem i uchwytami ---
 
     /**
-     * Kształt rozciągnięty od punktu do punktu — tak powstaje przy rysowaniu.
+     * Kształt rozciągnięty od punktu do punktu - tak powstaje przy rysowaniu.
      *
      * [square] to proporcje 1:1: kształt zamknięty dostaje równe boki, a linia
      * i strzałka kąt dosnapowany do wielokrotności 45 stopni.
@@ -277,7 +277,7 @@ object ShapeGeometry {
     /**
      * Kształt po przeciągnięciu uchwytu [index] do punktu na stronie.
      *
-     * Uchwyt naprzeciwko stoi w miejscu — także przy obróconym kształcie.
+     * Uchwyt naprzeciwko stoi w miejscu - także przy obróconym kształcie.
      * Dlatego rachunek idzie w układzie kształtu (bez obrotu), a na końcu
      * środek wraca na stronę obrócony o ten sam kąt: bez tego obrócony
      * prostokąt uciekałby spod palca przy każdym rozciągnięciu.
@@ -329,7 +329,7 @@ object ShapeGeometry {
 
     /**
      * Kąt kształtu obróconego uchwytem stojącym nad górną krawędzią.
-     * Blisko ćwiartki kąt się do niej dosnapowuje — inaczej „prosto" nigdy nie
+     * Blisko ćwiartki kąt się do niej dosnapowuje - inaczej „prosto" nigdy nie
      * wychodzi prosto.
      */
     fun rotatedTo(shape: ShapeElement, px: Float, py: Float): ShapeElement {
@@ -465,7 +465,7 @@ object ShapeGeometry {
 /**
  * Rysuje kształty na canvasie. Osobny obiekt zamiast wspólnych pędzli w
  * [ShapeGeometry], bo kartka rysuje na wątku głównym, a eksport do PDF na
- * roboczym — jeden pędzel dzielony przez oba potrafiłby zmienić kolor w
+ * roboczym - jeden pędzel dzielony przez oba potrafiłby zmienić kolor w
  * połowie rysunku.
  */
 class ShapePainter {

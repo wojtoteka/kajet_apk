@@ -16,7 +16,7 @@ import wojtoteka.ovh.kajet.core.R
 
 /*
  * Archivo i Plex Sans to fonty zmienne: jeden plik niesie wszystkie grubości.
- * Grubość trzeba nastawić jawnie na osi wght — bez tego każda odmiana
+ * Grubość trzeba nastawić jawnie na osi wght - bez tego każda odmiana
  * wygląda jak zwykła i pogrubienie w notatce nie robi nic.
  */
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)

@@ -81,7 +81,7 @@ object PdfExport {
         val identity = Matrix()
 
         handwriting.pages.forEach { page ->
-            // Długa kartka nie mieści się na A4 — kroimy ją na kolejne arkusze.
+            // Długa kartka nie mieści się na A4 - kroimy ją na kolejne arkusze.
             val sliceCount = max(1, kotlin.math.ceil(page.height / A4_HEIGHT.toFloat()).toInt())
             for (slice in 0 until sliceCount) {
                 val offset = slice * A4_HEIGHT.toFloat()

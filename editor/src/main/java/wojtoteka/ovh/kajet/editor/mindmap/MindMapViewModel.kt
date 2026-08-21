@@ -312,14 +312,14 @@ class MindMapViewModel(
     }
 
     fun setText(id: String, text: String) {
-        // Edytor WWW ucina przy 500 znakach — tu tak samo, żeby pliki się zgadzały.
+        // Edytor WWW ucina przy 500 znakach - tu tak samo, żeby pliki się zgadzały.
         val capped = text.take(500)
         changeWithoutHistory { old ->
             old.copy(
                 nodes = old.nodes.map { node ->
                     if (node.id != id) return@map node
                     /*
-                     * Węzeł przycina to, co się w nim nie zmieściło — dłuższe
+                     * Węzeł przycina to, co się w nim nie zmieściło - dłuższe
                      * hasło znikało bez śladu, że cokolwiek tam jeszcze jest.
                      * Dlatego po zmianie napisu pudełko ROŚNIE do rozmiaru,
                      * w którym całość się mieści. Nigdy nie maleje: od

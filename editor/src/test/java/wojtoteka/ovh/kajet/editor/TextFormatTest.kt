@@ -13,7 +13,7 @@ import wojtoteka.ovh.kajet.editor.text.TextFormat
   Formatowanie fragmentu notatki.
 
   Dwie rzeczy, których te testy pilnują przede wszystkim: format obejmuje
-  WYŁĄCZNIE zaznaczenie, a bez zaznaczenia nie rusza niczego wstecz — czeka
+  WYŁĄCZNIE zaznaczenie, a bez zaznaczenia nie rusza niczego wstecz - czeka
   na tekst, który człowiek zaraz napisze.
 */
 class TextFormatColorTest {
@@ -65,7 +65,7 @@ class TextFormatColorTest {
 
     @Test
     fun `kolor i rozmiar skladaja sie zawsze w tym samym porzadku`() {
-        // Rozmiar na zewnątrz, barwa przy treści — tak samo pisze serwer.
+        // Rozmiar na zewnątrz, barwa przy treści - tak samo pisze serwer.
         val sized = TextFormat.resize(TextFieldValue("Ala ma kota", TextRange(4, 6)), 4f, 17f)!!
         val coloured = TextFormat.applyColor(sized, red)!!
 
@@ -382,7 +382,7 @@ class TypingTest {
         }
     }
 
-    /** Co widać w polu — bez znaczników, tak jak w notatce. */
+    /** Co widać w polu - bez znaczników, tak jak w notatce. */
     private fun shown(): String = RichText.parse(field.text).text
 
     @Test
@@ -452,7 +452,7 @@ class TypingTest {
 */
 class DeletionTest {
 
-    /** Kasowanie jednego znaku zapisu przed [cursor] — tak robi to Compose. */
+    /** Kasowanie jednego znaku zapisu przed [cursor] - tak robi to Compose. */
     private fun backspace(previous: String, cursor: Int): TextFieldValue? =
         TextFormat.typedDeletion(
             previous = previous,
@@ -490,7 +490,7 @@ class DeletionTest {
             ),
         )!!
 
-        // Pusta para nie ma czego objąć — schodzi razem z treścią.
+        // Pusta para nie ma czego objąć - schodzi razem z treścią.
         assertThat(twice.text).isEqualTo("Ala  kota")
         assertThat(twice.text).doesNotContain("*")
     }

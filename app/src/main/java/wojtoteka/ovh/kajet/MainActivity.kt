@@ -61,12 +61,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         captureAuthIntent(intent)
         // Po obrocie ekranu albo śmierci procesu system oddaje tę samą
-        // intencję jeszcze raz — bez tego warunku plik wjeżdżałby do
+        // intencję jeszcze raz - bez tego warunku plik wjeżdżałby do
         // biblioteki podwójnie.
         if (savedInstanceState == null) ShareIncoming.offer(intent)
 
         // Awaria, która trafiła Kajet zwinięty do tła, nie mogła wtedy otworzyć
-        // ekranu — od Androida 12 system na to nie pozwala. Raport został w
+        // ekranu - od Androida 12 system na to nie pozwala. Raport został w
         // pliku i pokazujemy go teraz, przy pierwszym otwarciu aplikacji.
         if (showUnseenCrash()) return
 
@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
           Ale POZA wątkiem głównym. `container.cloud` to `by lazy`, czyli zamek,
           a za nim magazyn kluczy, zaszyfrowane ustawienia i plan WorkManagera.
           Wołane stąd wprost, wątek główny czekał na wątek rozgrzewki i ekran
-          stał — a tło okna w ciemnym motywie jest niemal czarne, więc wyglądało
+          stał - a tło okna w ciemnym motywie jest niemal czarne, więc wyglądało
           to na zawieszoną aplikację.
         */
         /*
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 val cloud = (application as KajetApp).container.cloud
                 // Najpierw token, potem notatki. Sesja mogła paść, gdy Kajet
-                // leżał w tle — wylogowanie przez stronę nie ma jak się tu
+                // leżał w tle - wylogowanie przez stronę nie ma jak się tu
                 // zgłosić samo.
                 cloud.auth.check()
                 cloud.sync.syncSoon()
@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
 
     /*
       Zejście w tło oddaje zastane brzmienie rysika. To ustawienie całego
-      urządzenia, więc Kajet nie zostawia go po sobie przestawionego —
+      urządzenia, więc Kajet nie zostawia go po sobie przestawionego -
       a usługa i tak gasi wtedy haptykę sama.
     */
     override fun onStop() {
@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
     /*
       Rozkaz o drganiu rysika jest ulotny: usługa Lenovo gasi go, gdy rysik
-      odjeżdża od ekranu albo gdy Kajet znika pod zasłoną powiadomień — a ta
+      odjeżdża od ekranu albo gdy Kajet znika pod zasłoną powiadomień - a ta
       nie przechodzi przez onStop/onResume. Jedyny pewny moment na
       przypomnienie to zbliżenie rysika: najechanie (hover) przychodzi, zanim
       końcówka dotknie ekranu, więc pierwsza kreska po powrocie ma już
@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
         ) {
             runCatching { PenHaptics.refresh(this) }
             // Usługa Lenovo wznawia drganie przy KAŻDYM najechaniu nad
-            // aplikację — także nad paskami i menu. Poza powierzchnią
+            // aplikację - także nad paskami i menu. Poza powierzchnią
             // pisania trzeba je od razu dogasić.
             runCatching { PenHaptics.settle(this) }
         }
@@ -169,7 +169,7 @@ class MainActivity : ComponentActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    // Powrót ostrości okna — zasłona powiadomień właśnie zjechała, rozkaz
+    // Powrót ostrości okna - zasłona powiadomień właśnie zjechała, rozkaz
     // trzeba wysłać od nowa i to bez czekania na odstęp między powtórkami.
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -190,14 +190,14 @@ private fun KajetAppRoot(container: AppContainer) {
       już wybrany.
 
       Stało tu kiedyś samo tło w kolorze biurka. A biurko w ciemnym motywie to
-      #171614, czyli praktycznie czerń — więc człowiek widział czarny ekran nie
+      #171614, czyli praktycznie czerń - więc człowiek widział czarny ekran nie
       do odróżnienia od zawieszonej aplikacji i ratował się jej ubijaniem.
       Teraz widać znak Kajetu i napis, a gdyby odczyt naprawdę się zaciął, po
       chwili dochodzi wyjaśnienie. Ten ekran ma zawsze coś mówić.
     */
     val loaded = settings
     if (loaded == null) {
-        // Ustawień jeszcze nie ma, więc i wybranego języka nie znamy — na tym
+        // Ustawień jeszcze nie ma, więc i wybranego języka nie znamy - na tym
         // jednym ekranie idziemy wprost za systemem.
         val words = remember { stringsFor(AppLanguage.SYSTEM, systemLanguage()) }
         KajetTheme(darkTheme = isSystemInDarkTheme()) {
@@ -213,7 +213,7 @@ private fun KajetAppRoot(container: AppContainer) {
     }
 
     /*
-      Język. Bez własnego wyboru bierzemy ten z systemu — po polsku, gdy system
+      Język. Bez własnego wyboru bierzemy ten z systemu - po polsku, gdy system
       jest po polsku, po angielsku w każdym innym przypadku. Wybór z ustawień
       wygrywa i działa od razu, bez przeładowania ekranu.
     */
@@ -232,7 +232,7 @@ private fun KajetAppRoot(container: AppContainer) {
                 .fillMaxSize()
                 .background(Kajet.colors.desk)
                 .systemBarsPadding()
-                // Otwarta klawiatura zwęża treść zamiast ją zasłaniać —
+                // Otwarta klawiatura zwęża treść zamiast ją zasłaniać -
                 // przyciski pod polami tekstowymi zostają widoczne.
                 .imePadding(),
         ) {
@@ -259,7 +259,7 @@ private fun KajetAppRoot(container: AppContainer) {
 /**
  * Ekran na te ułamki sekundy, w których ustawienia jadą jeszcze z dysku.
  *
- * Po pięciu sekundach dochodzi zdanie o tym, co robić — bo jeśli tyle to trwa,
+ * Po pięciu sekundach dochodzi zdanie o tym, co robić - bo jeśli tyle to trwa,
  * to znaczy, że coś stoi, a człowiek ma prawo wiedzieć, że to nie on zepsuł.
  */
 @Composable

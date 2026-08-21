@@ -39,7 +39,7 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Dlaczego [SubcomposeLayout], a nie zwykłe `try` wokół [content]: kompilator
  * Compose nie pozwala objąć wywołania composable blokiem `try`. W mierzeniu
- * składanie idzie przez `subcompose`, czyli zwykłe wywołanie funkcji — i to
+ * składanie idzie przez `subcompose`, czyli zwykłe wywołanie funkcji - i to
  * wolno złapać.
  *
  * Przeładowanie zmienia numer podejścia, który jest zarazem kluczem gniazda.

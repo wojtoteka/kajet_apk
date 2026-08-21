@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Pilnuje, żeby stan zalogowania nie rozjeżdżał się z prawdą na serwerze.
  *
  * Bez tego aplikacja dowiadywała się o wylogowaniu przez stronę dopiero wtedy,
- * gdy sama miała coś do wysłania — a Ustawienia mogły całymi godzinami
+ * gdy sama miała coś do wysłania - a Ustawienia mogły całymi godzinami
  * pokazywać „Zalogowano jako…". Teraz token sprawdza się przy starcie
  * aplikacji i przy każdym powrocie z tła.
  *
@@ -26,7 +26,7 @@ class AuthWatch(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Jedno pytanie na raz — powrót z tła potrafi przyjść dwa razy pod rząd. */
+    /** Jedno pytanie na raz - powrót z tła potrafi przyjść dwa razy pod rząd. */
     private val asking = AtomicBoolean(false)
 
     @Volatile
@@ -34,7 +34,7 @@ class AuthWatch(
 
     /**
      * Sprawdza token, jeśli od ostatniego sprawdzenia minęła chwila. Wraca
-     * natychmiast — pytanie leci w tle, a wynik i tak trafi do
+     * natychmiast - pytanie leci w tle, a wynik i tak trafi do
      * [AccountStore.state], z którego czytają wszystkie ekrany.
      */
     fun check() {

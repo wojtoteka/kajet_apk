@@ -84,7 +84,7 @@ class SendQueue(context: Context) {
      * Zdejmuje wpis tylko wtedy, gdy nikt go w międzyczasie nie podmienił.
      * Wysyłka trwa chwilę; jeśli w jej trakcie doszła nowa zmiana (autozapis)
      * albo kosz urósł do trwałego kasowania, wpis ma zostać i pojechać jeszcze
-     * raz — inaczej ta świeższa robota przepadałaby po cichu.
+     * raz - inaczej ta świeższa robota przepadałaby po cichu.
      */
     @Synchronized
     fun removeIfUnchanged(sent: QueueEntry) {
@@ -97,7 +97,7 @@ class SendQueue(context: Context) {
 
     /**
      * Nieudana wysyłka. Po [MAX_ATTEMPTS] porażkach wpis zostaje w kolejce
-     * jako utknięty: przestajemy dobijać się nim do serwera, ale nie znika —
+     * jako utknięty: przestajemy dobijać się nim do serwera, ale nie znika -
      * kiedyś znikał i notatka przestawała się synchronizować NA ZAWSZE, bez
      * żadnego sygnału. Teraz liczbę utkniętych widać w stanie synchronizacji,
      * a [retryStuck] daje im kolejną szansę.
@@ -177,11 +177,11 @@ data class QueueEntry(
     val kind: String = KIND_NOTE,
     val failedAttempts: Int = 0,
     val addedAt: Long = 0,
-    // Rośnie przy każdym dopisaniu pod ten sam klucz — po tym poznajemy, że
+    // Rośnie przy każdym dopisaniu pod ten sam klucz - po tym poznajemy, że
     // wpis podmieniono w trakcie wysyłki i nie wolno go jeszcze zdjąć.
     val revision: Int = 0,
     // Wpis z uzgadniania biblioteki (po zalogowaniu), a nie z zapisu
-    // użytkownika. Kiedy serwer trzyma taką notatkę w koszu, kosz wygrywa —
+    // użytkownika. Kiedy serwer trzyma taką notatkę w koszu, kosz wygrywa -
     // bez tego przelogowanie wskrzeszało wszystko, co skasowano gdzie indziej.
     val reconciled: Boolean = false,
 ) {

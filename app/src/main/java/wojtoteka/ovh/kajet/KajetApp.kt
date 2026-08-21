@@ -37,7 +37,7 @@ class AppContainer(context: Context) {
 
     /*
       Leniwie, bo budowa chmury to magazyn kluczy i EncryptedSharedPreferences
-      (I/O na dysku) plus plan WorkManagera — wszystko działo się na wątku
+      (I/O na dysku) plus plan WorkManagera - wszystko działo się na wątku
       głównym w Application.onCreate i wydłużało start. Teraz pierwszy dostęp
       robi wątek rozgrzewki (patrz KajetApp.onCreate), a nie rysowanie ekranu.
     */
@@ -55,7 +55,7 @@ class AppContainer(context: Context) {
         KajetAi(CloudAi(cloud.account, cloud.client, cloud.sync, cloud.codeIds))
     }
 
-    // Tablet: Python lokalnie (Chaquopy), chyba że jest konto i sieć — wtedy CloudCode.
+    // Tablet: Python lokalnie (Chaquopy), chyba że jest konto i sieć - wtedy CloudCode.
     // Telefon: bez Chaquopy, zawsze CloudCode → POST /api/v1/code.
     val runners: RunnerRegistry by lazy {
         val cloudCode = CloudCode(cloud.account, cloud.client)
@@ -78,7 +78,7 @@ class AppContainer(context: Context) {
         library.onNoteSaved = { path, id ->
             cloud.sync.reportChange(path, id)
         }
-        // Pasek zapisu czyta kolejkę i zapamiętane wersje — bez zgadywania,
+        // Pasek zapisu czyta kolejkę i zapamiętane wersje - bez zgadywania,
         // że „Zapisane" jest już na serwerze.
         library.cloudSave = CloudSaveStatus { cloud }
         // Pliki z kodem jeżdżą na serwer jako notatki CODE.
@@ -99,7 +99,7 @@ class AppContainer(context: Context) {
         library.onFoldersTrashed = { folderIds ->
             cloud.sync.reportFoldersDeleted(folderIds)
         }
-        // Sam folder — bez notatki w środku — też jest zmianą do wysłania.
+        // Sam folder - bez notatki w środku - też jest zmianą do wysłania.
         // Synchronizacja zaczyna od uzgodnienia drzewa folderów, więc samo jej
         // odpalenie wystarczy, żeby świeży folder pojawił się na stronie.
         library.onFolderChanged = {
@@ -108,7 +108,7 @@ class AppContainer(context: Context) {
         library.onCodePurged = { paths ->
             cloud.sync.reportCodePurged(paths)
         }
-        // Po notatce nie ma już śladu na dysku — chmura zapomina o niej
+        // Po notatce nie ma już śladu na dysku - chmura zapomina o niej
         // wszystko: zapamiętaną wersję, powiązanie pliku z kodem i zaległe
         // wpisy z treścią do wysłania. Bez tego zostawały na zawsze i przy
         // uzgadnianiu biblioteki potrafiły wskrzesić skasowaną notatkę.
@@ -135,13 +135,13 @@ class KajetApp : Application() {
         super.onCreate()
 
         // Proces ekranu błędu (:blad) nie buduje kontenera i nie łapie
-        // wyjątków — awaria ekranu błędu nie może otwierać go od nowa
+        // wyjątków - awaria ekranu błędu nie może otwierać go od nowa
         // w kółko; wtedy zostaje zwykłe zachowanie systemu.
         if (isErrorProcess()) return
 
         /*
           Ostatnia deska ratunku PRZED budową kontenera: każdy nieobsłużony
-          wyjątek — także z budowy kontenera i z rysowania ekranu — zapisuje
+          wyjątek - także z budowy kontenera i z rysowania ekranu - zapisuje
           raport, otwiera ekran błędu w osobnym procesie i ubija ten proces.
           Bez tego zostawał czarny ekran, z którego wychodziło się tylko
           ubiciem aplikacji z ręki.
@@ -157,7 +157,7 @@ class KajetApp : Application() {
             runCatching { CrashLog.write(this, report) }
 
             /*
-              Od Androida 12 aplikacja w tle nie otworzy ekranu — system pisze
+              Od Androida 12 aplikacja w tle nie otworzy ekranu - system pisze
               w dzienniku „Background activity launch blocked". I UWAGA:
               startActivity wtedy NIE rzuca wyjątku, tylko po cichu nic nie
               robi. Po powodzeniu tego wywołania nie da się więc poznać, czy
@@ -165,7 +165,7 @@ class KajetApp : Application() {
 
               Dlatego raport odhacza jako pokazany sam ErrorActivity, w swoim
               onCreate. Gdy start został zablokowany, znacznik zostaje nietknięty
-              i raport doczeka do najbliższego otwarcia Kajetu — wtedy pokaże go
+              i raport doczeka do najbliższego otwarcia Kajetu - wtedy pokaże go
               MainActivity.
             */
             runCatching { startActivity(ErrorActivity.intent(this, report)) }
@@ -189,7 +189,7 @@ class KajetApp : Application() {
 
           Osobny wątek, nie ten od rozgrzewki: wysyłka czeka na sieć do ośmiu
           sekund na raport, a chmura ma wstać jak najszybciej. Bez konta i bez
-          tokenu — punkt na serwerze przyjmuje raporty od każdego, bo awaria
+          tokenu - punkt na serwerze przyjmuje raporty od każdego, bo awaria
           trafia się także przed zalogowaniem.
         */
         Thread {
@@ -197,7 +197,7 @@ class KajetApp : Application() {
         }.start()
 
         /*
-          Sprzątanie po kasowaniu — nie częściej niż raz na dobę i zawsze poza
+          Sprzątanie po kasowaniu - nie częściej niż raz na dobę i zawsze poza
           wątkiem głównym. Chodzi o zaległe kasowania, sieroty po plikach i
           stare zdjęcia z aparatu; nic z tego nie jest pilne, więc nie ma prawa
           opóźnić wejścia do biblioteki ani niczego przerwać.
@@ -215,7 +215,7 @@ class KajetApp : Application() {
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             getProcessName()
         } else {
-            // cmdline kończy się znakiem NUL — dalej są śmieci.
+            // cmdline kończy się znakiem NUL - dalej są śmieci.
             java.io.File("/proc/self/cmdline").readText().substringBefore(Char.MIN_VALUE).trim()
         }
     }.getOrDefault(packageName)

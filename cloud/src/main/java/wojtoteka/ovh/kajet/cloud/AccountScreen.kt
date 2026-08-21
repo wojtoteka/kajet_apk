@@ -75,7 +75,7 @@ fun AccountScreen(model: AccountViewModel, onBack: () -> Unit) {
         DeviceAuthBridge.clear()
     }
 
-    // Świeży stan konta z serwera przy wejściu na ekran ORAZ po zalogowaniu —
+    // Świeży stan konta z serwera przy wejściu na ekran ORAZ po zalogowaniu -
     // sam klucz Unit odpalał się, gdy jeszcze nie było tokenu, i zajętość
     // zostawała zerowa aż do ponownego wejścia.
     LaunchedEffect(state is SignInState.SignedIn) {
@@ -373,7 +373,7 @@ private fun SignedIn(
 
             /*
               Notatki, które wyczerpały próby wysyłki. Kiedyś znikały z kolejki
-              po cichu i przestawały się synchronizować na zawsze — teraz mają
+              po cichu i przestawały się synchronizować na zawsze - teraz mają
               własny wiersz i przycisk, który daje im nową pulę prób.
             */
             if (stuckNotes > 0) {
@@ -487,7 +487,7 @@ private fun Field(
 private fun Notice(text: String, color: androidx.compose.ui.graphics.Color, onClose: (() -> Unit)?) {
     val words = LocalStrings.current
     InlineNotice(text = text, color = color) {
-        // Bez zamykania, gdy komunikat opisuje trwały stan (wygasła sesja) —
+        // Bez zamykania, gdy komunikat opisuje trwały stan (wygasła sesja) -
         // zniknie sam po ponownym zalogowaniu.
         if (onClose != null) {
             IconAction(KajetIcons.Close, words.closeMessage, onClose, iconSize = 16.dp)

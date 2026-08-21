@@ -96,7 +96,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
 
       Wcześniej liczyło się to przy każdym przerysowaniu, z bieżących ustawień.
       Zmiana wartości każe navigation-compose zbudować graf od nowa i wstawić go
-      do kontrolera — a wtedy dotychczasowy stos ekranów przestaje do niego
+      do kontrolera - a wtedy dotychczasowy stos ekranów przestaje do niego
       pasować i potrafi zostać pusty. Pusty stos to nic do narysowania, czyli
       samo tło biurka: dokładnie ten „czarny ekran", z którego wychodziło się
       tylko ubiciem aplikacji. Po wskazaniu katalogu i tak przechodzimy do
@@ -112,7 +112,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     }
 
     /*
-      Bezpiecznik na wypadek, gdyby stos ekranów mimo wszystko został pusty —
+      Bezpiecznik na wypadek, gdyby stos ekranów mimo wszystko został pusty -
       po synchronizacji, po powrocie z notatki skasowanej gdzie indziej albo po
       zmianie rozmiaru okna w trybie pulpitu. Zamiast gołego tła wracamy do
       biblioteki. Chwila zwłoki, bo przy pierwszym złożeniu stos jest pusty
@@ -122,7 +122,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         if (backStack != null) return@LaunchedEffect
         delay(600)
         if (navController.currentBackStackEntry != null) return@LaunchedEffect
-        Log.w("Kajet", "Stos ekranów został pusty — wracam na $start")
+        Log.w("Kajet", "Stos ekranów został pusty - wracam na $start")
         runCatching { navController.navigate(start) { launchSingleTop = true } }
     }
 
@@ -138,7 +138,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
 
     // Udostępnij / Otwórz w: bez katalogu notatek najpierw wybór folderu,
     // potem kopia do biblioteki i ten sam open() co przy stuknięciu w spisie.
-    // Pending kasujemy dopiero po udanej kopii — nieudane wzięcie nie zjada
+    // Pending kasujemy dopiero po udanej kopii - nieudane wzięcie nie zjada
     // intencji, więc da się spróbować jeszcze raz, póki system trzyma URI.
     LaunchedEffect(incomingShare, settings.libraryFolder, route) {
         val share = incomingShare ?: return@LaunchedEffect
@@ -159,7 +159,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     Column(Modifier.fillMaxSize()) {
         /*
           Pasek z biblioteki nie widać na notatce, kodzie ani podglądzie.
-          Ten sam komunikat stoi więc tu, nad całym stosem — bez osobnego
+          Ten sam komunikat stoi więc tu, nad całym stosem - bez osobnego
           systemu snackbarów. W bibliotece i ustawieniach już jest swoje miejsce.
         */
         val showAwayFromLibrary = libraryError != null &&
@@ -359,7 +359,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             if (container.library.hasPersistedAccess(settings.libraryFolder)) return@repeatOnLifecycle
             if (route == null || route == Routes.START) return@repeatOnLifecycle
-            Log.w("Kajet", "Brak trwałego dostępu do folderu — wracam do wyboru katalogu")
+            Log.w("Kajet", "Brak trwałego dostępu do folderu - wracam do wyboru katalogu")
             runCatching {
                 navController.navigate(Routes.START) {
                     popUpTo(0) { inclusive = true }
@@ -374,7 +374,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
   Powrót zdejmuje TYLKO ekran, który wciąż jest na wierzchu.
 
   Dwa szybkie stuknięcia „wstecz" wołały popBackStack dwa razy: drugie
-  zdejmowało ze stosu także bibliotekę i zostawał pusty stos — czyli samo tło
+  zdejmowało ze stosu także bibliotekę i zostawał pusty stos - czyli samo tło
   biurka, w ciemnym motywie praktycznie czarne, wyglądające jak zawieszona
   aplikacja. Po pierwszym zdjęciu ekran przestaje być RESUMED, więc spóźnione
   stuknięcie nie robi już nic. Bezpiecznik na pusty stos wyżej zostaje jako

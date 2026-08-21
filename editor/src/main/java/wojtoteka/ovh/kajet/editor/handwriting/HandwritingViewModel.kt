@@ -401,7 +401,7 @@ class HandwritingViewModel(
     private val _shapes = MutableStateFlow(shapesFrom(rememberedShapes, inkColor))
     val shapeSettings: StateFlow<ShapeSettings> = _shapes.asStateFlow()
 
-    /** Blokada proporcji 1:1 z panelu — dla tych, którzy nie mają klawiatury. */
+    /** Blokada proporcji 1:1 z panelu - dla tych, którzy nie mają klawiatury. */
     private val _squareShapes = MutableStateFlow(rememberedShapes.square ?: false)
     val squareShapes: StateFlow<Boolean> = _squareShapes.asStateFlow()
 
@@ -568,7 +568,7 @@ class HandwritingViewModel(
      * Domyka przeciąganie albo rozciąganie pola: [before] to pole sprzed
      * gestu. Zwykłe [updateTextBox] z historią nie umie tego zapisać, bo w
      * trakcie gestu dokument ma już położenia pośrednie i „przed" wyszłoby
-     * równe „po" — cofnięcie nie miałoby czego cofać.
+     * równe „po" - cofnięcie nie miałoby czego cofać.
      */
     fun commitTextBox(page: Int, before: TextBoxElement, after: TextBoxElement) {
         val sheet = document.value?.page(page) ?: return
@@ -579,7 +579,7 @@ class HandwritingViewModel(
 
     /**
      * Blok kodu na kartce to pole tekstowe w maszynowym kroju na ciemnej
-     * płytce — od razu szersze, bo kod rzadko mieści się w wizytówce.
+     * płytce - od razu szersze, bo kod rzadko mieści się w wizytówce.
      */
     fun addCodeBox(page: Int, x: Float, y: Float, argb: Int, background: Int) {
         val sheet = document.value?.page(page) ?: return
@@ -603,7 +603,7 @@ class HandwritingViewModel(
     private val _editedImage = MutableStateFlow<String?>(null)
     val editedImage: StateFlow<String?> = _editedImage.asStateFlow()
 
-    /** Wczytane bitmapy załączników — kartka rysuje z nich, nie z dysku. */
+    /** Wczytane bitmapy załączników - kartka rysuje z nich, nie z dysku. */
     private val _imageBitmaps = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
     val imageBitmaps: StateFlow<Map<String, Bitmap>> = _imageBitmaps.asStateFlow()
 
@@ -614,7 +614,7 @@ class HandwritingViewModel(
           `viewModelScope` domyślnie wpuszcza na wątek główny, a ten kolektor
           rusza przy KAŻDEJ zmianie dokumentu, czyli przy każdym pociągnięciu
           rysika. Dekodowanie zdjęcia stało wtedy w poprzek rysowania i ekran
-          zamierał na sekundy — w ciemnym motywie nie do odróżnienia od
+          zamierał na sekundy - w ciemnym motywie nie do odróżnienia od
           zawieszenia, bo tło jest niemal czarne.
 
           Bitmapy nie dostają `recycle()`: kartka rysuje z tej samej mapy i
@@ -658,7 +658,7 @@ class HandwritingViewModel(
         viewModelScope.launch {
             try {
                 // Nazwa z zegara, bo przy kolizji magazyn dokleja " (2)" ze
-                // spacją — a jedna nazwa ma wskazywać jeden plik.
+                // spacją - a jedna nazwa ma wskazywać jeden plik.
                 val name = repo.writeAttachment(
                     notePath = path,
                     name = "zdjecie-${System.currentTimeMillis()}.$extension",
@@ -765,7 +765,7 @@ class HandwritingViewModel(
                   kartce jest czarny i na ciemnej byłby niewidoczny, więc
                   zamiast go przywracać, zostaje atrament TEJ kartki (przyszedł
                   z ekranu notatki jako `inkColor`). Kolory dobrane świadomie
-                  — czerwony, zielony — wracają.
+                  - czerwony, zielony - wracają.
                 */
                 penColor = restoredInk(saved.color, base.penColor),
                 penWidth = saved.width ?: base.penWidth,

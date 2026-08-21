@@ -25,7 +25,7 @@ fun cloudSaveState(
  * Furtka dla edytora: kolejka, stan konta i przebieg synchronizacji mówią,
  * kiedy warto odczytać [Sync.cloudSave] jeszcze raz.
  *
- * [cloud] jest leniwe — budowa chmury to I/O, a tę furtkę stawia kontener
+ * [cloud] jest leniwe - budowa chmury to I/O, a tę furtkę stawia kontener
  * przy starcie, zanim ktokolwiek otworzy notatkę.
  */
 class CloudSaveStatus(

@@ -38,7 +38,7 @@ object SafAccess {
     }
 
     /**
-     * Zapisuje trwałe uprawnienie. Gdy system odrzuci, wołamy jeszcze raz —
+     * Zapisuje trwałe uprawnienie. Gdy system odrzuci, wołamy jeszcze raz -
      * dopiero potem zgłaszamy błąd. Nie wolno po cichu zapisać adresu folderu
      * bez uprawnienia: to właśnie ta cisza dawała pustą bibliotekę.
      */

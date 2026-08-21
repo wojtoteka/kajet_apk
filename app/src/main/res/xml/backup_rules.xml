@@ -5,7 +5,7 @@
   folderu i pokazują pustą bibliotekę, choć notatki na dysku są nietknięte.
 
   Wyłączamy tylko ten adres i podręczny spis. Same pliki notatek leżą
-  w folderze wskazanym przez użytkownika, poza katalogiem aplikacji —
+  w folderze wskazanym przez użytkownika, poza katalogiem aplikacji -
   kopii zapasowej aplikacji i tak ich nie obejmują. Gdyby kiedyś trafiły
   do pamięci prywatnej Kajetu, ta reguła ich nie wyłącza.
 -->

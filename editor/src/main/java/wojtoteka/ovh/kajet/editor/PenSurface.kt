@@ -11,7 +11,7 @@ import wojtoteka.ovh.kajet.ink.PenHaptics
 /**
  * Oznacza composable jako powierzchnię pisania rysikiem: pole tekstu, po
  * którym tablet zamienia kreski na litery. Rysik drga tylko nad takimi
- * powierzchniami (i nad kartką) — nad paskami narzędzi i menu jest cisza.
+ * powierzchniami (i nad kartką) - nad paskami narzędzi i menu jest cisza.
  *
  * Zdarzenia idą po torze Initial, żeby dzieci (pola tekstowe, przyciski)
  * nie zdążyły ich zabrać. Wjazd i zjazd liczy się względem CAŁEGO obszaru,

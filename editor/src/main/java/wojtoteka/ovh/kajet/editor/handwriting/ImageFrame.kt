@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
 
 /**
  * Ramka ZAZNACZONEGO zdjęcia. Samo zdjęcie rysuje kartka ([StrokeCanvas])
- * pod atramentem — tu jest tylko obrys, uchwyt rozmiaru i kosz, i to
+ * pod atramentem - tu jest tylko obrys, uchwyt rozmiaru i kosz, i to
  * wyłącznie dla zdjęcia wskazanego stuknięciem. Dzięki temu nakładka nie
  * zabiera rysika reszcie kartki: po niezaznaczonym zdjęciu pisze się
  * jak po papierze.
@@ -80,7 +80,7 @@ private fun ImageFrame(
     val left = (image.x - offsetX) * zoom
     val top = (image.y + pageTop - offsetY) * zoom
 
-    // Gest czyta zdjęcie przez rememberUpdatedState — patrz uwaga w TextBoxes.
+    // Gest czyta zdjęcie przez rememberUpdatedState - patrz uwaga w TextBoxes.
     val current by rememberUpdatedState(image)
     val currentZoom by rememberUpdatedState(zoom)
 
@@ -142,7 +142,7 @@ private fun ImageFrame(
             )
         }
 
-        // Rozmiar w rogu. Proporcje zostają — zdjęcie się skaluje, nie rozjeżdża.
+        // Rozmiar w rogu. Proporcje zostają - zdjęcie się skaluje, nie rozjeżdża.
         Box(
             Modifier
                 .align(Alignment.BottomEnd)

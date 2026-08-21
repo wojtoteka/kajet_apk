@@ -5,8 +5,8 @@ package wojtoteka.ovh.kajet.core.model
  *
  * Biblioteka oznacza takie wpisy jako [ItemType.OTHER_FILE]. Edytor kodu
  * czyta je jak UTF-8: na ekranie śmieci, a pierwszy klawisz psuje bajty
- * na dysku. Stąd osobne drogi — podgląd zdjęcia, podgląd PDF albo komunikat
- * — i żadnego pola tekstu na surowych bajtach.
+ * na dysku. Stąd osobne drogi - podgląd zdjęcia, podgląd PDF albo komunikat
+ * - i żadnego pola tekstu na surowych bajtach.
  */
 enum class OtherFileKind {
     IMAGE,
@@ -20,7 +20,7 @@ enum class OtherFileKind {
 
         /*
           Tekst, którego Kajet nie ma w spisie języków. .txt / .log / .csv
-          i tak idą do edytora kodu jako PLAIN_TEXT — tu są na wypadek, gdyby
+          i tak idą do edytora kodu jako PLAIN_TEXT - tu są na wypadek, gdyby
           któryś kiedyś spadł do OTHER_FILE.
         */
         private val TEXT = setOf(

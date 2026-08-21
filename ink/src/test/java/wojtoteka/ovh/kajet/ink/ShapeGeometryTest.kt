@@ -32,7 +32,7 @@ class ShapeGeometryTest {
 
     @Test
     fun `przeciagniecie od punktu do punktu daje dodatnie boki`() {
-        // Ciągnięcie w lewo do góry — prostokąt i tak ma boki dodatnie.
+        // Ciągnięcie w lewo do góry - prostokąt i tak ma boki dodatnie.
         val drawn = ShapeGeometry.fitTo(shape(), 300f, 300f, 100f, 150f, square = false)
 
         assertThat(drawn.x).isEqualTo(100f)

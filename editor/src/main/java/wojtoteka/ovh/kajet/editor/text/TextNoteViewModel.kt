@@ -154,7 +154,7 @@ class TextNoteViewModel(
             _busy.value = words.savingDrawing
             try {
                 // PNG siada na jasnym papierze markdowna, więc tło jest białe,
-                // a tusz z ciemnej kartki idzie na grafit — inaczej kremowa
+                // a tusz z ciemnej kartki idzie na grafit - inaczej kremowa
                 // kreska znika. Źródło kresek zostaje w barwach edytora.
                 val png = DrawingToImage.png(
                     strokes = PaperStrokes.of(strokes),

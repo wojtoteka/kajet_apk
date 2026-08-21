@@ -4,7 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /*
-  Port testów note-title.test.ts z serwera — obie strony mają podpowiadać
+  Port testów note-title.test.ts z serwera - obie strony mają podpowiadać
   ten sam tytuł z tej samej treści.
 */
 class NoteTitlesTest {
@@ -17,7 +17,7 @@ class NoteTitlesTest {
 
     @Test
     fun `nie nazywa notatki od wiersza pisanego w tej chwili`() {
-        // Autozapis rusza ułamek sekundy po pierwszym znaku — „L" nie może
+        // Autozapis rusza ułamek sekundy po pierwszym znaku - „L" nie może
         // zostać tytułem notatki na zawsze.
         assertThat(NoteTitles.fromMarkdown("L")).isNull()
         assertThat(NoteTitles.fromMarkdown("Lista")).isNull()
@@ -100,7 +100,7 @@ class NoteTitlesTest {
         val title = NoteTitles.fromMarkdown(long)
 
         assertThat(title).isNotNull()
-        // 48 znaków granicy plus wielokropek — ta sama liczba co na serwerze.
+        // 48 znaków granicy plus wielokropek - ta sama liczba co na serwerze.
         assertThat(title!!.length).isAtMost(51)
         assertThat(title.endsWith("...")).isTrue()
     }
