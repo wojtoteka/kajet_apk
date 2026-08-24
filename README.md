@@ -29,8 +29,9 @@ zdalnie na serwerze Kajetu w kontenerze.
 **Przeglądarka plików.** Obrazy, PDF-y i nieznane binaria otwierają się w podglądzie tylko do
 odczytu - nigdy nie lądują w edytorze kodu jako UTF-8.
 
-**Udostępnianie w obie strony.** Apka przyjmuje pliki przez Android Share i „Otwórz w",
-kopiując je najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
+**Udostępnianie w obie strony.** Apka przyjmuje przez Android Share i „Otwórz w" dokładnie
+to, co potrafi pokazać - tekst i kod, zdjęcia jpg / png / gif / webp oraz PDF - kopiując pliki
+najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
 
 **Eksport.** PDF (z formatowaniem tekstu, zdjęciami i rysunkiem), DOCX, Markdown.
 

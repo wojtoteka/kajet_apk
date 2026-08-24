@@ -58,76 +58,78 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="kajet" android:host="auth" />
             </intent-filter>
-            <!-- Udostępnij / Otwórz w: tekst, zdjęcie, PDF i pozostałe pliki.
-                 Osobne filtry, żeby kajet://auth nie wymagał typu MIME, a
-                 szuflada systemowa znajdowała Kajet po konkretnym typie. -->
+            <!--
+              „Udostępnij" / „Otwórz w". Kajet zgłasza się WYŁĄCZNIE do tego,
+              co naprawdę umie pokazać po skopiowaniu pliku do biblioteki:
+                - tekst i kod - edytor kodu czyta plik jako UTF-8,
+                - jpg / png / gif / webp - podgląd zdjęcia,
+                - PDF - podgląd stron.
+              Żadnego mimeType="*/*". Z nim system proponował Kajet do .apk,
+              .zip czy filmu, a taki plik i tak kończył na komunikacie, że nic
+              go nie otworzy.
+
+              Spis typów ma się zgadzać z OtherFileKind.of i CodeLanguage - to
+              one rozstrzygają, na który ekran trafi skopiowany plik. Po
+              dopisaniu tam nowego rodzaju trzeba dopisać typ MIME i tutaj,
+              inaczej szuflada systemowa Kajetu nie pokaże.
+
+              Typy MIME stoją w osobnym filtrze niż kajet://auth, bo tamten
+              adres przychodzi bez typu i w jednym filtrze by nie pasował.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <!-- Tekst i kod. text/* obejmuje text/plain, text/markdown,
+                     text/csv, text/html, text/xml i typy języków
+                     (text/x-python, text/x-java-source i podobne). -->
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="application/yaml" />
+                <data android:mimeType="application/x-yaml" />
+                <data android:mimeType="application/sql" />
+                <data android:mimeType="application/x-sh" />
+                <data android:mimeType="application/x-shellscript" />
+                <data android:mimeType="application/x-httpd-php" />
+                <!-- Zdjęcia: dokładnie te cztery formaty, które czyta podgląd
+                     (OtherFileKind.IMAGES). image/* wpuszczałoby też np. .heic,
+                     a ten kończy na komunikacie o binarce. -->
+                <data android:mimeType="image/jpeg" />
+                <data android:mimeType="image/png" />
+                <data android:mimeType="image/gif" />
+                <data android:mimeType="image/webp" />
+                <!-- SVG to znaczniki, więc idzie do edytora kodu, a nie do
+                     podglądu zdjęcia. -->
+                <data android:mimeType="image/svg+xml" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+            <!-- „Otwórz w" z menedżera plików i z pobranych. Ten sam spis
+                 typów co wyżej. Schematy i typy mnożą się przez siebie, więc
+                 content: i file: dotyczą każdego z nich. -->
             <intent-filter>
-                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="application/yaml" />
+                <data android:mimeType="application/x-yaml" />
+                <data android:mimeType="application/sql" />
+                <data android:mimeType="application/x-sh" />
+                <data android:mimeType="application/x-shellscript" />
+                <data android:mimeType="application/x-httpd-php" />
+                <data android:mimeType="image/jpeg" />
+                <data android:mimeType="image/png" />
+                <data android:mimeType="image/gif" />
+                <data android:mimeType="image/webp" />
+                <data android:mimeType="image/svg+xml" />
                 <data android:mimeType="application/pdf" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="text/plain" />
-                <data android:scheme="file" android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="image/*" />
-                <data android:scheme="file" android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="application/pdf" />
-                <data android:scheme="file" android:mimeType="application/pdf" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="*/*" />
-                <data android:scheme="file" android:mimeType="*/*" />
             </intent-filter>
         </activity>
 

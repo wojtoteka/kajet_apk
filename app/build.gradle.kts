@@ -16,8 +16,8 @@ android {
         applicationId = "wojtoteka.ovh.kajet"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "26.08.11"
+        versionCode = 17
+        versionName = "26.08.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
