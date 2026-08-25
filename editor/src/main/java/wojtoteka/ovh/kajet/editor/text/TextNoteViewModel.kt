@@ -11,9 +11,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.DrawingSource
+import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InlineDrawing
 import wojtoteka.ovh.kajet.core.model.NoteFont
+import wojtoteka.ovh.kajet.core.model.NotePhoto
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.editor.NoteViewModel
@@ -109,22 +111,48 @@ class TextNoteViewModel(
 
     // Zdjęcia i rysunki
 
+    /**
+     * Miejsce dla wstawianego zdjęcia: [at] to znak treści, za którym ma
+     * stanąć, [beside] mówi, czy ma stanąć OBOK poprzedniego zdjęcia,
+     * w tym samym wierszu, a [width] to jego szerokość - zdjęcie wchodzące
+     * obok bierze ją od sąsiada, żeby wiersz od razu był równy.
+     */
+    data class PhotoSpot(
+        val at: Int,
+        val beside: Boolean = false,
+        val width: Float = ImageLines.FULL_WIDTH,
+    )
+
     // Wybór zdjęcia w galerii albo aparacie trwa dłuższą chwilę i dzieje się
     // poza edytorem, więc miejsce wstawienia zapamiętuje się w chwili
     // naciśnięcia przycisku, a nie w chwili powrotu z wynikiem.
-    private var photoPosition: Int? = null
+    private var photoSpot: PhotoSpot? = null
 
-    fun rememberPhotoPosition(at: Int) {
-        photoPosition = at
+    fun rememberPhotoSpot(spot: PhotoSpot) {
+        photoSpot = spot
     }
 
-    fun takePhotoPosition(): Int {
-        val at = photoPosition ?: markdown.length
-        photoPosition = null
-        return at.coerceIn(0, markdown.length)
+    fun takePhotoSpot(): PhotoSpot {
+        val spot = photoSpot ?: PhotoSpot(markdown.length)
+        photoSpot = null
+        return spot.copy(at = spot.at.coerceIn(0, markdown.length))
     }
 
-    fun insertPhoto(data: ByteArray, extension: String, position: Int) {
+    /**
+     * Zapis zdjęcia gotowy do wstawienia w treść.
+     *
+     * Zdjęcie stojące OBOK poprzedniego siedzi w tym samym wierszu, rozdzielone
+     * samym odstępem - tak czyta wiersz ze zdjęciami [ImageLines] i tak samo
+     * markdown na stronie. Zdjęcie od nowego wiersza dostaje własny wiersz.
+     */
+    private fun photoMarkdown(alt: String, name: String, spot: PhotoSpot): String {
+        val photo = ImageLines.write(
+            NotePhoto(alt = alt, url = "assets/$name", width = spot.width),
+        )
+        return if (spot.beside) " $photo" else "\n$photo\n"
+    }
+
+    fun insertPhoto(data: ByteArray, extension: String, spot: PhotoSpot) {
         viewModelScope.launch {
             _busy.value = words.savingPhoto
             try {
@@ -136,7 +164,7 @@ class TextNoteViewModel(
                     data = data,
                     mime = if (extension == "png") "image/png" else "image/jpeg",
                 )
-                insert("\n![${words.photoAltText}](assets/$name)\n", position, position)
+                insert(photoMarkdown(words.photoAltText, name, spot), spot.at, spot.at)
             } catch (e: Exception) {
                 setError(e.message ?: words.photoSaveFailed)
             } finally {
@@ -145,7 +173,12 @@ class TextNoteViewModel(
         }
     }
 
-    fun insertDrawing(strokes: List<InkStroke>, width: Float, height: Float, position: Int) {
+    fun insertDrawing(
+        strokes: List<InkStroke>,
+        width: Float,
+        height: Float,
+        spot: PhotoSpot,
+    ) {
         if (strokes.isEmpty()) {
             _drawing.value = false
             return
@@ -186,7 +219,7 @@ class TextNoteViewModel(
                         ),
                     )
                 }
-                insert("\n![rysunek](assets/$imageName)\n", position, position)
+                insert(photoMarkdown("rysunek", imageName, spot), spot.at, spot.at)
             } catch (e: Exception) {
                 setError(e.message ?: words.drawingSaveFailed)
             } finally {

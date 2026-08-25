@@ -345,10 +345,13 @@ interface Strings {
     val photoDown: String
     val photoRemove: String
     val photoCaptionAbout: String
-    val photoPlacement: String
     val photoBeside: String
     val photoOwnLine: String
     val photoChoose: String
+    val photoUnchoose: String
+    val photoMove: String
+    val photoSmaller: String
+    val photoBigger: String
 
     // --- Edytor odręczny ---
     val penSettings: String
@@ -1633,10 +1636,13 @@ object PolishStrings : Strings {
     override val photoDown = "Przesuń zdjęcie niżej"
     override val photoRemove = "Usuń zdjęcie z notatki"
     override val photoCaptionAbout = "Podpis czyta czytnik ekranu i trafia do wydruku."
-    override val photoPlacement = "Ułożenie"
     override val photoBeside = "Obok poprzedniego"
     override val photoOwnLine = "Od nowego wiersza"
     override val photoChoose = "Wybierz zdjęcie"
+    override val photoUnchoose = "Odznacz zdjęcie"
+    override val photoMove = "Przeciągnij, żeby przesunąć zdjęcie"
+    override val photoSmaller = "Zmniejsz zdjęcie"
+    override val photoBigger = "Powiększ zdjęcie"
 
     override val penSettings = "Ustawienia pisaka"
     override val insertTextBox = "Wstaw pole tekstowe"
@@ -2356,10 +2362,13 @@ object EnglishStrings : Strings {
     override val photoDown = "Move the photo down"
     override val photoRemove = "Remove the photo from the note"
     override val photoCaptionAbout = "The caption is read by screen readers and goes into the print-out."
-    override val photoPlacement = "Placement"
     override val photoBeside = "Next to the one above"
     override val photoOwnLine = "On a new line"
     override val photoChoose = "Choose the photo"
+    override val photoUnchoose = "Deselect the photo"
+    override val photoMove = "Drag to move the photo"
+    override val photoSmaller = "Make the photo smaller"
+    override val photoBigger = "Make the photo bigger"
 
     override val penSettings = "Pen settings"
     override val insertTextBox = "Insert a text box"

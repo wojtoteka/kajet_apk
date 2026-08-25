@@ -158,7 +158,7 @@ fun NoteScreen(
                     scope.launch {
                         val photo = readPhoto(context, uri)
                         if (photo != null) {
-                            model.insertPhoto(photo.first, photo.second, model.takePhotoPosition())
+                            model.insertPhoto(photo.first, photo.second, model.takePhotoSpot())
                         }
                     }
                 }
@@ -172,7 +172,7 @@ fun NoteScreen(
                 if (ok && file != null) {
                     scope.launch {
                         val data = readCameraFile(file)
-                        if (data != null) model.insertPhoto(data, "jpg", model.takePhotoPosition())
+                        if (data != null) model.insertPhoto(data, "jpg", model.takePhotoSpot())
                     }
                 }
             }

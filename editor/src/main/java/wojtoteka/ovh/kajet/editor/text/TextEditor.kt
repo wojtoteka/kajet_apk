@@ -130,6 +130,14 @@ fun TextEditor(
     var blockMode by remember { mutableStateOf(true) }
     var blocks by remember(document?.id) { mutableStateOf(Blocks.split(modelContent)) }
 
+    /*
+      Zdjęcie wskazane stuknięciem. Tylko ono ma obwódkę, uchwyt rozmiaru
+      i przyciski, i to na nim pracują wszystkie działania przy zdjęciach.
+      Nowe zdjęcie i nowy rysunek wchodzą OBOK niego, w ten sam wiersz -
+      w ten sposób stawia się zdjęcia jedno przy drugim.
+    */
+    var selectedPhoto by remember(document?.id) { mutableStateOf<String?>(null) }
+
     // Blok, w którym stoi kursor. Pasek formatowania działa właśnie na nim.
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var focusedField by remember { mutableStateOf(TextFieldValue()) }
@@ -175,6 +183,31 @@ fun TextEditor(
         focusedKey?.let { Blocks.endPosition(blocks, it) } ?: model.markdown.length
     } else {
         field.selection.start
+    }
+
+    /**
+     * Miejsce dla nowego zdjęcia albo rysunku.
+     *
+     * Kiedy jakieś zdjęcie jest wybrane, nowe staje OBOK niego, w tym samym
+     * wierszu i w tej samej szerokości - w ten sposób stawia się zdjęcia jedno
+     * przy drugim, bez szukania czegokolwiek w ustawieniach. Kiedy nic nie jest
+     * wybrane, zdjęcie idzie od nowego wiersza za blokiem z kursorem, jak dotąd.
+     */
+    fun photoSpot(): TextNoteViewModel.PhotoSpot {
+        val chosen = if (blockMode) {
+            blocks.firstOrNull { it.key == selectedPhoto } as? Block.Image
+        } else {
+            null
+        }
+        return if (chosen == null) {
+            TextNoteViewModel.PhotoSpot(insertPosition())
+        } else {
+            TextNoteViewModel.PhotoSpot(
+                at = Blocks.endPosition(blocks, chosen.key),
+                beside = true,
+                width = chosen.width,
+            )
+        }
     }
 
     /**
@@ -332,11 +365,11 @@ fun TextEditor(
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
             IconAction(KajetIcons.PhotoFrame, words.insertPhotoFromGallery, {
-                model.rememberPhotoPosition(insertPosition())
+                model.rememberPhotoSpot(photoSpot())
                 onPhotoFromGallery()
             })
             IconAction(KajetIcons.CameraBody, words.takePhoto, {
-                model.rememberPhotoPosition(insertPosition())
+                model.rememberPhotoSpot(photoSpot())
                 onPhotoFromCamera()
             })
             IconAction(KajetIcons.DrawingPad, words.insertDrawing, model::openDrawing)
@@ -402,7 +435,11 @@ fun TextEditor(
                 fragmentSize = pending.on[SpanType.SIZE]?.toFloatOrNull()
                     ?: TextFormat.sizeIn(cursorField, noteSize),
                 noteSize = noteSize,
-                onBlockMode = { blockMode = it },
+                onBlockMode = {
+                    // Surowy markdown nie ma zdjęć do wybierania.
+                    selectedPhoto = null
+                    blockMode = it
+                },
                 onFont = model::setFont,
                 onNoteSize = model::setFontSize,
                 onFragmentSize = { delta ->
@@ -493,6 +530,8 @@ fun TextEditor(
                             model.setContent(Blocks.join(next))
                         },
                         onTapBelow = { focusPageBottom() },
+                        selectedPhoto = selectedPhoto,
+                        onSelectPhoto = { selectedPhoto = it },
                         keyToFocus = keyToFocus,
                         onFocusTaken = { keyToFocus = null },
                         onBlockFocused = { key, set ->
@@ -540,14 +579,9 @@ fun TextEditor(
         DrawingDialog(
             onClose = model::closeDrawing,
             onDone = { strokes, width, height ->
-                // Rysunek ma trafić za blok, w którym stoi kursor, a nie
-                // na koniec całej notatki.
-                val position = if (blockMode) {
-                    focusedKey?.let { Blocks.endPosition(blocks, it) } ?: model.markdown.length
-                } else {
-                    field.selection.start
-                }
-                model.insertDrawing(strokes, width, height, position)
+                // Rysunek ma trafić za wybrane zdjęcie albo za blok, w którym
+                // stoi kursor - a nie na koniec całej notatki.
+                model.insertDrawing(strokes, width, height, photoSpot())
             },
         )
     }

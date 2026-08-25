@@ -469,6 +469,15 @@ object Blocks {
         return at > 0 && blocks[at] is Block.Image && blocks[at - 1] is Block.Image
     }
 
+    /** Czy zdjęcie stoi w wierszu z innymi - czyli czy ma z czego zejść. */
+    fun standsInRow(blocks: List<Block>, key: String): Boolean {
+        val at = blocks.indexOfFirst { it.key == key }
+        val image = blocks.getOrNull(at) as? Block.Image ?: return false
+        if (image.inRow) return true
+        val next = blocks.getOrNull(at + 1)
+        return next is Block.Image && next.inRow
+    }
+
     /**
      * Stawia zdjęcie obok poprzedniego albo odsuwa je do własnego wiersza.
      *
@@ -481,9 +490,64 @@ object Blocks {
         val image = blocks[at] as? Block.Image ?: return blocks
         if (beside && !canStandBeside(blocks, key)) return blocks
 
-        val align = if (beside) (blocks[at - 1] as Block.Image).align else image.align
+        if (beside) {
+            val align = (blocks[at - 1] as Block.Image).align
+            return blocks.toMutableList().apply {
+                this[at] = image.copy(inRow = true, align = align)
+            }
+        }
+
+        /*
+          Zdjęcie stojące obok poprzedniego po prostu z wiersza wychodzi. Kiedy
+          to ono wiersz ZACZYNA, z wiersza schodzi to, co stoi za nim - inaczej
+          pierwszego zdjęcia nie dałoby się odsunąć od reszty, bo znacznik
+          „stoję obok" ma sąsiad, a nie ono.
+        */
+        val leaving = if (image.inRow) at else at + 1
+        val target = blocks.getOrNull(leaving) as? Block.Image ?: return blocks
+        if (!target.inRow) return blocks
         return blocks.toMutableList().apply {
-            this[at] = image.copy(inRow = beside, align = align)
+            this[leaving] = target.copy(inRow = false)
+        }
+    }
+
+    /** Kierunek, w którym zdjęcie idzie od jednego przesunięcia. */
+    enum class PhotoNudge { LEFT, RIGHT, UP, DOWN }
+
+    /**
+     * Zdjęcie przesunięte palcem albo rysikiem - o jedno miejsce w podanym
+     * kierunku.
+     *
+     * Wiersz ze zdjęciami leży w poprzek, a notatka w pionie, więc kierunek
+     * znaczy w nim co innego:
+     *
+     * - w bok, mając sąsiada w wierszu: zamiana miejscami z tym sąsiadem;
+     * - w prawo, stojąc samo pod zdjęciem: wchodzi do jego wiersza, obok niego;
+     * - w pionie, stojąc w wierszu z innymi: schodzi do własnego wiersza;
+     * - w pionie, stojąc samo: idzie o jeden blok wyżej albo niżej.
+     */
+    fun nudgePhoto(blocks: List<Block>, key: String, nudge: PhotoNudge): List<Block> {
+        val at = blocks.indexOfFirst { it.key == key }
+        if (blocks.getOrNull(at) !is Block.Image) return blocks
+        val row = rows(blocks).firstOrNull { group -> group.any { it.key == key } } ?: return blocks
+        val inside = row.indexOfFirst { it.key == key }
+        val alone = row.size == 1
+
+        return when (nudge) {
+            PhotoNudge.LEFT ->
+                if (inside > 0) move(blocks, key, up = true) else blocks
+
+            PhotoNudge.RIGHT -> when {
+                inside < row.lastIndex -> move(blocks, key, up = false)
+                alone && canStandBeside(blocks, key) -> setSideBySide(blocks, key, beside = true)
+                else -> blocks
+            }
+
+            PhotoNudge.UP ->
+                if (alone) move(blocks, key, up = true) else setSideBySide(blocks, key, beside = false)
+
+            PhotoNudge.DOWN ->
+                if (alone) move(blocks, key, up = false) else setSideBySide(blocks, key, beside = false)
         }
     }
 

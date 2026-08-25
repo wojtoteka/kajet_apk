@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,31 +26,39 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,6 +90,13 @@ fun BlockEditor(
      * w ostatnim akapicie, a nie zostawić klawiaturę przy tytule.
      */
     onTapBelow: () -> Unit,
+    /**
+     * Zdjęcie wskazane stuknięciem. Dopiero ono ma obwódkę, uchwyt rozmiaru
+     * i przyciski - niezaznaczone zdjęcie jest samym zdjęciem, jak w notatce
+     * odręcznej.
+     */
+    selectedPhoto: String?,
+    onSelectPhoto: (String?) -> Unit,
     keyToFocus: String?,
     onFocusTaken: () -> Unit,
     onBlockFocused: (key: String, setField: (TextFieldValue) -> Unit) -> Unit,
@@ -136,7 +154,12 @@ fun BlockEditor(
                     focused = keyToFocus == block.key,
                     onFocusTaken = onFocusTaken,
                     onContent = { onBlocksChange(Blocks.setText(blocks, block.key, it)) },
-                    onBlockFocused = onBlockFocused,
+                    // Kursor w tekście kończy pracę przy zdjęciu - obwódka
+                    // i przyciski nie mają po co zostawać na ekranie.
+                    onBlockFocused = { key, set ->
+                        onSelectPhoto(null)
+                        onBlockFocused(key, set)
+                    },
                     onSelection = onSelection,
                     onTyped = onTyped,
                 )
@@ -161,7 +184,10 @@ fun BlockEditor(
                             onBlocksChange(Blocks.setText(blocks, block.key, content))
                         }
                     },
-                    onBlockFocused = onBlockFocused,
+                    onBlockFocused = { key, set ->
+                        onSelectPhoto(null)
+                        onBlockFocused(key, set)
+                    },
                     onSelection = onSelection,
                     onTyped = onTyped,
                 )
@@ -187,9 +213,15 @@ fun BlockEditor(
                 is Block.Image -> ImageRowBlock(
                     photos = group.filterIsInstance<Block.Image>(),
                     attachment = attachment,
+                    selectedKey = selectedPhoto,
+                    onSelect = onSelectPhoto,
                     canMoveUp = { key -> blocks.firstOrNull()?.key != key },
                     canMoveDown = { key -> blocks.lastOrNull()?.key != key },
                     canStandBeside = { key -> Blocks.canStandBeside(blocks, key) },
+                    standsInRow = { key -> Blocks.standsInRow(blocks, key) },
+                    onNudge = { key, nudge ->
+                        onBlocksChange(Blocks.nudgePhoto(blocks, key, nudge))
+                    },
                     onAlt = { key, alt -> onBlocksChange(Blocks.setAlt(blocks, key, alt)) },
                     onWidth = { key, width -> onBlocksChange(Blocks.setImageWidth(blocks, key, width)) },
                     onAlign = { key, align -> onBlocksChange(Blocks.setImageAlign(blocks, key, align)) },
@@ -198,7 +230,10 @@ fun BlockEditor(
                     },
                     onMoveUp = { key -> onBlocksChange(Blocks.move(blocks, key, up = true)) },
                     onMoveDown = { key -> onBlocksChange(Blocks.move(blocks, key, up = false)) },
-                    onDelete = { key -> onBlocksChange(Blocks.remove(blocks, key)) },
+                    onDelete = { key ->
+                        onSelectPhoto(null)
+                        onBlocksChange(Blocks.remove(blocks, key))
+                    },
                 )
             }
         }
@@ -221,7 +256,10 @@ fun BlockEditor(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClickLabel = words.writeHere,
-                        onClick = onTapBelow,
+                        onClick = {
+                            onSelectPhoto(null)
+                            onTapBelow()
+                        },
                     ),
             )
         }
@@ -560,19 +598,27 @@ private fun TableCell(
  * Wiersz ze zdjęciami: jedno albo kilka obok siebie. W pliku to jeden wiersz,
  * więc i tutaj jest to jeden blok.
  *
- * Przyciski stoją POD wierszem i tyczą się wybranego zdjęcia. Pod zdjęciem
- * o szerokości 25% i tak by się nie zmieściły, a osobny rząd przycisków dla
- * każdego zdjęcia zajmowałby więcej miejsca niż same zdjęcia. Wybrane zdjęcie
- * ma obwódkę - dopóki zdjęcie jest jedno, nie ma czego wybierać i obwódki nie
- * ma.
+ * Niezaznaczone zdjęcie jest samym zdjęciem - bez obwódki, uchwytów
+ * i przycisków. Dopiero stuknięcie je wybiera: wtedy dostaje obwódkę, uchwyt
+ * rozmiaru w rogu, a pod wierszem staje pasek z resztą działań. Tak samo
+ * działa zdjęcie na kartce odręcznej (ImageFrame.kt), więc obie notatki
+ * obsługuje się tak samo.
+ *
+ * Przyciski stoją POD wierszem, a nie pod zdjęciem: pod zdjęciem o szerokości
+ * 25% i tak by się nie zmieściły, a osobny rząd dla każdego zdjęcia zajmowałby
+ * więcej miejsca niż same zdjęcia.
  */
 @Composable
 private fun ImageRowBlock(
     photos: List<Block.Image>,
     attachment: suspend (String) -> ByteArray?,
+    selectedKey: String?,
+    onSelect: (String?) -> Unit,
     canMoveUp: (String) -> Boolean,
     canMoveDown: (String) -> Boolean,
     canStandBeside: (String) -> Boolean,
+    standsInRow: (String) -> Boolean,
+    onNudge: (String, Blocks.PhotoNudge) -> Unit,
     onAlt: (String, String) -> Unit,
     onWidth: (String, Float) -> Unit,
     onAlign: (String, NoteAlign) -> Unit,
@@ -583,12 +629,15 @@ private fun ImageRowBlock(
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
-    var chosenKey by remember { mutableStateOf(photos.first().key) }
-    var showAlt by remember { mutableStateOf(false) }
-    var showSize by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
 
-    // Wybrane zdjęcie mogło przed chwilą wyjechać z wiersza albo pójść do kosza.
-    val block = photos.firstOrNull { it.key == chosenKey } ?: photos.first()
+    // Zaznaczone zdjęcie TEGO wiersza albo nic, gdy wybrane jest w innym
+    // miejscu notatki. Podpis i rozmiar otwierają się przy zdjęciu, więc
+    // przy zmianie wyboru mają się zamknąć - stąd klucz w remember.
+    val block = photos.firstOrNull { it.key == selectedKey }
+    var showAlt by remember(block?.key) { mutableStateOf(false) }
+    var showSize by remember(block?.key) { mutableStateOf(false) }
+
     val many = photos.size > 1
     val align = photos.first().align
 
@@ -601,6 +650,7 @@ private fun ImageRowBlock(
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val room = maxWidth
+            val roomPx = with(density) { room.toPx() }
             // Szerokość zdjęcia to ułamek szerokości notatki, więc liczymy ją
             // sami. Sam Row podzieliłby miejsce po równo albo mierzył ułamek
             // od tego, co zostało po sąsiedzie - i 25% obok 25% nie byłoby
@@ -617,12 +667,19 @@ private fun ImageRowBlock(
                         photo = photo,
                         attachment = attachment,
                         width = room * parts[index],
-                        marked = many && photo.key == block.key,
-                        onChoose = if (many) ({ chosenKey = photo.key }) else null,
+                        roomPx = roomPx,
+                        chosen = photo.key == block?.key,
+                        onChoose = { onSelect(if (photo.key == block?.key) null else photo.key) },
+                        onWidth = { width -> onWidth(photo.key, width) },
+                        onNudge = { nudge -> onNudge(photo.key, nudge) },
                     )
                 }
             }
         }
+
+        // Przyciski dopiero po wybraniu zdjęcia - inaczej notatka złożona ze
+        // zdjęć składa się w połowie z rzędów przycisków.
+        if (block == null) return@Column
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -630,7 +687,7 @@ private fun ImageRowBlock(
         ) {
             Text(
                 text = if (many) {
-                    words.photoOfMany(photos.indexOf(block) + 1, photos.size)
+                    words.photoOfMany(photos.indexOfFirst { it.key == block.key } + 1, photos.size)
                 } else {
                     block.alt.ifBlank { words.noCaption }
                 },
@@ -643,6 +700,22 @@ private fun ImageRowBlock(
                 text = words.percentOf((block.width * 100).roundToInt()),
                 style = Kajet.type.meta,
                 color = colors.muted,
+            )
+            IconAction(
+                icon = KajetIcons.Minus,
+                description = words.photoSmaller,
+                onClick = { onWidth(block.key, block.width - WIDTH_STEP) },
+                enabled = block.width > Block.SMALLEST_WIDTH,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+            IconAction(
+                icon = KajetIcons.Plus,
+                description = words.photoBigger,
+                onClick = { onWidth(block.key, block.width + WIDTH_STEP) },
+                enabled = block.width < Block.FULL_WIDTH,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
             )
             IconAction(
                 icon = KajetIcons.FitToView,
@@ -661,25 +734,63 @@ private fun ImageRowBlock(
                 touchTarget = 40.dp,
             )
             IconAction(
+                icon = KajetIcons.Bin,
+                description = words.photoRemove,
+                onClick = { onDelete(block.key) },
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+        }
+
+        // Ułożenie wiersza, sąsiedztwo i przesuwanie po notatce. Przewijanie
+        // w bok jak w tabeli - na telefonie ten rząd się nie mieści.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            NoteAlign.entries.forEach { side ->
+                IconAction(
+                    icon = when (side) {
+                        NoteAlign.LEFT -> KajetIcons.AlignLeft
+                        NoteAlign.CENTER -> KajetIcons.AlignCentre
+                        NoteAlign.RIGHT -> KajetIcons.AlignRight
+                    },
+                    description = side.label(words),
+                    onClick = { onAlign(block.key, side) },
+                    selected = align == side,
+                    iconSize = 16.dp,
+                    touchTarget = 40.dp,
+                )
+            }
+            // Zdjęcie idzie obok tego, które stoi nad nim - i wraca do swojego
+            // wiersza tym samym przyciskiem. Kiedy nad zdjęciem nie ma zdjęcia,
+            // nie ma też obok czego stanąć.
+            when {
+                standsInRow(block.key) -> BarTextAction(words.photoOwnLine) {
+                    onSideBySide(block.key, false)
+                }
+
+                canStandBeside(block.key) -> BarTextAction(words.photoBeside) {
+                    onSideBySide(block.key, true)
+                }
+            }
+            IconAction(
                 icon = KajetIcons.ArrowDown,
                 description = words.photoUp,
                 onClick = { onMoveUp(block.key) },
                 enabled = canMoveUp(block.key),
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
+                modifier = Modifier.rotate(180f),
             )
             IconAction(
                 icon = KajetIcons.ArrowDown,
                 description = words.photoDown,
                 onClick = { onMoveDown(block.key) },
                 enabled = canMoveDown(block.key),
-                iconSize = 16.dp,
-                touchTarget = 40.dp,
-            )
-            IconAction(
-                icon = KajetIcons.Bin,
-                description = words.photoRemove,
-                onClick = { onDelete(block.key) },
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
             )
@@ -694,9 +805,6 @@ private fun ImageRowBlock(
                     onChange = { onWidth(block.key, it) },
                     readout = { words.percentOf((it * 100).roundToInt()) },
                 )
-                // Cztery SecondaryButton 48 dp nie mieszczą się w rzędzie
-                // rozmiaru zdjęcia. Przewijanie w bok jak w tabeli; akcje
-                // tekstowe jak „Wyczyść" w konsoli.
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -707,42 +815,6 @@ private fun ImageRowBlock(
                     listOf(0.25f, 0.5f, 0.75f, 1f).forEach { part ->
                         BarTextAction(words.percentOf((part * 100).roundToInt())) {
                             onWidth(block.key, part)
-                        }
-                    }
-                }
-
-                SectionLabel(words.photoPlacement)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    NoteAlign.entries.forEach { side ->
-                        IconAction(
-                            icon = when (side) {
-                                NoteAlign.LEFT -> KajetIcons.AlignLeft
-                                NoteAlign.CENTER -> KajetIcons.AlignCentre
-                                NoteAlign.RIGHT -> KajetIcons.AlignRight
-                            },
-                            description = side.label(words),
-                            onClick = { onAlign(block.key, side) },
-                            selected = align == side,
-                            iconSize = 16.dp,
-                            touchTarget = 40.dp,
-                        )
-                    }
-                    // Zdjęcie idzie obok tego, które stoi nad nim - i wraca do
-                    // swojego wiersza tym samym przyciskiem. Kiedy nad zdjęciem
-                    // nie ma zdjęcia, nie ma też obok czego stanąć.
-                    when {
-                        block.inRow -> BarTextAction(words.photoOwnLine) {
-                            onSideBySide(block.key, false)
-                        }
-
-                        canStandBeside(block.key) -> BarTextAction(words.photoBeside) {
-                            onSideBySide(block.key, true)
                         }
                     }
                 }
@@ -778,25 +850,57 @@ private fun ImageRowBlock(
 /** Odstęp między zdjęciami stojącymi obok siebie. */
 private val PHOTO_GAP = 8.dp
 
+/** O tyle zmienia się szerokość zdjęcia od jednego naciśnięcia plusa i minusa. */
+private const val WIDTH_STEP = 0.1f
+
+/** Uchwyt w rogu zaznaczonego zdjęcia. */
+private val HANDLE = 30.dp
+
+/**
+ * Ile palec musi przejechać, żeby zdjęcie poszło o jedno miejsce dalej.
+ * Mniej znaczyłoby, że zdjęcie ucieka przy samym dotknięciu.
+ */
+private val NUDGE_STEP = 44.dp
+
 private fun sideOf(align: NoteAlign): Alignment.Horizontal = when (align) {
     NoteAlign.LEFT -> Alignment.Start
     NoteAlign.CENTER -> Alignment.CenterHorizontally
     NoteAlign.RIGHT -> Alignment.End
 }
 
-/** Samo zdjęcie w wierszu - bez przycisków, te stoją pod całym wierszem. */
+/**
+ * Samo zdjęcie w wierszu. Przyciski stoją pod całym wierszem, a tutaj -
+ * przy zaznaczonym zdjęciu - jest obwódka i dwa uchwyty: przesuwanie palcem
+ * po samym zdjęciu i rozmiar w prawym dolnym rogu.
+ */
 @Composable
 private fun PhotoBox(
     photo: Block.Image,
     attachment: suspend (String) -> ByteArray?,
     width: Dp,
-    marked: Boolean,
-    onChoose: (() -> Unit)?,
+    roomPx: Float,
+    chosen: Boolean,
+    onChoose: () -> Unit,
+    onWidth: (Float) -> Unit,
+    onNudge: (Blocks.PhotoNudge) -> Unit,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
+    val density = LocalDensity.current
     var image by remember(photo.url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var failed by remember(photo.url) { mutableStateOf(false) }
+
+    /*
+      Gest czyta zdjęcie i działania przez rememberUpdatedState, a liczy od
+      stanu z POCZĄTKU gestu - tak samo jak ramka na kartce odręcznej. Lambda
+      pointerInput żyje ze starym otoczeniem: bez tego drugie przesunięcie
+      w jednym ruchu liczyłoby się od układu notatki sprzed pierwszego.
+    */
+    val current by rememberUpdatedState(photo)
+    val resize by rememberUpdatedState(onWidth)
+    val nudge by rememberUpdatedState(onNudge)
+    var shift by remember(photo.key) { mutableStateOf(Offset.Zero) }
+    val step = with(density) { NUDGE_STEP.toPx() }
 
     LaunchedEffect(photo.url) {
         val name = photo.attachmentName
@@ -819,26 +923,67 @@ private fun PhotoBox(
     Box(
         Modifier
             .width(width)
+            .offset { IntOffset(shift.x.roundToInt(), shift.y.roundToInt()) }
             .background(colors.desk, RoundedCornerShape(Kajet.dimens.corner))
             .border(
-                width = if (marked) 1.5.dp else 1.dp,
-                color = if (marked) colors.accent else colors.line,
+                width = if (chosen) 2.dp else 1.dp,
+                color = if (chosen) colors.accent else colors.line,
                 shape = RoundedCornerShape(Kajet.dimens.corner),
             )
+            // Bez podświetlenia i bez skupienia: stuknięcie wybiera zdjęcie
+            // do pracy, a nie otwiera nic.
+            .focusProperties { canFocus = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClickLabel = if (chosen) words.photoUnchoose else words.photoChoose,
+                onClick = onChoose,
+            )
             .then(
-                if (onChoose == null) {
+                if (!chosen) {
                     Modifier
                 } else {
-                    // Bez podświetlenia i bez skupienia: stuknięcie wybiera
-                    // zdjęcie dla przycisków pod wierszem, a nie otwiera nic.
-                    Modifier
-                        .focusProperties { canFocus = false }
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClickLabel = words.photoChoose,
-                            onClick = onChoose,
-                        )
+                    /*
+                      Przesuwanie wybranego zdjęcia. Zdjęcie idzie za palcem,
+                      a po minięciu progu przeskakuje o jedno miejsce i wraca
+                      pod palec. Wiersz ze zdjęciami leży w poprzek, notatka
+                      w pionie - dlatego kierunek liczy się osobno w bok
+                      i osobno w pionie.
+                    */
+                    Modifier.pointerInput(photo.key) {
+                        detectDragGestures(
+                            onDragEnd = { shift = Offset.Zero },
+                            onDragCancel = { shift = Offset.Zero },
+                        ) { change, drag ->
+                            change.consume()
+                            val moved = shift + drag
+                            when {
+                                abs(moved.x) >= step && abs(moved.x) >= abs(moved.y) -> {
+                                    nudge(
+                                        if (moved.x > 0) {
+                                            Blocks.PhotoNudge.RIGHT
+                                        } else {
+                                            Blocks.PhotoNudge.LEFT
+                                        },
+                                    )
+                                    shift = Offset.Zero
+                                }
+
+                                abs(moved.y) >= step -> {
+                                    nudge(
+                                        if (moved.y > 0) {
+                                            Blocks.PhotoNudge.DOWN
+                                        } else {
+                                            Blocks.PhotoNudge.UP
+                                        },
+                                    )
+                                    shift = Offset.Zero
+                                }
+
+                                else -> shift = moved
+                            }
+                        }
+                    }
                 },
             ),
         contentAlignment = Alignment.Center,
@@ -856,7 +1001,7 @@ private fun PhotoBox(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                androidx.compose.material3.Icon(
+                Icon(
                     KajetIcons.ErrorMark,
                     contentDescription = null,
                     tint = colors.danger,
@@ -870,6 +1015,63 @@ private fun PhotoBox(
             }
 
             else -> Box(Modifier.fillMaxWidth().height(120.dp))
+        }
+
+        if (chosen) {
+            // Znak, że zdjęcie da się teraz wziąć palcem. Przesuwa się je
+            // po całym zdjęciu, więc róg tylko na to wskazuje.
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .size(HANDLE)
+                    .background(colors.accent)
+                    // Uchwyt nie jest przyciskiem: stuknięcie w niego ma nie
+                    // zdejmować zaznaczenia ze zdjęcia.
+                    .pointerInput(photo.key) { detectTapGestures { } },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    KajetIcons.Move,
+                    contentDescription = words.photoMove,
+                    tint = colors.onAccent,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+
+            // Rozmiar ciągnięty za róg. Proporcje zostają - zdjęcie się skaluje,
+            // nie rozjeżdża, bo szerokość jest jedyną zapisaną liczbą.
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(HANDLE)
+                    .background(colors.accent)
+                    // Stuknięcie w uchwyt ma zostać przy uchwycie, a nie zdjąć
+                    // zaznaczenia ze zdjęcia.
+                    .pointerInput(photo.key) { detectTapGestures { } }
+                    .pointerInput(photo.key) {
+                        var base = 0f
+                        var acc = 0f
+                        detectDragGestures(
+                            onDragStart = {
+                                base = current.width
+                                acc = 0f
+                            },
+                        ) { change, drag ->
+                            change.consume()
+                            if (roomPx <= 0f) return@detectDragGestures
+                            acc += drag.x
+                            resize(base + acc / roomPx)
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    KajetIcons.FitToView,
+                    contentDescription = words.photoSize,
+                    tint = colors.onAccent,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }

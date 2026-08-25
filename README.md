@@ -20,6 +20,9 @@ na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmi
 nie zamarza na wartości sprzed zmiany motywu. Zdjęcia i rysunki stojące w jednym wierszu
 pliku stoją obok siebie także w notatce, a ułożenie wiersza (lewo, środek, prawo) siedzi
 w tytule zdjęcia: `![a|25%](assets/a.png "srodek") ![b|25%](assets/b.png "srodek")`.
+Zdjęcie wybiera się stuknięciem - dopiero wtedy ma obwódkę, uchwyt rozmiaru w rogu i pasek
+działań, a palcem albo rysikiem przesuwa się je w wierszu i po notatce. Nowe zdjęcie i nowy
+rysunek wchodzą obok wybranego, w ten sam wiersz i w tej samej szerokości.
 
 **Mapy myśli.** Węzły owalne i prostokątne, zawijanie długich haseł, płótno biorące rozmiar
 z kontenera zamiast sztywnych wymiarów.

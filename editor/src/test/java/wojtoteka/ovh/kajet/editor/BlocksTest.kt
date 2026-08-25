@@ -203,6 +203,73 @@ class BlocksTest {
     }
 
     @Test
+    fun `pierwsze zdjecie wiersza tez da sie odsunac`() {
+        // Znacznik „stoję obok" ma sąsiad, nie pierwsze zdjęcie - bez tego
+        // pierwszego zdjęcia nie dałoby się w ogóle odsunąć od reszty.
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val first = blocks.filterIsInstance<Block.Image>().first()
+
+        assertThat(Blocks.standsInRow(blocks, first.key)).isTrue()
+        val apart = Blocks.setSideBySide(blocks, first.key, beside = false)
+        assertThat(Blocks.join(apart))
+            .isEqualTo("![a|25%](assets/a.png)\n\n![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `przesuniecie w bok zamienia zdjecia miejscami w wierszu`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val first = blocks.filterIsInstance<Block.Image>().first()
+        val moved = Blocks.nudgePhoto(blocks, first.key, Blocks.PhotoNudge.RIGHT)
+
+        assertThat(Blocks.join(moved))
+            .isEqualTo("![b|25%](assets/b.png) ![a|25%](assets/a.png)")
+        // Skrajne zdjęcie nie ma się z kim zamienić w tę stronę.
+        assertThat(Blocks.nudgePhoto(blocks, first.key, Blocks.PhotoNudge.LEFT))
+            .isEqualTo(blocks)
+    }
+
+    @Test
+    fun `przesuniecie w prawo stawia zdjecie obok tego nad nim`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png)\n\n![b|25%](assets/b.png)")
+        val second = blocks.filterIsInstance<Block.Image>()[1]
+        val beside = Blocks.nudgePhoto(blocks, second.key, Blocks.PhotoNudge.RIGHT)
+
+        assertThat(Blocks.join(beside))
+            .isEqualTo("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `przesuniecie w pionie wyprowadza zdjecie z wiersza`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val second = blocks.filterIsInstance<Block.Image>()[1]
+        val apart = Blocks.nudgePhoto(blocks, second.key, Blocks.PhotoNudge.DOWN)
+
+        assertThat(Blocks.join(apart))
+            .isEqualTo("![a|25%](assets/a.png)\n\n![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `przesuniecie w pionie samotnego zdjecia przenosi je po notatce`() {
+        val blocks = Blocks.split("Tekst\n\n![a|25%](assets/a.png)")
+        val photo = blocks.filterIsInstance<Block.Image>().single()
+        val higher = Blocks.nudgePhoto(blocks, photo.key, Blocks.PhotoNudge.UP)
+
+        assertThat(Blocks.join(higher)).isEqualTo("![a|25%](assets/a.png)\n\nTekst")
+    }
+
+    @Test
+    fun `samotne zdjecie bez sasiada nad soba nie ma dokad pojsc w bok`() {
+        val blocks = Blocks.split("Tekst\n\n![a|25%](assets/a.png)")
+        val photo = blocks.filterIsInstance<Block.Image>().single()
+
+        assertThat(Blocks.standsInRow(blocks, photo.key)).isFalse()
+        assertThat(Blocks.nudgePhoto(blocks, photo.key, Blocks.PhotoNudge.RIGHT))
+            .isEqualTo(blocks)
+        assertThat(Blocks.nudgePhoto(blocks, photo.key, Blocks.PhotoNudge.LEFT))
+            .isEqualTo(blocks)
+    }
+
+    @Test
     fun `przesuniecie poza liste nic nie zmienia`() {
         val blocks = Blocks.split("Jedyny")
         assertThat(Blocks.move(blocks, blocks[0].key, up = true)).isEqualTo(blocks)
