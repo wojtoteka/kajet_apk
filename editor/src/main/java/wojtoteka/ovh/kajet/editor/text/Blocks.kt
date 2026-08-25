@@ -1,6 +1,8 @@
 package wojtoteka.ovh.kajet.editor.text
 
-import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.model.ImageLines
+import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.model.NotePhoto
 
 sealed interface Block {
     val key: String
@@ -40,6 +42,19 @@ sealed interface Block {
          * nadal czytamy. Przy zapisie ściągamy do 20-100%, jak serwer.
          */
         val width: Float = FULL_WIDTH,
+        /**
+         * Gdzie w wierszu stoją zdjęcia: przy lewej krawędzi, na środku albo
+         * przy prawej. Dotyczy całego wiersza, więc zdjęcia stojące obok
+         * siebie mają to samo ułożenie.
+         */
+        val align: NoteAlign = NoteAlign.LEFT,
+        /**
+         * Czy zdjęcie stoi OBOK poprzedniego, w tym samym wierszu.
+         *
+         * W pliku to po prostu jeden wiersz z dwoma zdjęciami. Pierwsze
+         * zdjęcie wiersza ma tu `false` - ono ten wiersz zaczyna.
+         */
+        val inRow: Boolean = false,
     ) : Block {
         val attachmentName: String?
             get() = if (url.startsWith(ATTACHMENT_PREFIX)) {
@@ -51,22 +66,13 @@ sealed interface Block {
 
     companion object {
         const val ATTACHMENT_PREFIX = "assets/"
-        const val FULL_WIDTH = 1f
+        const val FULL_WIDTH = ImageLines.FULL_WIDTH
         /** Najmniejsza szerokość przy zapisie i suwaku - ten sam próg co serwer. */
-        const val SMALLEST_WIDTH = 0.2f
+        const val SMALLEST_WIDTH = ImageLines.SMALLEST_WIDTH
     }
 }
 
 object Blocks {
-
-    // URL łapany leniwie, bo magazyn potrafi nadać nazwę ze spacją i nawiasem
-    // ("zdjecie (2).jpg"); tytuł w cudzysłowie (stary zapis szerokości) ma
-    // pierwszeństwo przed URL-em.
-    private val imageOnly =
-        Regex("""^\s*!\[([^\]]*)]\((.+?)(?:\s+"([^"]*)")?\)\s*$""")
-
-    private val altWidth = Regex("""^(.*?)\s*\|\s*(\d{1,3})\s*%$""")
-    private val percentTitle = Regex("""^(\d{1,3})%$""")
 
     private val taskOnly = Regex("""^\s*[-*+] \[([ xX])] ?(.*)$""")
 
@@ -134,16 +140,22 @@ object Blocks {
                 continue
             }
 
-            val image = if (inCode) null else imageOnly.find(line)
-            if (image != null) {
+            // Kilka zdjęć w jednym wierszu pliku to kilka zdjęć stojących
+            // obok siebie w notatce. Każde ma swój blok - własną szerokość,
+            // podpis i przyciski - a trzyma je razem znacznik [Block.Image.inRow].
+            val photos = if (inCode) null else ImageLines.read(line)
+            if (photos != null) {
                 closeText()
-                val (alt, width) = readImageSize(image.groupValues[1], image.groupValues[3])
-                result += Block.Image(
-                    key = "o${number++}",
-                    alt = alt,
-                    url = image.groupValues[2].trim(),
-                    width = width,
-                )
+                photos.forEachIndexed { index, photo ->
+                    result += Block.Image(
+                        key = "o${number++}",
+                        alt = photo.alt,
+                        url = photo.url,
+                        width = photo.width,
+                        align = photo.align,
+                        inRow = index > 0,
+                    )
+                }
                 at++
                 continue
             }
@@ -176,38 +188,6 @@ object Blocks {
         return result
     }
 
-    /**
-     * Opis i szerokość z obu zapisów: `![opis|60%](url)` oraz
-     * `![opis](url "60%")`. Z pliku bierzemy, co stoi (także 10%);
-     * dolny próg 20% obowiązuje dopiero przy zapisie.
-     */
-    private fun readImageSize(rawAlt: String, title: String): Pair<String, Float> {
-        val fromAlt = altWidth.find(rawAlt)
-        if (fromAlt != null) {
-            return fromAlt.groupValues[1] to percentFromFile(fromAlt.groupValues[2])
-        }
-        val fromTitle = percentTitle.find(title.trim())?.groupValues?.get(1)
-        if (fromTitle != null) {
-            return rawAlt to percentFromFile(fromTitle)
-        }
-        return rawAlt to Block.FULL_WIDTH
-    }
-
-    private fun percentFromFile(raw: String): Float {
-        val percent = raw.toIntOrNull() ?: return Block.FULL_WIDTH
-        return percent.coerceIn(1, 100) / 100f
-    }
-
-    /** Kanoniczny opis: sam tekst, a przy węższym zdjęciu dopisek `|NN%`. */
-    private fun writeImageAlt(alt: String, width: Float): String {
-        val clean = readImageSize(alt, "").first
-        val percent = (width * 100).roundToInt().coerceIn(
-            (Block.SMALLEST_WIDTH * 100).roundToInt(),
-            (Block.FULL_WIDTH * 100).roundToInt(),
-        )
-        return if (width >= Block.FULL_WIDTH || percent >= 100) clean else "$clean|$percent%"
-    }
-
     fun join(blocks: List<Block>): String {
         // Puste akapity z końca to miejsce na pisanie, a nie treść notatki.
         // Gdyby szły do pliku, notatka rosłaby o pusty wiersz przy każdym zapisie.
@@ -222,10 +202,13 @@ object Blocks {
 
     private fun render(block: Block): String = when (block) {
         is Block.Text -> block.content
-        is Block.Image -> "![${writeImageAlt(block.alt, block.width)}](${block.url})"
+        is Block.Image -> ImageLines.write(photoOf(block))
         is Block.Task -> "- [${if (block.done) "x" else " "}] ${block.content}"
         is Block.Table -> renderTable(block)
     }
+
+    private fun photoOf(block: Block.Image): NotePhoto =
+        NotePhoto(alt = block.alt, url = block.url, width = block.width, align = block.align)
 
     /** Tabelka z powrotem na markdown: nagłówek, kreski, reszta wierszy. */
     private fun renderTable(table: Block.Table): String {
@@ -239,8 +222,13 @@ object Blocks {
         return out.joinToString("\n")
     }
 
-    private fun separator(before: Block, after: Block): String =
-        if (before is Block.Task && after is Block.Task) "\n" else "\n\n"
+    private fun separator(before: Block, after: Block): String = when {
+        before is Block.Task && after is Block.Task -> "\n"
+        // Zdjęcia obok siebie stoją w jednym wierszu pliku, rozdzielone samym
+        // odstępem. Pusty wiersz rozsunąłby je z powrotem jedno pod drugie.
+        before is Block.Image && after is Block.Image && after.inRow -> " "
+        else -> "\n\n"
+    }
 
     fun setText(blocks: List<Block>, key: String, content: String): List<Block> =
         blocks.map { block ->
@@ -405,7 +393,8 @@ object Blocks {
     }
 
     fun remove(blocks: List<Block>, key: String): List<Block> {
-        val left = blocks.filterNot { it.key == key }
+        val rows = rowNumbers(blocks)
+        val left = tidyRows(blocks.filterNot { it.key == key }, rows)
         return left.ifEmpty { listOf(Block.Text("t0", "")) }
     }
 
@@ -415,16 +404,102 @@ object Blocks {
         val to = if (up) from - 1 else from + 1
         if (to !in blocks.indices) return blocks
 
+        val rows = rowNumbers(blocks)
+        val moved = blocks.toMutableList().apply {
+            val taken = removeAt(from)
+            add(to, taken)
+        }
+        return tidyRows(moved, rows)
+    }
+
+    // --- Zdjęcia obok siebie ---
+
+    /**
+     * Numer wiersza dla każdego bloku. Zdjęcia stojące obok siebie mają ten
+     * sam numer, wszystko inne swój własny.
+     *
+     * Po przesunięciu albo usunięciu zdjęcia znacznik „stoję obok poprzedniego"
+     * przestaje pasować do nowego sąsiedztwa: pierwsze zdjęcie wiersza mogło
+     * wyjechać wyżej, a to, co po nim zostało, wisiałoby przy akapicie.
+     * Numery zdjęte PRZED zmianą mówią, co naprawdę było razem, więc
+     * [tidyRows] potrafi to potem złożyć z powrotem.
+     */
+    private fun rowNumbers(blocks: List<Block>): Map<String, Int> {
+        val numbers = HashMap<String, Int>(blocks.size)
+        var row = 0
+        for ((index, block) in blocks.withIndex()) {
+            val together = block is Block.Image &&
+                block.inRow &&
+                blocks.getOrNull(index - 1) is Block.Image
+            if (!together) row++
+            numbers[block.key] = row
+        }
+        return numbers
+    }
+
+    /** Znaczniki wiersza dopasowane do nowego sąsiedztwa. */
+    private fun tidyRows(blocks: List<Block>, rows: Map<String, Int>): List<Block> =
+        blocks.mapIndexed { index, block ->
+            if (block !is Block.Image) return@mapIndexed block
+            val before = blocks.getOrNull(index - 1)
+            val together = before is Block.Image && rows[before.key] == rows[block.key]
+            if (block.inRow == together) block else block.copy(inRow = together)
+        }
+
+    /**
+     * Bloki pogrupowane tak, jak stoją w notatce: zdjęcia obok siebie w jednej
+     * grupie, każdy inny blok sam.
+     */
+    fun rows(blocks: List<Block>): List<List<Block>> {
+        val result = mutableListOf<MutableList<Block>>()
+        for (block in blocks) {
+            val last = result.lastOrNull()
+            if (block is Block.Image && block.inRow && last?.lastOrNull() is Block.Image) {
+                last.add(block)
+            } else {
+                result += mutableListOf(block)
+            }
+        }
+        return result
+    }
+
+    /** Czy zdjęcie ma przed sobą inne zdjęcie, obok którego może stanąć. */
+    fun canStandBeside(blocks: List<Block>, key: String): Boolean {
+        val at = blocks.indexOfFirst { it.key == key }
+        return at > 0 && blocks[at] is Block.Image && blocks[at - 1] is Block.Image
+    }
+
+    /**
+     * Stawia zdjęcie obok poprzedniego albo odsuwa je do własnego wiersza.
+     *
+     * Przy dołączeniu zdjęcie bierze ułożenie wiersza, do którego wchodzi -
+     * ułożenie ma cały wiersz, a nie pojedyncze zdjęcie.
+     */
+    fun setSideBySide(blocks: List<Block>, key: String, beside: Boolean): List<Block> {
+        val at = blocks.indexOfFirst { it.key == key }
+        if (at < 0) return blocks
+        val image = blocks[at] as? Block.Image ?: return blocks
+        if (beside && !canStandBeside(blocks, key)) return blocks
+
+        val align = if (beside) (blocks[at - 1] as Block.Image).align else image.align
         return blocks.toMutableList().apply {
-            val moved = removeAt(from)
-            add(to, moved)
+            this[at] = image.copy(inRow = beside, align = align)
+        }
+    }
+
+    /** Ułożenie całego wiersza, w którym stoi to zdjęcie. */
+    fun setImageAlign(blocks: List<Block>, key: String, align: NoteAlign): List<Block> {
+        val row = rows(blocks).firstOrNull { group -> group.any { it.key == key } } ?: return blocks
+        val keys = row.mapTo(HashSet()) { it.key }
+        return blocks.map { block ->
+            if (block is Block.Image && block.key in keys) block.copy(align = align) else block
         }
     }
 
     fun setAlt(blocks: List<Block>, key: String, alt: String): List<Block> =
         blocks.map { block ->
             if (block is Block.Image && block.key == key) {
-                block.copy(alt = readImageSize(alt, "").first)
+                block.copy(alt = ImageLines.plainAlt(alt))
             } else {
                 block
             }

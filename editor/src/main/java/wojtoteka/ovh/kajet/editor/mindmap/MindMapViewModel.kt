@@ -383,7 +383,9 @@ class MindMapViewModel(
     }
 
     fun setInkLabel(id: String, strokes: List<InkStroke>) {
-        change(map.copy(nodes = map.nodes.map { if (it.id == id) it.copy(ink = strokes) else it }))
+        // Kreski przychodzą w mierze kartki z okna rysunku, więc przed zapisem
+        // trafiają w ramkę węzła - inaczej podpis leży obok niego.
+        updateNode(id) { MindMapInk.fitted(it, strokes) }
         _inkLabel.value = null
     }
 

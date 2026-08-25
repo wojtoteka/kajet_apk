@@ -1,5 +1,6 @@
 package wojtoteka.ovh.kajet.export
 
+import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.text.docxImageHere
 import wojtoteka.ovh.kajet.core.text.words
@@ -56,8 +57,19 @@ object DocxExport {
                 trimmed.startsWith("> ") ->
                     append(paragraph(trimmed.drop(2), style = "Quote", italic = true))
 
-                trimmed.startsWith("![") ->
-                    append(paragraph(words.docxImageHere(imageCaption(trimmed)), italic = true))
+                trimmed.startsWith("![") -> {
+                    // Kilka zdjęć obok siebie to kilka zdjęć - każde ma w pliku
+                    // Worda swój wpis, a nie jeden wspólny.
+                    val photos = ImageLines.read(trimmed).orEmpty()
+                    if (photos.isEmpty()) {
+                        append(paragraph(words.docxImageHere(imageCaption(trimmed)), italic = true))
+                    } else {
+                        photos.forEach { photo ->
+                            val caption = photo.alt.ifBlank { words.noDescription }
+                            append(paragraph(words.docxImageHere(caption), italic = true))
+                        }
+                    }
+                }
 
                 trimmed.startsWith("$$") ->
                     append(paragraph(trimmed.trim('$').trim(), monospace = true))
@@ -103,8 +115,10 @@ object DocxExport {
         }
     }
 
-    private fun imageCaption(line: String): String =
-        Regex("!\\[([^\\]]*)]").find(line)?.groupValues?.get(1)?.ifBlank { words.noDescription } ?: words.noDescription
+    private fun imageCaption(line: String): String {
+        val alt = Regex("!\\[([^\\]]*)]").find(line)?.groupValues?.get(1).orEmpty()
+        return ImageLines.plainAlt(alt).ifBlank { words.noDescription }
+    }
 
     private fun formattedParagraph(text: String): String {
         val runs = StringBuilder()

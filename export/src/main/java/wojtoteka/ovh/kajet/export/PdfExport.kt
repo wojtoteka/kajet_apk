@@ -25,6 +25,7 @@ import android.text.style.UnderlineSpan
 import androidx.compose.ui.graphics.toArgb
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import wojtoteka.ovh.kajet.core.design.KajetLightColors
+import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
@@ -208,6 +209,70 @@ object PdfExport {
         canvas.drawPath(path, paint)
     }
 
+    /**
+     * Wiersz ze zdjęciami: jedno albo kilka obok siebie, tak jak w notatce.
+     *
+     * Szerokości ściąga [ImageLines.sideBySide] - ta sama rachuba co w
+     * edytorze, więc wydruk pokazuje to, co było widać na tablecie. Oddaje
+     * wysokość, o którą przesuwa się kartka; zero, gdy żadnego zdjęcia nie
+     * udało się wczytać.
+     */
+    private fun drawPhotoRow(
+        pictures: List<PdfMarkdown.ImageRef>,
+        attachment: (String) -> ByteArray?,
+        canvas: () -> Canvas,
+        paint: Paint,
+        leftMargin: Float,
+        width: Float,
+        topMargin: Float,
+        top: () -> Float,
+        place: (Float) -> Unit,
+    ): Float {
+        val gap = 8f
+        val loaded = pictures.mapNotNull { picture ->
+            val bytes = PdfMarkdown.attachmentBytes(attachment, picture.asset)
+            val bitmap = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            if (bitmap == null) null else bitmap to picture
+        }
+        if (loaded.isEmpty()) return 0f
+
+        val gapShare = if (loaded.size > 1) gap * (loaded.size - 1) / width else 0f
+        val parts = ImageLines.sideBySide(loaded.map { it.second.width }, gapShare)
+        var sizes = loaded.mapIndexed { index, (bitmap, _) ->
+            val drawW = width * parts[index]
+            drawW to bitmap.height * (drawW / bitmap.width.toFloat())
+        }
+
+        // Najwyższe zdjęcie wiersza wyznacza skalę - kartka ma swoją wysokość,
+        // a wiersz musi zmieścić się w niej cały.
+        val tallest = sizes.maxOf { it.second }
+        val room = A4_HEIGHT - 2 * topMargin
+        if (tallest > room) {
+            val shrink = room / tallest
+            sizes = sizes.map { (drawW, drawH) -> drawW * shrink to drawH * shrink }
+        }
+
+        val rowHeight = sizes.maxOf { it.second }
+        val used = sizes.fold(0f) { total, size -> total + size.first } + gap * (sizes.size - 1)
+        val free = (width - used).coerceAtLeast(0f)
+        val start = leftMargin + when (loaded.first().second.align) {
+            NoteAlign.LEFT -> 0f
+            NoteAlign.CENTER -> free / 2f
+            NoteAlign.RIGHT -> free
+        }
+
+        place(rowHeight)
+        val y = top()
+        var x = start
+        loaded.forEachIndexed { index, (bitmap, _) ->
+            val (drawW, drawH) = sizes[index]
+            canvas().drawBitmap(bitmap, null, RectF(x, y, x + drawW, y + drawH), paint)
+            bitmap.recycle()
+            x += drawW + gap
+        }
+        return rowHeight + 8f
+    }
+
     private fun textPages(
         pdf: PdfDocument,
         document: NoteDocument,
@@ -266,29 +331,19 @@ object PdfExport {
                 continue
             }
 
-            val picture = PdfMarkdown.image(trimmed)
-            if (picture != null) {
-                val bytes = PdfMarkdown.attachmentBytes(attachment, picture.asset)
-                val bitmap = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-                if (bitmap != null) {
-                    var drawW = width * picture.width
-                    var drawH = bitmap.height * (drawW / bitmap.width.toFloat())
-                    val maxH = A4_HEIGHT - 2 * topMargin
-                    if (drawH > maxH) {
-                        val shrink = maxH / drawH
-                        drawW *= shrink
-                        drawH = maxH
-                    }
-                    place(drawH)
-                    page.canvas.drawBitmap(
-                        bitmap,
-                        null,
-                        RectF(leftMargin, y, leftMargin + drawW, y + drawH),
-                        imagePaint,
-                    )
-                    bitmap.recycle()
-                    y += drawH + 8f
-                }
+            val pictures = PdfMarkdown.images(trimmed)
+            if (pictures.isNotEmpty()) {
+                y += drawPhotoRow(
+                    pictures = pictures,
+                    attachment = attachment,
+                    canvas = { page.canvas },
+                    paint = imagePaint,
+                    leftMargin = leftMargin,
+                    width = width,
+                    topMargin = topMargin,
+                    top = { y },
+                    place = { place(it) },
+                )
                 continue
             }
 

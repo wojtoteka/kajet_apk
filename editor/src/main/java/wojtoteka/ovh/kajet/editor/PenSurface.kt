@@ -35,3 +35,33 @@ fun Modifier.penWritingSurface(context: Context): Modifier = pointerInput(Unit) 
         }
     }
 }
+
+/**
+ * Odwrotność [penWritingSurface]: miejsce, w którym rysik ma milczeć.
+ *
+ * Usługa Lenovo wznawia drganie przy każdym wjeździe rysika nad okno wpisanej
+ * aplikacji i sama nie odróżnia kartki od paska narzędzi. Aktywność dogasza to
+ * w `dispatchGenericMotionEvent`, ale okno dialogowe jest OSOBNYM oknem i te
+ * zdarzenia do aktywności nie docierają - rysik drgał więc nad całym oknem
+ * rysowania: nad przyciskami, nad podpisem, nad pustym miejscem obok karty.
+ *
+ * Zdarzenia idą po torze Initial, czyli przed dziećmi. Dzięki temu kartka
+ * (`StrokeCanvas`) zdąży zgłosić się jako powierzchnia pisania PO tym, jak
+ * rodzic wyciszy rysika, a nie odwrotnie.
+ *
+ * Liczy się samo najechanie i dotknięcie - ruchu nie ma po co obsługiwać,
+ * bo [PenHaptics.surfaceHover] i tak odrzuca powtórkę po jednym porównaniu.
+ */
+fun Modifier.penQuietSurface(context: Context): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.changes.none { it.type == PointerType.Stylus }) continue
+            when (event.type) {
+                PointerEventType.Enter, PointerEventType.Press ->
+                    PenHaptics.surfaceHover(context, false)
+                else -> Unit
+            }
+        }
+    }
+}

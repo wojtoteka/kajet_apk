@@ -9,6 +9,7 @@ import wojtoteka.ovh.kajet.core.model.MindEdge
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NodeShape
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import wojtoteka.ovh.kajet.core.text.EnglishStrings
 import wojtoteka.ovh.kajet.core.text.PolishStrings
@@ -50,12 +51,25 @@ class PdfMarkdownTest {
 
     @Test
     fun `zdjecie z assets oddaje nazwe zalacznika i skale`() {
-        assertThat(PdfMarkdown.image("![mapa](assets/mapa.png)"))
-            .isEqualTo(PdfMarkdown.ImageRef("mapa.png", 1f))
-        assertThat(PdfMarkdown.image("![z](assets/z.png \"50%\")"))
-            .isEqualTo(PdfMarkdown.ImageRef("z.png", 0.5f))
-        assertThat(PdfMarkdown.image("zwykly tekst")).isNull()
-        assertThat(PdfMarkdown.image("![siec](https://przyklad.pl/a.png)")).isNull()
+        assertThat(PdfMarkdown.images("![mapa](assets/mapa.png)"))
+            .containsExactly(PdfMarkdown.ImageRef("mapa.png", 1f))
+        assertThat(PdfMarkdown.images("![z](assets/z.png \"50%\")"))
+            .containsExactly(PdfMarkdown.ImageRef("z.png", 0.5f))
+        assertThat(PdfMarkdown.images("![z|25%](assets/z.png)"))
+            .containsExactly(PdfMarkdown.ImageRef("z.png", 0.25f))
+        assertThat(PdfMarkdown.images("zwykly tekst")).isEmpty()
+        assertThat(PdfMarkdown.images("![siec](https://przyklad.pl/a.png)")).isEmpty()
+
+        // Dwa zdjecia w jednym wierszu stoja obok siebie takze na wydruku,
+        // a ulozenie wiersza czytamy z tytulu.
+        val obok = PdfMarkdown.images(
+            "![a|25%](assets/a.png \"srodek\") ![b|25%](assets/b.png)",
+        )
+        assertThat(obok).containsExactly(
+            PdfMarkdown.ImageRef("a.png", 0.25f, NoteAlign.CENTER),
+            PdfMarkdown.ImageRef("b.png", 0.25f, NoteAlign.CENTER),
+        ).inOrder()
+
         assertThat(
             PdfMarkdown.attachmentBytes(
                 { name -> if (name == "mapa.png") byteArrayOf(1) else null },

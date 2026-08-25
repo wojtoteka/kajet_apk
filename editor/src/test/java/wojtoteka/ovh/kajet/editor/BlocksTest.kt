@@ -4,6 +4,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import wojtoteka.ovh.kajet.editor.text.Block
 import wojtoteka.ovh.kajet.editor.text.Blocks
@@ -129,6 +130,76 @@ class BlocksTest {
         assertThat((fromAlt[0] as Block.Image).url).isEqualTo("assets/zdjecie (2).png")
         assertThat((fromTitle[0] as Block.Image).url).isEqualTo("assets/zdjecie (2).png")
         assertThat(Blocks.join(fromTitle)).isEqualTo("![z|40%](assets/zdjecie (2).png)")
+    }
+
+    @Test
+    fun `dwa zdjecia w jednym wierszu stoja obok siebie`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+
+        val photos = blocks.filterIsInstance<Block.Image>()
+        assertThat(photos).hasSize(2)
+        assertThat(photos[0].inRow).isFalse()
+        assertThat(photos[1].inRow).isTrue()
+        assertThat(Blocks.rows(blocks).first()).hasSize(2)
+        assertThat(Blocks.join(blocks))
+            .isEqualTo("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `zdjecie postawione obok poprzedniego wraca do jednego wiersza pliku`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png)\n\n![b|25%](assets/b.png)")
+        val together = Blocks.setSideBySide(blocks, blocks[1].key, beside = true)
+
+        assertThat(Blocks.join(together))
+            .isEqualTo("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+
+        val apart = Blocks.setSideBySide(together, blocks[1].key, beside = false)
+        assertThat(Blocks.join(apart))
+            .isEqualTo("![a|25%](assets/a.png)\n\n![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `pierwsze zdjecie notatki nie ma obok czego stanac`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png)\n\nTekst\n\n![b|25%](assets/b.png)")
+
+        assertThat(Blocks.canStandBeside(blocks, blocks[0].key)).isFalse()
+        assertThat(Blocks.canStandBeside(blocks, blocks[2].key)).isFalse()
+        assertThat(Blocks.setSideBySide(blocks, blocks[2].key, beside = true)).isEqualTo(blocks)
+    }
+
+    @Test
+    fun `ulozenie tyczy sie calego wiersza i stoi w tytule`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val middle = Blocks.setImageAlign(blocks, blocks[1].key, NoteAlign.CENTER)
+
+        assertThat(middle.filterIsInstance<Block.Image>().map { it.align })
+            .containsExactly(NoteAlign.CENTER, NoteAlign.CENTER)
+        val markdown = Blocks.join(middle)
+        assertThat(markdown).isEqualTo(
+            "![a|25%](assets/a.png \"srodek\") ![b|25%](assets/b.png \"srodek\")",
+        )
+        assertThat(Blocks.split(markdown).filterIsInstance<Block.Image>().map { it.align })
+            .containsExactly(NoteAlign.CENTER, NoteAlign.CENTER)
+    }
+
+    @Test
+    fun `zdjecie zabrane z wiersza nie zostawia sasiada przyklejonego do akapitu`() {
+        val blocks = Blocks.split("Tekst\n\n![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val first = blocks.filterIsInstance<Block.Image>().first()
+        val left = Blocks.remove(blocks, first.key)
+
+        assertThat(left.filterIsInstance<Block.Image>().single().inRow).isFalse()
+        assertThat(Blocks.join(left)).isEqualTo("Tekst\n\n![b|25%](assets/b.png)")
+    }
+
+    @Test
+    fun `przesuniecie w wierszu zamienia zdjecia miejscami, nie rozbija wiersza`() {
+        val blocks = Blocks.split("![a|25%](assets/a.png) ![b|25%](assets/b.png)")
+        val second = blocks.filterIsInstance<Block.Image>()[1]
+        val moved = Blocks.move(blocks, second.key, up = true)
+
+        assertThat(Blocks.join(moved))
+            .isEqualTo("![b|25%](assets/b.png) ![a|25%](assets/a.png)")
     }
 
     @Test

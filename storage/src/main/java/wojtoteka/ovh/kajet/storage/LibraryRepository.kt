@@ -702,8 +702,16 @@ class LibraryRepository(
         path
     }
 
-    suspend fun deletePermanently(id: String) = withContext(io) {
-        eraseTrashSlot(id, alsoOnServer = true)
+    /**
+     * [onProgress] mówi, przy którym pliku stoi kasowanie. Wpis kosza bywa
+     * całym folderem, a kasowanie idzie notatka po notatce - bez tego ekran
+     * stoi w miejscu i wygląda, jakby przycisk nie zadziałał.
+     */
+    suspend fun deletePermanently(
+        id: String,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ) = withContext(io) {
+        eraseTrashSlot(id, alsoOnServer = true, onProgress = onProgress)
         refresh()
     }
 
@@ -714,7 +722,11 @@ class LibraryRepository(
      * zlecone przez serwer - jedna implementacja kasowania, nie dwie różne.
      * Zwraca true, kiedy po wpisie nic nie zostało na dysku.
      */
-    private suspend fun eraseTrashSlot(id: String, alsoOnServer: Boolean): Boolean {
+    private suspend fun eraseTrashSlot(
+        id: String,
+        alsoOnServer: Boolean,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Boolean {
         val store = requireStore()
         val noteIds = runCatching { store.trashedNoteIds(id) }.getOrDefault(emptyList())
         val codePaths = runCatching { store.trashedCodePaths(id) }.getOrDefault(emptyList())
@@ -722,8 +734,18 @@ class LibraryRepository(
             noteSlots = noteIds.associateWith { id },
             codeSlots = codePaths.associateWith { id },
         )
-        for (noteId in noteIds) deleteNoteCompletely(noteId, alsoOnServer, trash = here)
-        for (codePath in codePaths) deleteCodeFileCompletely(codePath, alsoOnServer, trash = here)
+        val total = noteIds.size + codePaths.size
+        var done = 0
+        for (noteId in noteIds) {
+            deleteNoteCompletely(noteId, alsoOnServer, trash = here)
+            done += 1
+            onProgress(done, total)
+        }
+        for (codePath in codePaths) {
+            deleteCodeFileCompletely(codePath, alsoOnServer, trash = here)
+            done += 1
+            onProgress(done, total)
+        }
 
         // Reszta wpisu: opis kosza i to, co nie jest ani notatką, ani plikiem
         // z kodem. Notatki skasowane wyżej mogły już zabrać cały wpis.
@@ -732,12 +754,21 @@ class LibraryRepository(
         return false
     }
 
-    suspend fun emptyTrash() = withContext(io) {
+    /** [onProgress] jak w [deletePermanently] - pełny kosz kasuje się długo. */
+    suspend fun emptyTrash(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }) = withContext(io) {
         val store = requireStore()
         val here = readTrashContents()
-        for (noteId in here.noteSlots.keys) deleteNoteCompletely(noteId, alsoOnServer = true, trash = here)
+        val total = here.noteSlots.size + here.codeSlots.size
+        var done = 0
+        for (noteId in here.noteSlots.keys) {
+            deleteNoteCompletely(noteId, alsoOnServer = true, trash = here)
+            done += 1
+            onProgress(done, total)
+        }
         for (codePath in here.codeSlots.keys) {
             deleteCodeFileCompletely(codePath, alsoOnServer = true, trash = here)
+            done += 1
+            onProgress(done, total)
         }
         for (leftover in store.emptyTrash()) retries.addTrashSlot(leftover)
         refresh()

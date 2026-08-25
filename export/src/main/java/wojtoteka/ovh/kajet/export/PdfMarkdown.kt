@@ -3,9 +3,11 @@ package wojtoteka.ovh.kajet.export
 import androidx.compose.ui.graphics.toArgb
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.InkPalette
+import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NodeShape
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import kotlin.math.min
 
@@ -39,12 +41,8 @@ internal object PdfMarkdown {
     data class ImageRef(
         val asset: String,
         val width: Float = 1f,
+        val align: NoteAlign = NoteAlign.LEFT,
     )
-
-    // URL leniwy jak w edytorze: nazwa pliku potrafi mieć spację albo nawias.
-    private val imageLine =
-        Regex("""^\s*!\[([^\]]*)]\((.+?)(?:\s+"([^"]*)")?\)\s*$""")
-    private val percentTitle = Regex("""^(\d{1,3})%$""")
 
     /**
      * Ten sam porządek co w [DocxExport.formattedParagraph], plus rozmiar
@@ -61,15 +59,27 @@ internal object PdfMarkdown {
             """|\*[^*]+\*""",
     )
 
-    fun image(line: String): ImageRef? {
-        val match = imageLine.find(line) ?: return null
-        val url = match.groupValues[2].trim()
-        if (!url.startsWith("assets/")) return null
-        val title = match.groupValues.getOrNull(3).orEmpty()
-        val width = percentTitle.find(title.trim())?.groupValues?.get(1)?.toIntOrNull()
-            ?.let { (it / 100f).coerceIn(0.1f, 1f) }
-            ?: 1f
-        return ImageRef(url.removePrefix("assets/"), width)
+    /**
+     * Zdjęcia z wiersza - kilka, gdy w notatce stoją obok siebie.
+     *
+     * Czytanie samego wiersza siedzi w [ImageLines], wspólne z edytorem.
+     * Wcześniej wydruk miał własne wyrażenie, które znało tylko szerokość
+     * zapisaną w tytule - zdjęcie zmniejszone w notatce wychodziło z drukarki
+     * na całą szerokość kartki.
+     */
+    fun images(line: String): List<ImageRef> {
+        val photos = ImageLines.read(line) ?: return emptyList()
+        return photos.mapNotNull { photo ->
+            if (!photo.url.startsWith("assets/")) {
+                null
+            } else {
+                ImageRef(
+                    asset = photo.url.removePrefix("assets/"),
+                    width = photo.width.coerceIn(0.1f, 1f),
+                    align = photo.align,
+                )
+            }
+        }
     }
 
     fun runs(markdown: String): List<Run> {

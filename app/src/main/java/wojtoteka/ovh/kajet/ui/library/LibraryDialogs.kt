@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -235,11 +237,22 @@ fun FolderIconGrid(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
+                        .clip(RoundedCornerShape(Kajet.dimens.corner))
                         .background(
                             if (option == selected) Kajet.colors.accentWash else Kajet.colors.sheet,
-                            RoundedCornerShape(Kajet.dimens.corner),
                         )
-                        .clickable(onClickLabel = option.label(words)) { onSelect(option) },
+                        /*
+                          Bez podświetlenia dotyku. Rysik zgłasza najechanie
+                          nad każdą ikoną, a szare podświetlenie zostawało po
+                          nim na kilku kratkach naraz - wyglądało to jak druga,
+                          fałszywa ikona wybrana. Wybór widać po niebieskim tle
+                          i po nazwie nad siatką, więc nie ma czego zastępować.
+                        */
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = option.label(words),
+                        ) { onSelect(option) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -259,7 +272,13 @@ private fun FolderColourDot(option: FolderColor, selected: Boolean, onClick: () 
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clickable(onClick = onClick),
+            // Jak w siatce ikon: bez podświetlenia, żeby po rysiku nie zostawał
+            // szary kwadrat wokół okrągłej kropki.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Box(

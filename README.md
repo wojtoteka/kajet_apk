@@ -17,7 +17,9 @@ na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmi
 
 **Notatki tekstowe.** Markdown z tabelami, listami, obrazkami ze skalowaniem szerokości
 (`![alt|60%]`) i rozmiarem czcionki. Rozmiar `0` znaczy „domyślny z motywu", więc notatka
-nie zamarza na wartości sprzed zmiany motywu.
+nie zamarza na wartości sprzed zmiany motywu. Zdjęcia i rysunki stojące w jednym wierszu
+pliku stoją obok siebie także w notatce, a ułożenie wiersza (lewo, środek, prawo) siedzi
+w tytule zdjęcia: `![a|25%](assets/a.png "srodek") ![b|25%](assets/b.png "srodek")`.
 
 **Mapy myśli.** Węzły owalne i prostokątne, zawijanie długich haseł, płótno biorące rozmiar
 z kontenera zamiast sztywnych wymiarów.

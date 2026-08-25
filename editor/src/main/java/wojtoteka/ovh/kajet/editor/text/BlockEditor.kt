@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -60,9 +62,11 @@ import wojtoteka.ovh.kajet.core.design.component.SettingSlider
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.design.fontFamilyFor
 import wojtoteka.ovh.kajet.core.model.TextContent
+import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.percentOf
+import wojtoteka.ovh.kajet.core.text.photoOfMany
 import wojtoteka.ovh.kajet.core.text.photoNotFound
 
 @Composable
@@ -103,6 +107,10 @@ fun BlockEditor(
         )
     }
 
+    // Zdjęcia stojące obok siebie muszą trafić do JEDNEGO pola listy - inaczej
+    // nie ma ich jak postawić w rzędzie. Reszta bloków idzie sama, tak jak szła.
+    val rows = remember(blocks) { Blocks.rows(blocks) }
+
     LazyColumn(
         modifier = modifier,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -112,7 +120,8 @@ fun BlockEditor(
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        items(blocks, key = { it.key }) { block ->
+        items(rows, key = { it.first().key }) { group ->
+            val block = group.first()
             when (block) {
                 is Block.Text -> TextBlock(
                     key = block.key,
@@ -175,16 +184,21 @@ fun BlockEditor(
                     onDelete = { onBlocksChange(Blocks.remove(blocks, block.key)) },
                 )
 
-                is Block.Image -> ImageBlock(
-                    block = block,
+                is Block.Image -> ImageRowBlock(
+                    photos = group.filterIsInstance<Block.Image>(),
                     attachment = attachment,
-                    canMoveUp = blocks.firstOrNull()?.key != block.key,
-                    canMoveDown = blocks.lastOrNull()?.key != block.key,
-                    onAlt = { onBlocksChange(Blocks.setAlt(blocks, block.key, it)) },
-                    onWidth = { onBlocksChange(Blocks.setImageWidth(blocks, block.key, it)) },
-                    onMoveUp = { onBlocksChange(Blocks.move(blocks, block.key, up = true)) },
-                    onMoveDown = { onBlocksChange(Blocks.move(blocks, block.key, up = false)) },
-                    onDelete = { onBlocksChange(Blocks.remove(blocks, block.key)) },
+                    canMoveUp = { key -> blocks.firstOrNull()?.key != key },
+                    canMoveDown = { key -> blocks.lastOrNull()?.key != key },
+                    canStandBeside = { key -> Blocks.canStandBeside(blocks, key) },
+                    onAlt = { key, alt -> onBlocksChange(Blocks.setAlt(blocks, key, alt)) },
+                    onWidth = { key, width -> onBlocksChange(Blocks.setImageWidth(blocks, key, width)) },
+                    onAlign = { key, align -> onBlocksChange(Blocks.setImageAlign(blocks, key, align)) },
+                    onSideBySide = { key, beside ->
+                        onBlocksChange(Blocks.setSideBySide(blocks, key, beside))
+                    },
+                    onMoveUp = { key -> onBlocksChange(Blocks.move(blocks, key, up = true)) },
+                    onMoveDown = { key -> onBlocksChange(Blocks.move(blocks, key, up = false)) },
+                    onDelete = { key -> onBlocksChange(Blocks.remove(blocks, key)) },
                 )
             }
         }
@@ -542,42 +556,41 @@ private fun TableCell(
     )
 }
 
+/**
+ * Wiersz ze zdjęciami: jedno albo kilka obok siebie. W pliku to jeden wiersz,
+ * więc i tutaj jest to jeden blok.
+ *
+ * Przyciski stoją POD wierszem i tyczą się wybranego zdjęcia. Pod zdjęciem
+ * o szerokości 25% i tak by się nie zmieściły, a osobny rząd przycisków dla
+ * każdego zdjęcia zajmowałby więcej miejsca niż same zdjęcia. Wybrane zdjęcie
+ * ma obwódkę - dopóki zdjęcie jest jedno, nie ma czego wybierać i obwódki nie
+ * ma.
+ */
 @Composable
-private fun ImageBlock(
-    block: Block.Image,
+private fun ImageRowBlock(
+    photos: List<Block.Image>,
     attachment: suspend (String) -> ByteArray?,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onAlt: (String) -> Unit,
-    onWidth: (Float) -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onDelete: () -> Unit,
+    canMoveUp: (String) -> Boolean,
+    canMoveDown: (String) -> Boolean,
+    canStandBeside: (String) -> Boolean,
+    onAlt: (String, String) -> Unit,
+    onWidth: (String, Float) -> Unit,
+    onAlign: (String, NoteAlign) -> Unit,
+    onSideBySide: (String, Boolean) -> Unit,
+    onMoveUp: (String) -> Unit,
+    onMoveDown: (String) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
-    var image by remember(block.url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    var failed by remember(block.url) { mutableStateOf(false) }
+    var chosenKey by remember { mutableStateOf(photos.first().key) }
     var showAlt by remember { mutableStateOf(false) }
     var showSize by remember { mutableStateOf(false) }
 
-    LaunchedEffect(block.url) {
-        val name = block.attachmentName
-        if (name == null) {
-            failed = true
-            return@LaunchedEffect
-        }
-        val data = runCatching { attachment(name) }.getOrNull()
-        if (data == null) {
-            failed = true
-        } else {
-            // Poza wątkiem głównym i w rozmiarze na ekran, nie w pełnej
-            // rozdzielczości aparatu - inaczej wstawione zdjęcie zamrażało
-            // przewijanie notatki, a przy kilku kończyło się brakiem pamięci.
-            image = withContext(Dispatchers.IO) { Bitmaps.decode(data)?.asImageBitmap() }
-            failed = image == null
-        }
-    }
+    // Wybrane zdjęcie mogło przed chwilą wyjechać z wiersza albo pójść do kosza.
+    val block = photos.firstOrNull { it.key == chosenKey } ?: photos.first()
+    val many = photos.size > 1
+    val align = photos.first().align
 
     Column(
         Modifier
@@ -586,40 +599,28 @@ private fun ImageBlock(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth(block.width.coerceIn(0.01f, Block.FULL_WIDTH))
-                .background(colors.desk, RoundedCornerShape(Kajet.dimens.corner))
-                .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner)),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                image != null -> Image(
-                    bitmap = image!!,
-                    contentDescription = block.alt.ifBlank { words.photoInNote },
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                failed -> Row(
-                    Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    androidx.compose.material3.Icon(
-                        KajetIcons.ErrorMark,
-                        contentDescription = null,
-                        tint = colors.danger,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = words.photoNotFound(block.url),
-                        style = Kajet.type.meta,
-                        color = colors.muted,
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val room = maxWidth
+            // Szerokość zdjęcia to ułamek szerokości notatki, więc liczymy ją
+            // sami. Sam Row podzieliłby miejsce po równo albo mierzył ułamek
+            // od tego, co zostało po sąsiedzie - i 25% obok 25% nie byłoby
+            // dwoma równymi zdjęciami.
+            val gapShare = if (many) (PHOTO_GAP * (photos.size - 1)) / room else 0f
+            val parts = ImageLines.sideBySide(photos.map { it.width }, gapShare)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(PHOTO_GAP, sideOf(align)),
+                verticalAlignment = Alignment.Top,
+            ) {
+                photos.forEachIndexed { index, photo ->
+                    PhotoBox(
+                        photo = photo,
+                        attachment = attachment,
+                        width = room * parts[index],
+                        marked = many && photo.key == block.key,
+                        onChoose = if (many) ({ chosenKey = photo.key }) else null,
                     )
                 }
-
-                else -> Box(Modifier.fillMaxWidth().height(120.dp))
             }
         }
 
@@ -628,9 +629,14 @@ private fun ImageBlock(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = block.alt.ifBlank { words.noCaption },
+                text = if (many) {
+                    words.photoOfMany(photos.indexOf(block) + 1, photos.size)
+                } else {
+                    block.alt.ifBlank { words.noCaption }
+                },
                 style = Kajet.type.meta,
                 color = colors.muted,
+                maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -657,23 +663,23 @@ private fun ImageBlock(
             IconAction(
                 icon = KajetIcons.ArrowDown,
                 description = words.photoUp,
-                onClick = onMoveUp,
-                enabled = canMoveUp,
+                onClick = { onMoveUp(block.key) },
+                enabled = canMoveUp(block.key),
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
             )
             IconAction(
                 icon = KajetIcons.ArrowDown,
                 description = words.photoDown,
-                onClick = onMoveDown,
-                enabled = canMoveDown,
+                onClick = { onMoveDown(block.key) },
+                enabled = canMoveDown(block.key),
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
             )
             IconAction(
                 icon = KajetIcons.Bin,
                 description = words.photoRemove,
-                onClick = onDelete,
+                onClick = { onDelete(block.key) },
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
             )
@@ -685,7 +691,7 @@ private fun ImageBlock(
                     name = words.photoSize,
                     value = block.width.coerceIn(Block.SMALLEST_WIDTH, Block.FULL_WIDTH),
                     range = Block.SMALLEST_WIDTH..Block.FULL_WIDTH,
-                    onChange = onWidth,
+                    onChange = { onWidth(block.key, it) },
                     readout = { words.percentOf((it * 100).roundToInt()) },
                 )
                 // Cztery SecondaryButton 48 dp nie mieszczą się w rzędzie
@@ -700,7 +706,43 @@ private fun ImageBlock(
                 ) {
                     listOf(0.25f, 0.5f, 0.75f, 1f).forEach { part ->
                         BarTextAction(words.percentOf((part * 100).roundToInt())) {
-                            onWidth(part)
+                            onWidth(block.key, part)
+                        }
+                    }
+                }
+
+                SectionLabel(words.photoPlacement)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    NoteAlign.entries.forEach { side ->
+                        IconAction(
+                            icon = when (side) {
+                                NoteAlign.LEFT -> KajetIcons.AlignLeft
+                                NoteAlign.CENTER -> KajetIcons.AlignCentre
+                                NoteAlign.RIGHT -> KajetIcons.AlignRight
+                            },
+                            description = side.label(words),
+                            onClick = { onAlign(block.key, side) },
+                            selected = align == side,
+                            iconSize = 16.dp,
+                            touchTarget = 40.dp,
+                        )
+                    }
+                    // Zdjęcie idzie obok tego, które stoi nad nim - i wraca do
+                    // swojego wiersza tym samym przyciskiem. Kiedy nad zdjęciem
+                    // nie ma zdjęcia, nie ma też obok czego stanąć.
+                    when {
+                        block.inRow -> BarTextAction(words.photoOwnLine) {
+                            onSideBySide(block.key, false)
+                        }
+
+                        canStandBeside(block.key) -> BarTextAction(words.photoBeside) {
+                            onSideBySide(block.key, true)
                         }
                     }
                 }
@@ -712,7 +754,7 @@ private fun ImageBlock(
                 SectionLabel(words.photoCaption)
                 BasicTextField(
                     value = block.alt,
-                    onValueChange = onAlt,
+                    onValueChange = { onAlt(block.key, it) },
                     singleLine = true,
                     textStyle = Kajet.type.body.copy(color = colors.text),
                     cursorBrush = SolidColor(colors.accent),
@@ -729,6 +771,105 @@ private fun ImageBlock(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/** Odstęp między zdjęciami stojącymi obok siebie. */
+private val PHOTO_GAP = 8.dp
+
+private fun sideOf(align: NoteAlign): Alignment.Horizontal = when (align) {
+    NoteAlign.LEFT -> Alignment.Start
+    NoteAlign.CENTER -> Alignment.CenterHorizontally
+    NoteAlign.RIGHT -> Alignment.End
+}
+
+/** Samo zdjęcie w wierszu - bez przycisków, te stoją pod całym wierszem. */
+@Composable
+private fun PhotoBox(
+    photo: Block.Image,
+    attachment: suspend (String) -> ByteArray?,
+    width: Dp,
+    marked: Boolean,
+    onChoose: (() -> Unit)?,
+) {
+    val words = LocalStrings.current
+    val colors = Kajet.colors
+    var image by remember(photo.url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var failed by remember(photo.url) { mutableStateOf(false) }
+
+    LaunchedEffect(photo.url) {
+        val name = photo.attachmentName
+        if (name == null) {
+            failed = true
+            return@LaunchedEffect
+        }
+        val data = runCatching { attachment(name) }.getOrNull()
+        if (data == null) {
+            failed = true
+        } else {
+            // Poza wątkiem głównym i w rozmiarze na ekran, nie w pełnej
+            // rozdzielczości aparatu - inaczej wstawione zdjęcie zamrażało
+            // przewijanie notatki, a przy kilku kończyło się brakiem pamięci.
+            image = withContext(Dispatchers.IO) { Bitmaps.decode(data)?.asImageBitmap() }
+            failed = image == null
+        }
+    }
+
+    Box(
+        Modifier
+            .width(width)
+            .background(colors.desk, RoundedCornerShape(Kajet.dimens.corner))
+            .border(
+                width = if (marked) 1.5.dp else 1.dp,
+                color = if (marked) colors.accent else colors.line,
+                shape = RoundedCornerShape(Kajet.dimens.corner),
+            )
+            .then(
+                if (onChoose == null) {
+                    Modifier
+                } else {
+                    // Bez podświetlenia i bez skupienia: stuknięcie wybiera
+                    // zdjęcie dla przycisków pod wierszem, a nie otwiera nic.
+                    Modifier
+                        .focusProperties { canFocus = false }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = words.photoChoose,
+                            onClick = onChoose,
+                        )
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            image != null -> Image(
+                bitmap = image!!,
+                contentDescription = photo.alt.ifBlank { words.photoInNote },
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            failed -> Row(
+                Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                androidx.compose.material3.Icon(
+                    KajetIcons.ErrorMark,
+                    contentDescription = null,
+                    tint = colors.danger,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = words.photoNotFound(photo.url),
+                    style = Kajet.type.meta,
+                    color = colors.muted,
+                )
+            }
+
+            else -> Box(Modifier.fillMaxWidth().height(120.dp))
         }
     }
 }

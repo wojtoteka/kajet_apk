@@ -32,6 +32,8 @@ import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.core.text.bulkPartlyFailed
 import wojtoteka.ovh.kajet.core.text.checkingProgress
+import wojtoteka.ovh.kajet.core.text.deletingOne
+import wojtoteka.ovh.kajet.core.text.deletingProgress
 import wojtoteka.ovh.kajet.core.text.movingProgress
 import wojtoteka.ovh.kajet.core.text.refreshingIndex
 import wojtoteka.ovh.kajet.core.text.trashingProgress
@@ -450,14 +452,28 @@ class LibraryViewModel(
         _trash.value = repo.listTrash()
     }
 
+    /*
+      Kasowanie z kosza mówi, co się dzieje - tak samo jak wyrzucanie do kosza
+      w bibliotece. Wpis kosza bywa całym folderem, a pełny kosz to i kilkaset
+      plików: bez paska ekran stał nieruchomo, a po chwili wszystko znikało
+      naraz i wyglądało to jak zacięcie.
+    */
     fun deletePermanently(item: TrashEntry) = inBackground {
-        repo.deletePermanently(item.id)
+        _progress.value = words.deletingOne(item.displayName)
+        repo.deletePermanently(item.id) { done, total ->
+            if (total > 1) _progress.value = words.deletingProgress(done, total)
+        }
         _trash.value = repo.listTrash()
+        _progress.value = null
     }
 
     fun emptyTrash() = inBackground {
-        repo.emptyTrash()
+        _progress.value = words.emptyingTrash
+        repo.emptyTrash { done, total ->
+            _progress.value = words.deletingProgress(done, total)
+        }
         _trash.value = repo.listTrash()
+        _progress.value = null
     }
 
     fun exportFolder(

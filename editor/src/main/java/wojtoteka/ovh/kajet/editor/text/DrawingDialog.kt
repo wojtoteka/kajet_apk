@@ -1,10 +1,12 @@
 package wojtoteka.ovh.kajet.editor.text
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +60,7 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InkTool
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.editor.penQuietSurface
 import wojtoteka.ovh.kajet.ink.CanvasListener
 import wojtoteka.ovh.kajet.ink.EditorTool
 import wojtoteka.ovh.kajet.ink.OnScreenPage
@@ -67,6 +71,42 @@ import wojtoteka.ovh.kajet.ink.Strokes
 
 private const val DRAWING_WIDTH = 560f
 private const val DRAWING_HEIGHT = 300f
+
+/** Wysokość pudła kartki przy [DRAWING_HEIGHT]. Z tej pary bierze się skala. */
+private val DRAWING_BOX_HEIGHT = 320.dp
+
+/*
+  Rosnąca kartka.
+
+  Kreska postawiona blisko dolnej krawędzi znaczy „miejsce się kończy", więc
+  kartka dostaje kolejny kawałek. Rośnie DOPIERO po oderwaniu rysika - w
+  trakcie kreski podłoga uciekałaby spod ręki. Raz dołożone miejsce zostaje:
+  gumka ani cofnięcie ostatniej kreski nie zabierają go z powrotem, bo pole,
+  które kurczy się samo, jest nie do trafienia rysikiem.
+
+  Górna granica to trzy kartki. Wyżej okno przestaje być oknem rysunku
+  w notatce, a robi się notatką odręczną - od tego jest osobny rodzaj notatki.
+*/
+private const val DRAWING_GROW_MARGIN = 56f
+private const val DRAWING_GROW_STEP = 120f
+private const val DRAWING_MAX_HEIGHT = DRAWING_HEIGHT * 3
+
+/*
+  Kartka przycięta przy wstawianiu.
+
+  Miejsce dołożone w trakcie rysowania zostaje puste, gdy kreska, dla której
+  urosło, pójdzie pod gumkę. Zamiast kurczyć kartkę pod rysikiem - czego nie
+  da się trafić - liczymy to raz, na „Wstaw rysunek": kartka kończy się tuż
+  pod ostatnią kreską, więc w notatce nie ma pustego pasa. Odstęp jest ciut
+  mniejszy od tego, przy którym kartka rośnie, żeby przycięcie nie wyglądało
+  jak ucięta kreska.
+
+  Dół i tylko dół: przycięcie od góry przesuwałoby rysunek względem tego, co
+  było widać pod rysikiem. Najniższa kartka to jeden krok wzrostu - z samej
+  kropki nie robimy paska o wysokości kropki.
+*/
+private const val DRAWING_TRIM_MARGIN = 40f
+private const val DRAWING_MIN_HEIGHT = DRAWING_GROW_STEP
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -80,6 +120,11 @@ fun DrawingDialog(
     var tool by remember { mutableStateOf(EditorTool.PEN) }
     var color by remember { mutableStateOf(colors.defaultInk.toArgb()) }
     var width by remember { mutableStateOf(2.4f) }
+
+    // Wysokość kartki. Rośnie razem z rysunkiem i tyle samo trafia do notatki,
+    // więc wstawiony rysunek ma dokładnie te proporcje, co pod rysikiem.
+    var pageHeight by remember { mutableFloatStateOf(DRAWING_HEIGHT) }
+    var canvas by remember { mutableStateOf<StrokeCanvas?>(null) }
 
     // Rysunek w notatce tekstowej to też pisanie rysikiem, więc i tu rysik ma
     // drgać tym, czym się rysuje. Zagnieżdżenia liczy PenHaptics, więc
@@ -110,6 +155,9 @@ fun DrawingDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) { detectTapGestures { onClose() } }
+                // Rysik ma drgać nad kartką, a nie nad całym oknem. Wjazd nad
+                // okno wycisza go z góry; kartka zgłosi się zaraz potem sama.
+                .penQuietSurface(context)
                 .systemBarsPadding()
                 .imePadding()
                 .padding(16.dp),
@@ -127,6 +175,7 @@ fun DrawingDialog(
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .penQuietSurface(context)
                         .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -144,6 +193,7 @@ fun DrawingDialog(
                     Modifier
                         .fillMaxWidth()
                         .background(colors.desk)
+                        .penQuietSurface(context)
                         // Na telefonie pasek się nie mieści, więc przewija się w bok
                         // zamiast ściskać kropki do zerowej szerokości.
                         .horizontalScroll(rememberScrollState())
@@ -181,7 +231,14 @@ fun DrawingDialog(
                                     if (width == variant) colors.accentWash else Color.Transparent,
                                     RoundedCornerShape(Kajet.dimens.corner),
                                 )
-                                .clickable(onClickLabel = words.strokeWidth) { width = variant },
+                                // Bez podświetlenia dotyku: po rysiku zostawał
+                                // szary kwadrat, nie do odróżnienia od wybranej
+                                // grubości.
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClickLabel = words.strokeWidth,
+                                ) { width = variant },
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
@@ -200,34 +257,61 @@ fun DrawingDialog(
                 }
                 HorizontalRule()
 
+                /*
+                  Pudło kartki. Wysokość idzie za wysokością kartki, więc
+                  dołożone miejsce naprawdę widać, a skala kreski się nie
+                  zmienia. Ruch jest płynny: skok o sto dwadzieścia punktów
+                  w jednej klatce wygląda jak usterka.
+
+                  `weight(1f, fill = false)` przycina to do tego, co zostało
+                  w oknie. Gdy kartka urośnie ponad tę granicę, pudło stoi,
+                  a widok zjeżdża do świeżego miejsca.
+                */
+                val boxHeight by animateDpAsState(
+                    targetValue = DRAWING_BOX_HEIGHT * (pageHeight / DRAWING_HEIGHT),
+                    // Dopiero gdy pudło stanie na swoim, wiadomo, czy kartka
+                    // się w nim zmieściła. Jeśli nie - widok zjeżdża do
+                    // świeżego miejsca. `post` czeka na nowy rozmiar widoku,
+                    // bo bez tego liczylibyśmy z poprzedniego.
+                    finishedListener = { canvas?.post { canvas?.showPageBottom(pageHeight) } },
+                    label = "wysokosc kartki",
+                )
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false)
                         .heightIn(min = 140.dp)
-                        .height(320.dp)
+                        .height(boxHeight)
                         .background(colors.desk),
                 ) {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { context ->
                             StrokeCanvas(context).also { view ->
-                                view.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                                canvas = view
+                                view.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
                                     val newW = right - left
-                                    val newH = bottom - top
                                     val oldW = oldRight - oldLeft
-                                    val oldH = oldBottom - oldTop
                                     if (newW <= 0) return@addOnLayoutChangeListener
-                                    if (newW == oldW && newH == oldH) return@addOnLayoutChangeListener
+                                    if (newW == oldW) return@addOnLayoutChangeListener
                                     if (view.pages.isEmpty()) return@addOnLayoutChangeListener
                                     // StrokeCanvas dopasowuje kartkę tylko raz. Po obrocie
                                     // zostaje zoom z poprzedniej szerokości, więc tu
-                                    // dopasowujemy przy każdej zmianie rozmiaru pudła.
+                                    // dopasowujemy przy każdej zmianie SZEROKOŚCI pudła.
+                                    // Sama zmiana wysokości niczego nie dopasowuje:
+                                    // fitWidth() cofa widok na sam początek kartki,
+                                    // a przy rosnącej kartce właśnie tego nie chcemy.
                                     view.fitWidth()
                                 }
                                 view.listener = object : CanvasListener {
                                     override fun strokeFinished(page: Int, stroke: InkStroke) {
                                         strokes = strokes + stroke
+                                        // Kreska sięgnęła dołu kartki: miejsce się
+                                        // kończy, więc dokładamy następny kawałek.
+                                        if (stroke.bounds().bottom > pageHeight - DRAWING_GROW_MARGIN) {
+                                            pageHeight = (pageHeight + DRAWING_GROW_STEP)
+                                                .coerceAtMost(DRAWING_MAX_HEIGHT)
+                                        }
                                     }
 
                                     override fun eraserPassed(
@@ -251,12 +335,13 @@ fun DrawingDialog(
                                 }
                             }
                         },
+                        onRelease = { canvas = null },
                         update = { view ->
                             view.pages = listOf(
                                 OnScreenPage(
                                     index = 0,
                                     width = DRAWING_WIDTH,
-                                    height = DRAWING_HEIGHT,
+                                    height = pageHeight,
                                     background = PageBackground.PLAIN,
                                     strokes = strokes,
                                 ),
@@ -280,6 +365,7 @@ fun DrawingDialog(
                 Column(
                     Modifier
                         .fillMaxWidth()
+                        .penQuietSurface(context)
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -294,7 +380,7 @@ fun DrawingDialog(
                     ) {
                         PrimaryButton(
                             text = words.insertDrawing,
-                            onClick = { onDone(strokes, DRAWING_WIDTH, DRAWING_HEIGHT) },
+                            onClick = { onDone(strokes, DRAWING_WIDTH, trimmedHeight(strokes, pageHeight)) },
                             icon = KajetIcons.Confirm,
                             enabled = strokes.isNotEmpty(),
                         )
@@ -306,6 +392,27 @@ fun DrawingDialog(
             }
         }
     }
+}
+
+/**
+ * Wysokość kartki obcięta do tego, co na niej stoi: dolna krawędź kresek plus
+ * [DRAWING_TRIM_MARGIN]. Nigdy nie dokłada miejsca - najwyżej oddaje to, które
+ * zostało puste.
+ */
+private fun trimmedHeight(strokes: List<InkStroke>, pageHeight: Float): Float {
+    val bottom = Strokes.bounds(strokes)?.bottom ?: return pageHeight
+    return (bottom + DRAWING_TRIM_MARGIN)
+        .coerceIn(DRAWING_MIN_HEIGHT, pageHeight)
+}
+
+/**
+ * Zjeżdża do dolnej krawędzi kartki. Dopóki cała kartka mieści się w pudle,
+ * nie robi nic - widok zostaje tam, gdzie go zostawiono.
+ */
+private fun StrokeCanvas.showPageBottom(pageHeight: Float) {
+    if (height <= 0 || zoom <= 0f) return
+    val target = (pageHeight - height / zoom).coerceAtLeast(0f)
+    if (target != offsetY) setView(offsetX, target, zoom)
 }
 
 @Composable

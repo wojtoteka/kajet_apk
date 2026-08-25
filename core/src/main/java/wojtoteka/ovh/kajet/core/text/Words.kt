@@ -69,6 +69,9 @@ interface Strings {
     val emptyFolder: String
     val emptyFolderHint: String
     val emptyTrash: String
+
+    /** Pasek postępu przy opróżnianiu kosza, zanim policzy się pierwszy plik. */
+    val emptyingTrash: String
     val restore: String
     val deleteForever: String
     val moveToTrash: String
@@ -342,6 +345,10 @@ interface Strings {
     val photoDown: String
     val photoRemove: String
     val photoCaptionAbout: String
+    val photoPlacement: String
+    val photoBeside: String
+    val photoOwnLine: String
+    val photoChoose: String
 
     // --- Edytor odręczny ---
     val penSettings: String
@@ -860,6 +867,17 @@ fun Strings.trashingProgress(done: Int, total: Int): String =
 fun Strings.movingProgress(done: Int, total: Int): String =
     if (english) "Moving: $done of $total" else "Przenoszę: $done z $total"
 
+/*
+  Kasowanie z kosza. Idzie plik po pliku i przy pełnym koszu trwa kilka albo
+  kilkanaście sekund - bez tego zdania ekran stał w miejscu, a potem wszystko
+  znikało naraz i wyglądało to, jakby przycisk nie zadziałał.
+*/
+fun Strings.deletingProgress(done: Int, total: Int): String =
+    if (english) "Deleting for good: $done of $total" else "Kasuję na dobre: $done z $total"
+
+fun Strings.deletingOne(name: String): String =
+    if (english) "Deleting for good: $name" else "Kasuję na dobre: $name"
+
 /**
  * Ile wpisów nie dało się ruszyć. Reszta poszła - dlatego zdanie mówi
  * o niepowodzeniu części, a nie o niepowodzeniu całości.
@@ -898,6 +916,12 @@ fun Strings.photoNotFound(file: String): String = if (english) {
     "Kajet could not find $file. The photo may have been deleted from the note's folder."
 } else {
     "Nie ma pliku $file. Zdjęcie mogło zostać skasowane z katalogu notatki."
+}
+
+fun Strings.photoOfMany(number: Int, total: Int): String = if (english) {
+    "Photo $number of $total"
+} else {
+    "Zdjęcie $number z $total"
 }
 
 fun Strings.selectedStrokes(count: Int): String = if (english) {
@@ -1321,6 +1345,7 @@ object PolishStrings : Strings {
     override val emptyFolder = "Tu jeszcze nic nie ma"
     override val emptyFolderHint = "Zacznij od nowej notatki albo folderu."
     override val emptyTrash = "Opróżnij kosz"
+    override val emptyingTrash = "Opróżniam kosz"
     override val restore = "Przywróć"
     override val deleteForever = "Skasuj na dobre"
     override val moveToTrash = "Wyrzuć do kosza"
@@ -1608,6 +1633,10 @@ object PolishStrings : Strings {
     override val photoDown = "Przesuń zdjęcie niżej"
     override val photoRemove = "Usuń zdjęcie z notatki"
     override val photoCaptionAbout = "Podpis czyta czytnik ekranu i trafia do wydruku."
+    override val photoPlacement = "Ułożenie"
+    override val photoBeside = "Obok poprzedniego"
+    override val photoOwnLine = "Od nowego wiersza"
+    override val photoChoose = "Wybierz zdjęcie"
 
     override val penSettings = "Ustawienia pisaka"
     override val insertTextBox = "Wstaw pole tekstowe"
@@ -2039,6 +2068,7 @@ object EnglishStrings : Strings {
     override val emptyFolder = "Nothing here yet"
     override val emptyFolderHint = "Start with a new note or folder."
     override val emptyTrash = "Empty the bin"
+    override val emptyingTrash = "Emptying the bin"
     override val restore = "Restore"
     override val deleteForever = "Delete for good"
     override val moveToTrash = "Move to bin"
@@ -2326,6 +2356,10 @@ object EnglishStrings : Strings {
     override val photoDown = "Move the photo down"
     override val photoRemove = "Remove the photo from the note"
     override val photoCaptionAbout = "The caption is read by screen readers and goes into the print-out."
+    override val photoPlacement = "Placement"
+    override val photoBeside = "Next to the one above"
+    override val photoOwnLine = "On a new line"
+    override val photoChoose = "Choose the photo"
 
     override val penSettings = "Pen settings"
     override val insertTextBox = "Insert a text box"
