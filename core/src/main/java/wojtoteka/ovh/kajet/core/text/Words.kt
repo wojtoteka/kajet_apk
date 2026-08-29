@@ -63,6 +63,7 @@ interface Strings {
     val newFolder: String
     val newNote: String
     val newCodeFile: String
+    val uploadFile: String
     val folderName: String
     val folderColour: String
     val folderIcon: String
@@ -285,6 +286,7 @@ interface Strings {
     val codeOpenFailed: String
     val codeSaveFailed: String
     val codeRunFailed: String
+    val codeFileTooLargeTitle: String
 
     // --- Konsola pod podglądem strony ---
     val codeConsole: String
@@ -1196,6 +1198,108 @@ fun Strings.nothingOpensFile(name: String): String = if (english) {
         "Użyj \u201eWyślij\u201d i wybierz program samodzielnie."
 }
 
+fun Strings.codeFileTooLargeAbout(sizeBytes: Long, limitBytes: Int): String {
+    val sizeKb = (sizeBytes.coerceAtLeast(1L) + 1023L) / 1024L
+    val limitKb = limitBytes / 1024
+    return if (english) {
+        "The file is about $sizeKb KB. Kajet edits files up to $limitKb KB, so this one " +
+            "was not loaded into the editor. You can open it in another app instead."
+    } else {
+        "Plik ma około $sizeKb KB. Kajet edytuje pliki do $limitKb KB, dlatego ten nie " +
+            "został wczytany do edytora. Możesz otworzyć go w innej aplikacji."
+    }
+}
+
+/**
+ * Ileś megabajtów zamiast siedmiu cyfr. Bajty są dokładne, ale žeby
+ * zrozumieć „41 943 040 B", trzeba je najpierw policzyć na palcach.
+ *
+ * Zaokrąglenie idzie w górę do jednej dziesiątej: plik odrobinę większy od
+ * limitu nie może się w napisie zrównać z limitem, bo wyszedłby z tego
+ * komunikat o pliku, który się mieści, a jednak nie przeszedł.
+ */
+fun Strings.megabytes(bytes: Long): String {
+    val tenths = (bytes.coerceAtLeast(0L) * 10 + MEGABYTE - 1) / MEGABYTE
+    val whole = tenths / 10
+    val rest = tenths % 10
+    return if (rest == 0L) "$whole" else "$whole${if (english) "." else ","}$rest"
+}
+
+private const val MEGABYTE = 1_048_576L
+
+fun Strings.uploadTooLargeAbout(sizeBytes: Long, limitBytes: Long): String = if (english) {
+    "The file is about ${megabytes(sizeBytes)} MB. Kajet uploads files up to " +
+        "${megabytes(limitBytes)} MB, so this one stayed on the device."
+} else {
+    "Plik ma około ${megabytes(sizeBytes)} MB. Kajet wgrywa pliki do " +
+        "${megabytes(limitBytes)} MB, dlatego ten został na urządzeniu."
+}
+
+/**
+ * Plik, którego Kajet nie wgra do chmury. Wybieraczka plików systemu pokazuje
+ * wszystko, co jest na urządzeniu, więc zdjęcie albo film da się w niej
+ * wskazać — lepiej powiedzieć to od razu, niż po nieudanym wysyłaniu.
+ */
+fun Strings.uploadNotTextAbout(name: String): String = if (english) {
+    "“$name” is not a text or source-code file."
+} else {
+    "„$name” to nie plik tekstowy ani z kodem."
+}
+
+/**
+ * Napis paska wgrywania.
+ *
+ * Odmowy z serwera bywają rozpisane na dwa pełne zdania i na telefonie taki
+ * pasek zajmował pół ekranu. Znane powody mają więc tutaj własne, krótkie
+ * zakończenie zdania, a nieznane skracają się do pierwszego zdania.
+ */
+fun Strings.uploadStatusText(
+    name: String,
+    status: String,
+    progress: Int,
+    error: String?,
+    errorCode: String? = null,
+): String = when (status) {
+    "PENDING" -> if (english) "$name — waiting for a connection" else "$name — oczekuje na połączenie"
+    "UPLOADING" -> if (english) "$name — uploading ($progress%)" else "$name — wysyłanie ($progress%)"
+    "SYNCED" -> if (english) "$name — uploaded successfully" else "$name — wgrany pomyślnie"
+    "FAILED_RETRYABLE" -> "$name — " + uploadProblem(error, errorCode, temporary = true)
+    else -> "$name — " + uploadProblem(error, errorCode, temporary = false)
+}
+
+/** Krótki powód odmowy. Kody są te same, którymi odpowiada serwer. */
+fun Strings.uploadProblem(error: String?, errorCode: String?, temporary: Boolean): String = when (errorCode) {
+    "unsupported-extension", "mime-mismatch" ->
+        if (english) "not a text or source-code file" else "to nie plik tekstowy ani z kodem"
+
+    "not-utf8", "unreadable-file" ->
+        if (english) "the contents are not plain text" else "treść nie jest zwykłym tekstem"
+
+    "file-too-large" -> if (english) "the file is too big" else "plik jest za duży"
+
+    "no-folder" ->
+        if (english) "this folder is not in the cloud yet" else "tego folderu nie ma jeszcze w chmurze"
+
+    else -> firstSentence(error) ?: if (temporary) {
+        if (english) "sending did not work, Kajet will try again" else "wysyłanie się nie udało, Kajet spróbuje jeszcze raz"
+    } else {
+        if (english) "sending did not work" else "wysyłanie się nie udało"
+    }
+}
+
+/**
+ * Pierwsze zdanie komunikatu, najwyżej sto dwadzieścia znaków. Pasek ma
+ * mieścić się w dwóch, trzech wierszach także wtedy, gdy serwer przyśle
+ * powiadomienie, którego ta wersja aplikacji jeszcze nie zna.
+ */
+private fun firstSentence(text: String?): String? {
+    val whole = text?.trim().orEmpty()
+    if (whole.isEmpty()) return null
+    val stop = whole.indexOf(". ")
+    val one = if (stop > 0) whole.take(stop + 1) else whole
+    return if (one.length <= 120) one else one.take(119).trimEnd() + "…"
+}
+
 fun Strings.pdfPage(current: Int, total: Int): String =
     if (english) "Page $current of $total" else "Strona $current z $total"
 
@@ -1342,6 +1446,7 @@ object PolishStrings : Strings {
     override val newFolder = "Nowy folder"
     override val newNote = "Nowa notatka"
     override val newCodeFile = "Nowy plik z kodem"
+    override val uploadFile = "Wgraj plik"
     override val folderName = "Nazwa folderu"
     override val folderColour = "Kolor folderu"
     override val folderIcon = "Ikona folderu"
@@ -1577,6 +1682,7 @@ object PolishStrings : Strings {
     override val codeOpenFailed = "Nie udało się otworzyć pliku."
     override val codeSaveFailed = "Nie udało się zapisać pliku."
     override val codeRunFailed = "Uruchomienie się nie udało."
+    override val codeFileTooLargeTitle = "Plik jest za duży do edycji"
 
     override val codeConsole = "Konsola"
     override val codeConsoleClear = "Wyczyść"
@@ -1803,15 +1909,16 @@ object PolishStrings : Strings {
     override val signedIn = "Zalogowany"
     override val spaceLabel = "Miejsce"
     override val takenNoLimit = "zajęte, bez limitu"
-    override val syncSection = "Wysyłanie do chmury"
-    override val syncAbout = "Notatki wysyłają się same po każdym zapisie. Kiedy nie ma internetu, " +
-        "czekają na urządzeniu i idą, gdy sieć wróci."
-    override val syncing = "Wysyłam…"
-    override val syncNow = "Wyślij teraz"
+    override val syncSection = "Synchronizacja z chmurą"
+    override val syncAbout = "Kajet wysyła zmiany z urządzenia i pobiera zmiany ze strony. " +
+        "Uzgadnia też foldery oraz ostatnie położenie plików. Ręczna synchronizacja ponawia " +
+        "również zadania, które wcześniej utknęły."
+    override val syncing = "Synchronizuję…"
+    override val syncNow = "Synchronizuj teraz"
     override val signOut = "Wyloguj się"
     override val signOutAbout = "Wylogowanie odcina chmurę, ale nie kasuje niczego z urządzenia. " +
         "Notatki zostają w wybranym katalogu."
-    override val everythingSynced = "Wszystko wysłane"
+    override val everythingSynced = "Wszystko zsynchronizowane"
     override val noInternet = "Brak internetu"
     override val sessionExpired = "Logowanie straciło ważność. Zaloguj się jeszcze raz."
     override val closeMessage = "Zamknij komunikat"
@@ -1826,8 +1933,8 @@ object PolishStrings : Strings {
     override val pasteTokenFromSite = "Wklej kod ze strony konta."
     override val sessionExpiredServer = "To logowanie już nie działa. Zaloguj się jeszcze raz."
     override val signedOutNotesStay = "Wylogowano. Notatki zostały na urządzeniu."
-    override val syncFailedSafe = "Nie udało się wysłać notatek. Są bezpieczne na urządzeniu."
-    override val alreadyInSync = "Wszystko jest już w chmurze."
+    override val syncFailedSafe = "Nie udało się zsynchronizować notatek. Są bezpieczne na urządzeniu."
+    override val alreadyInSync = "Urządzenie i chmura są już zsynchronizowane."
     override val serverCopiesKept = "Obie wersje leżą obok siebie, żeby nic nie przepadło."
     override val incompleteSignInAnswer = "Logowanie się nie dokończyło. Spróbuj jeszcze raz."
     override val approvalTimedOut = "Czas na zatwierdzenie minął. Spróbuj jeszcze raz."
@@ -1845,7 +1952,7 @@ object PolishStrings : Strings {
     override val noteChangedElsewhere = "Ta notatka zmieniła się także gdzie indziej."
     override val outOfSpace = "Brakuje miejsca na koncie."
     override val serverTrouble = "Serwer ma kłopot. Kajet spróbuje jeszcze raz później."
-    override val noNotesDirToSend = "Nie ma katalogu z notatkami, więc nie ma czego wysłać. " +
+    override val noNotesDirToSend = "Nie ma katalogu z notatkami, więc nie można wykonać synchronizacji. " +
         "Otwórz ustawienia i wskaż folder na urządzeniu."
     override val noNotesDirToSave = "Nie wskazano katalogu na notatki, więc nie ma dokąd ich zapisać. " +
         "Otwórz ustawienia i wybierz folder na urządzeniu."
@@ -2068,6 +2175,7 @@ object EnglishStrings : Strings {
     override val newFolder = "New folder"
     override val newNote = "New note"
     override val newCodeFile = "New code file"
+    override val uploadFile = "Upload file"
     override val folderName = "Folder name"
     override val folderColour = "Folder colour"
     override val folderIcon = "Folder icon"
@@ -2303,6 +2411,7 @@ object EnglishStrings : Strings {
     override val codeOpenFailed = "The file would not open."
     override val codeSaveFailed = "The file would not save."
     override val codeRunFailed = "Running it did not work."
+    override val codeFileTooLargeTitle = "This file is too large to edit"
 
     override val codeConsole = "Console"
     override val codeConsoleClear = "Clear"
@@ -2527,15 +2636,16 @@ object EnglishStrings : Strings {
     override val signedIn = "Signed in"
     override val spaceLabel = "Space"
     override val takenNoLimit = "used, no limit"
-    override val syncSection = "Cloud upload"
-    override val syncAbout = "Notes upload themselves after every save. With no internet they wait " +
-        "on the device and go up when the network is back."
-    override val syncing = "Sending…"
-    override val syncNow = "Send now"
+    override val syncSection = "Cloud synchronisation"
+    override val syncAbout = "Kajet sends changes from this device and fetches changes from the website. " +
+        "It also reconciles folders and the latest file locations. A manual sync retries work " +
+        "that got stuck earlier."
+    override val syncing = "Synchronising…"
+    override val syncNow = "Synchronise now"
     override val signOut = "Sign out"
     override val signOutAbout = "Signing out cuts off the cloud but deletes nothing from the device. " +
         "Your notes stay in the folder you picked."
-    override val everythingSynced = "Everything is uploaded"
+    override val everythingSynced = "Everything is synchronised"
     override val noInternet = "No internet"
     override val sessionExpired = "Your sign-in is no longer valid. Sign in again."
     override val closeMessage = "Close this message"
@@ -2550,8 +2660,8 @@ object EnglishStrings : Strings {
     override val pasteTokenFromSite = "Paste the code from your account page."
     override val sessionExpiredServer = "This sign-in no longer works. Sign in again."
     override val signedOutNotesStay = "Signed out. Your notes stayed on the device."
-    override val syncFailedSafe = "The upload did not work. Your notes are safe on the device."
-    override val alreadyInSync = "Everything is already in the cloud."
+    override val syncFailedSafe = "Synchronisation did not work. Your notes are safe on the device."
+    override val alreadyInSync = "This device and the cloud are already synchronised."
     override val serverCopiesKept = "Both versions are saved side by side, so nothing is lost."
     override val incompleteSignInAnswer = "The sign-in did not finish. Try again."
     override val approvalTimedOut = "The time to approve ran out. Try again."
@@ -2568,7 +2678,7 @@ object EnglishStrings : Strings {
     override val noteChangedElsewhere = "This note has also changed somewhere else."
     override val outOfSpace = "Your account is out of space."
     override val serverTrouble = "The server is having trouble. Kajet will try again later."
-    override val noNotesDirToSend = "Kajet cannot see the notes folder, so there is nothing to send. " +
+    override val noNotesDirToSend = "Kajet cannot see the notes folder, so it cannot synchronise. " +
         "Open settings and point it at a folder on this device."
     override val noNotesDirToSave = "No notes folder has been picked, so there is nowhere to save them. " +
         "Open settings and choose a folder on this device."

@@ -423,6 +423,21 @@ class LibraryStore(
         return DiskFiles.readText(resolver, file)
     }
 
+    fun readTextUpTo(path: String, maxBytes: Int): BoundedTextRead {
+        val file = entry(path)?.takeIf { it.isFile }
+            ?: throw IOException(words.fileGone(path))
+        val declared = file.length().coerceAtLeast(0L)
+        if (declared > maxBytes) {
+            return BoundedTextRead.TooLarge(declared, file.uri.toString())
+        }
+        val bytes = DiskFiles.readBytesUpTo(resolver, file, maxBytes)
+            ?: return BoundedTextRead.TooLarge(
+                sizeBytes = maxOf(declared, maxBytes.toLong() + 1L),
+                documentUri = file.uri.toString(),
+            )
+        return BoundedTextRead.Content(bytes.toString(Charsets.UTF_8))
+    }
+
     fun writeText(path: String, content: String) {
         val file = entry(path)?.takeIf { it.isFile }
             ?: throw IOException(words.fileGoneUnsaved(path))

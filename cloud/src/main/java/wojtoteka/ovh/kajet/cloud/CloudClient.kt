@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
@@ -31,6 +32,8 @@ class CloudClient(
             val notFound: Boolean = false,
             /** Powód podany przez serwer w polu `error`, np. „not-yours". */
             val code: String = "",
+            /** HTTP status when the server answered; null for transport failures. */
+            val httpStatus: Int? = null,
         ) : Result<Nothing>
     }
 
@@ -132,6 +135,66 @@ class CloudClient(
             url = "${account.serverUrl()}/api/v1/sync/deleted?$params",
             method = "GET",
         )
+    }
+
+    /** Import a picked text/source file through the server's `/api/v1/files` contract. */
+    suspend fun uploadFile(
+        uploadId: String,
+        file: File,
+        originalName: String,
+        mimeType: String,
+        folderId: String?,
+        onProgress: (Int) -> Unit = {},
+    ): Result<FileUploadResponse> = withContext(Dispatchers.IO) {
+        val boundary = "----KajetUpload${System.nanoTime()}"
+        val safeName = originalName.replace('"', '_').replace('\r', '_').replace('\n', '_')
+        val beforeFile = buildString {
+            append("--$boundary\r\n")
+            append("Content-Disposition: form-data; name=\"uploadId\"\r\n\r\n")
+            append(uploadId)
+            append("\r\n")
+            if (!folderId.isNullOrBlank()) {
+                append("--$boundary\r\n")
+                append("Content-Disposition: form-data; name=\"folderId\"\r\n\r\n")
+                append(folderId)
+                append("\r\n")
+            }
+            append("--$boundary\r\n")
+            append("Content-Disposition: form-data; name=\"file\"; filename=\"$safeName\"\r\n")
+            append("Content-Type: ${mimeType.ifBlank { "application/octet-stream" }}\r\n\r\n")
+        }.toByteArray(Charsets.UTF_8)
+        val footer = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
+        val total = file.length().coerceAtLeast(1L)
+
+        val raw = connect(
+            url = "${account.serverUrl()}/api/v1/files",
+            method = "POST",
+            contentType = "multipart/form-data; boundary=$boundary",
+            withToken = true,
+        ) { connection ->
+            connection.setFixedLengthStreamingMode(beforeFile.size.toLong() + file.length() + footer.size)
+            connection.outputStream.buffered().use { output ->
+                output.write(beforeFile)
+                file.inputStream().buffered().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var sent = 0L
+                    var lastProgress = -1
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        sent += read
+                        val progress = ((sent * 100L) / total).toInt().coerceIn(0, 99)
+                        if (progress != lastProgress) {
+                            lastProgress = progress
+                            onProgress(progress)
+                        }
+                    }
+                }
+                output.write(footer)
+            }
+        }
+        parse(raw)
     }
 
     // --- Folders ---
@@ -483,6 +546,7 @@ class CloudClient(
             mustSignIn = sessionDead,
             notFound = status == 404,
             code = code,
+            httpStatus = status,
         )
     }
 
@@ -726,6 +790,20 @@ data class AttachmentResponse(
     val name: String,
     val hash: String = "",
     val sizeBytes: Int = 0,
+    val url: String = "",
+)
+
+@Serializable
+data class FileUploadResponse(
+    val status: String = "created",
+    val id: String,
+    val title: String = "",
+    val kind: String = "CODE",
+    val language: String = "text",
+    val fileSizeBytes: Long = 0,
+    val sizeBytes: Long = 0,
+    val version: Int = 0,
+    val updatedAt: Long = 0,
     val url: String = "",
 )
 

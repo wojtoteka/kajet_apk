@@ -580,6 +580,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
       odrzuca powtórki po jednym porównaniu.
     */
     override fun onHoverEvent(event: MotionEvent): Boolean {
+        PenHaptics.diagnose(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE ->
                 PenHaptics.surfaceHover(context, true)
@@ -594,8 +595,21 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         val id = event.getPointerId(index)
         val type = event.getToolType(index)
 
+        if (event.actionMasked == MotionEvent.ACTION_MOVE) {
+            val stylusIndex = (0 until event.pointerCount).firstOrNull { pointer ->
+                val pointerType = event.getToolType(pointer)
+                pointerType == MotionEvent.TOOL_TYPE_STYLUS ||
+                    pointerType == MotionEvent.TOOL_TYPE_ERASER
+            }
+            if (stylusIndex != null) PenHaptics.vibrate(this, event, stylusIndex, moving = true)
+        }
+
         if (type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER) {
             lastStylusTime = event.eventTime
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
+                    PenHaptics.vibrate(this, event, index, moving = false)
+            }
         }
 
         return when (event.actionMasked) {
@@ -621,7 +635,6 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             // Dotknięcie kartki bez wcześniejszego najechania (nie każdy
             // rysik je zgłasza) też znaczy „jestem nad powierzchnią pisania".
             PenHaptics.surfaceHover(context, true)
-            PenHaptics.refresh(context)
         }
 
         /*

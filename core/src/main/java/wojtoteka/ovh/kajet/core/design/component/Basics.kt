@@ -259,12 +259,20 @@ fun EmptyState(
     }
 }
 
+/**
+ * Pasek z komunikatem u góry treści.
+ *
+ * [maxLines] pilnuje wysokości. Długie zdanie z serwera potrafiło rozepchnąć
+ * pasek na pół ekranu telefonu i spis notatek znikał pod nim - trzy wiersze
+ * wystarczą na komunikat, a reszta zdania kończy się wielokropkiem.
+ */
 @Composable
 fun NoticeBar(
     icon: ImageVector,
     text: String,
     modifier: Modifier = Modifier,
     color: Color = Kajet.colors.muted,
+    maxLines: Int = 3,
     action: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
@@ -280,6 +288,8 @@ fun NoticeBar(
             text = text,
             style = Kajet.type.body,
             color = color,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         action?.invoke(this)

@@ -39,6 +39,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.OpenableColumns
+import android.net.Uri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -72,6 +76,9 @@ import wojtoteka.ovh.kajet.export.ExportFormat
 import wojtoteka.ovh.kajet.storage.Housekeeping
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
+import wojtoteka.ovh.kajet.storage.FileUploadStatus
+import wojtoteka.ovh.kajet.core.model.CodeLanguage
+import wojtoteka.ovh.kajet.core.text.uploadStatusText
 
 @Composable
 fun LibraryScreen(
@@ -90,6 +97,30 @@ fun LibraryScreen(
     val progress by model.progress.collectAsStateWithLifecycle()
     val stuckPaths by model.stuckPaths.collectAsStateWithLifecycle()
     val stuckNotice by model.stuckNotice.collectAsStateWithLifecycle()
+    val uploads by model.uploads.collectAsStateWithLifecycle(initialValue = emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+    /*
+      Wybieraczka plików systemu pokazuje wszystko, co leży na urządzeniu,
+      a do chmury idą tylko pliki tekstowe i z kodem. Rozszerzenie sprawdzamy
+      od razu po wybraniu: bez tego zdjęcie wędrowało przez całe wysyłanie po
+      to, żeby serwer odmówił, a odmowa zostawała na ekranie jako nieudany
+      upload. Serwer rozstrzyga tak samo, po rozszerzeniu.
+    */
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val selected = selectedFile(context.contentResolver, uri)
+            if (CodeLanguage.fromExtension(selected.name) == null) {
+                model.refuseUpload(selected.name)
+            } else {
+                model.queueUpload(
+                    uri = uri,
+                    name = selected.name,
+                    mime = selected.mime,
+                    size = selected.size,
+                )
+            }
+        }
+    }
 
     var folderDialog by remember { mutableStateOf(false) }
     var noteDialog by remember { mutableStateOf(false) }
@@ -184,6 +215,60 @@ fun LibraryScreen(
                 }
             }
 
+            /*
+              Pasek wgrywanego pliku mówi o każdym kroku, nie tylko o potknięciu:
+              „oczekuje na połączenie", „wysyłanie", a na końcu „wgrany pomyślnie".
+              Krzyżyk zamyka pasek na każdym z tych kroków - po nieudanym wgraniu
+              zostawało samo „Spróbuj jeszcze raz" i napis stał na ekranie na dobre.
+            */
+            if (section == LibrarySection.LIBRARY) {
+                val upload = uploads.firstOrNull { it.folderPath == path && it.status != FileUploadStatus.SYNCED.name }
+                    ?: uploads.firstOrNull { it.folderPath == path }
+                upload?.let {
+                    val failed = it.status == FileUploadStatus.FAILED_RETRYABLE.name ||
+                        it.status == FileUploadStatus.FAILED_PERMANENT.name
+                    val done = it.status == FileUploadStatus.SYNCED.name
+                    /*
+                      Pasek o skończonej robocie znika sam. Wgrany plik i plik
+                      odrzucony na dobre nie mają już nic do zrobienia, a napis
+                      czekał na krzyżyk - stał więc na ekranie tygodniami
+                      i wracał po każdym uruchomieniu aplikacji. Nieudane
+                      wysyłanie zostaje dłużej, bo jest co przeczytać.
+                    */
+                    val finished = done || it.status == FileUploadStatus.FAILED_PERMANENT.name
+                    LaunchedEffect(it.id, it.status) {
+                        if (finished) {
+                            kotlinx.coroutines.delay(if (done) 5_000L else 12_000L)
+                            model.hideUpload(it.id)
+                        }
+                    }
+                    NoticeBar(
+                        icon = when {
+                            failed -> KajetIcons.ErrorMark
+                            done -> KajetIcons.CloudDone
+                            else -> KajetIcons.CloudMark
+                        },
+                        text = words.uploadStatusText(
+                            name = it.originalName,
+                            status = it.status,
+                            progress = it.progress,
+                            error = it.lastError,
+                            errorCode = it.errorCode,
+                        ),
+                        color = if (failed) Kajet.colors.danger else Kajet.colors.accent,
+                    ) {
+                        if (failed) BarTextAction(words.retryStuckButton) { model.retryUpload(it.id) }
+                        IconAction(
+                            icon = KajetIcons.Close,
+                            description = words.closeMessage,
+                            onClick = { model.hideUpload(it.id) },
+                            iconSize = 18.dp,
+                            touchTarget = 40.dp,
+                        )
+                    }
+                }
+            }
+
             when (section) {
                 LibrarySection.LIBRARY -> FolderView(
                     model = model,
@@ -204,6 +289,7 @@ fun LibraryScreen(
                     onNewFolder = { folderDialog = true },
                     onNewNote = { noteDialog = true },
                     onNewFile = { fileDialog = true },
+                    onUploadFile = { picker.launch(arrayOf("*/*")) },
                     onMoveSelected = { movingSelected = true },
                     onTrashSelected = { trashingSelected = true },
                 )
@@ -362,6 +448,25 @@ fun LibraryScreen(
             }
         }
     }
+}
+
+private data class SelectedFile(val name: String, val mime: String, val size: Long?)
+
+private fun selectedFile(resolver: android.content.ContentResolver, uri: Uri): SelectedFile {
+    var name = uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { "plik.txt" }
+    var size: Long? = null
+    runCatching {
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (nameColumn >= 0) name = cursor.getString(nameColumn).orEmpty().ifBlank { name }
+                    if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) size = cursor.getLong(sizeColumn)
+                }
+            }
+    }
+    return SelectedFile(name, resolver.getType(uri).orEmpty(), size)
 }
 
 @Composable
@@ -567,6 +672,7 @@ private fun FolderView(
     onNewFolder: () -> Unit,
     onNewNote: () -> Unit,
     onNewFile: () -> Unit,
+    onUploadFile: () -> Unit,
     onMoveSelected: () -> Unit,
     onTrashSelected: () -> Unit,
 ) {
@@ -591,6 +697,7 @@ private fun FolderView(
             onNewFolder = onNewFolder,
             onNewNote = onNewNote,
             onNewFile = onNewFile,
+            onUploadFile = onUploadFile,
             onSelectMany = {
                 if (selecting) model.stopSelecting() else model.startSelecting()
             },
@@ -667,6 +774,7 @@ private fun FolderHeader(
     onNewFolder: () -> Unit,
     onNewNote: () -> Unit,
     onNewFile: () -> Unit,
+    onUploadFile: () -> Unit,
     onSelectMany: () -> Unit,
     onSelectAll: () -> Unit,
     onMoveSelected: () -> Unit,
@@ -683,7 +791,10 @@ private fun FolderHeader(
                 if (selecting) Kajet.colors.desk else androidx.compose.ui.graphics.Color.Transparent,
             ),
     ) {
-        val narrow = maxWidth < 800.dp
+        // Pięć przycisków obok nazwy folderu potrzebuje więcej miejsca niż
+        // cztery. Poniżej tej szerokości nazwa stoi w osobnym wierszu nad
+        // rzędem przycisków, a rząd przewija się w bok.
+        val narrow = maxWidth < 900.dp
 
         // Na wąskiej kolumnie rząd przycisków przewija się w bok. Przy zmianie
         // trybu wraca na początek: w tryb zaznaczania wchodzi się przyciskiem
@@ -753,6 +864,7 @@ private fun FolderHeader(
                         onNewNote = onNewNote,
                         onNewFolder = onNewFolder,
                         onNewFile = onNewFile,
+                        onUploadFile = onUploadFile,
                         onSelectMany = onSelectMany,
                         onSelectAll = onSelectAll,
                         onMoveSelected = onMoveSelected,
@@ -802,6 +914,7 @@ private fun FolderHeader(
                     onNewNote = onNewNote,
                     onNewFolder = onNewFolder,
                     onNewFile = onNewFile,
+                    onUploadFile = onUploadFile,
                     onSelectMany = onSelectMany,
                     onSelectAll = onSelectAll,
                     onMoveSelected = onMoveSelected,
@@ -813,9 +926,11 @@ private fun FolderHeader(
 }
 
 /**
- * Rząd przycisków nagłówka. Poza zaznaczaniem zakłada nowe wpisy, w trybie
- * zaznaczania robi coś z tym, co wskazane. Oba zestawy mają po cztery
- * przyciski o tej samej wysokości, więc podmiana nie rusza niczego pod spodem.
+ * Rząd przycisków nagłówka. Poza zaznaczaniem zakłada nowe wpisy i wgrywa
+ * plik z urządzenia, w trybie zaznaczania robi coś z tym, co wskazane. Oba
+ * zestawy mają przyciski o tej samej wysokości, więc podmiana nie rusza
+ * niczego pod spodem. „Wgraj plik" stoi tutaj, a nie w osobnym rzędzie pod
+ * nagłówkiem: wszystko, co dokłada coś do folderu, leży w jednym miejscu.
  *
  * Przy zerze wskazanych „Przenieś" i „Do kosza" stoją wygaszone, zamiast
  * znikać - znikanie zmieniałoby szerokość rzędu przy każdym zaznaczeniu.
@@ -833,6 +948,7 @@ private fun HeaderActions(
     onNewNote: () -> Unit,
     onNewFolder: () -> Unit,
     onNewFile: () -> Unit,
+    onUploadFile: () -> Unit,
     onSelectMany: () -> Unit,
     onSelectAll: () -> Unit,
     onMoveSelected: () -> Unit,
@@ -866,6 +982,7 @@ private fun HeaderActions(
             onClick = onNewFile,
             icon = KajetIcons.CodeFile,
         )
+        SecondaryButton(words.uploadFile, onUploadFile, icon = KajetIcons.CloudMark)
         // Długie przytrzymanie wiersza robi to samo, ale o tym trzeba wiedzieć.
         // Przycisk widać.
         if (anyItems) {

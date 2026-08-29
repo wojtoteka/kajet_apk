@@ -83,9 +83,12 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     val model: LibraryViewModel = viewModel(
         // Chmura wchodzi tu furtką, a nie gotowym obiektem: jej budowa to I/O
         // na dysku, a model powstaje przy pierwszym rysowaniu biblioteki.
-        factory = LibraryViewModel.Factory(container.library, container.export) {
-            CloudStuckNotes(container.cloud.sync, container.cloud.queue)
-        },
+        factory = LibraryViewModel.Factory(
+            repo = container.library,
+            export = container.export,
+            stuck = { CloudStuckNotes(container.cloud.sync, container.cloud.queue) },
+            uploader = { container.cloud.uploads },
+        ),
     )
     val libraryError by model.error.collectAsStateWithLifecycle()
     val words = LocalStrings.current

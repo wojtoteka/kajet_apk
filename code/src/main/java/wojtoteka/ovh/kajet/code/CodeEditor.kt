@@ -35,8 +35,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
@@ -55,6 +57,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,12 +69,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
+import wojtoteka.ovh.kajet.core.design.component.EmptyState
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
+import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.codeFileTooLargeAbout
+import wojtoteka.ovh.kajet.core.text.nothingOpensFile
 import wojtoteka.ovh.kajet.core.text.searchFound
 
 @Composable
@@ -82,7 +89,9 @@ fun CodeEditor(
     onAi: (() -> Unit)? = null,
 ) {
     val words = LocalStrings.current
+    val context = LocalContext.current
     val code by model.code.collectAsStateWithLifecycle()
+    val loadState by model.loadState.collectAsStateWithLifecycle()
     val input by model.input.collectAsStateWithLifecycle()
     val result by model.result.collectAsStateWithLifecycle()
     val tab by model.tab.collectAsStateWithLifecycle()
@@ -93,6 +102,7 @@ fun CodeEditor(
     val wordWrap by model.wordWrap.collectAsStateWithLifecycle()
     val query by model.query.collectAsStateWithLifecycle()
     val matches by model.matches.collectAsStateWithLifecycle()
+    val ready = loadState is CodeLoadState.Ready
 
     val colors = Kajet.colors
     var searchVisible by remember { mutableStateOf(false) }
@@ -151,8 +161,8 @@ fun CodeEditor(
                     icon = KajetIcons.PlayRun,
                     description = words.codeRun,
                     onClick = model::run,
-                    enabled = model.runner != null,
-                    selected = model.runner != null,
+                    enabled = ready && model.runner != null,
+                    selected = ready && model.runner != null,
                 )
             }
             if (model.language == CodeLanguage.HTML) {
@@ -161,11 +171,24 @@ fun CodeEditor(
                     description = words.codePagePreview,
                     onClick = { model.saveNow(); previewVisible = !previewVisible },
                     selected = previewVisible,
+                    enabled = ready,
                 )
             }
-            IconAction(KajetIcons.Search, words.codeSearchInFile, { searchVisible = !searchVisible }, selected = searchVisible)
-            IconAction(KajetIcons.WordWrap, words.codeWordWrap, model::toggleWordWrap, selected = wordWrap)
-            if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi)
+            IconAction(
+                KajetIcons.Search,
+                words.codeSearchInFile,
+                { searchVisible = !searchVisible },
+                selected = searchVisible,
+                enabled = ready,
+            )
+            IconAction(
+                KajetIcons.WordWrap,
+                words.codeWordWrap,
+                model::toggleWordWrap,
+                selected = wordWrap,
+                enabled = ready,
+            )
+            if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi, enabled = ready)
             Spacer(Modifier.height(12.dp))
         }
         }
@@ -177,7 +200,7 @@ fun CodeEditor(
             FileHeader(model = model, saved = saved, inCloud = inCloud, narrow = narrow)
             HorizontalRule()
 
-            if (searchVisible) {
+            if (searchVisible && ready) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -247,9 +270,25 @@ fun CodeEditor(
                     .clipToBounds()
                     .imePadding(),
             ) {
-                if (previewVisible && model.language == CodeLanguage.HTML) {
-                    HtmlPreview(code, console)
-                } else {
+                when (val state = loadState) {
+                    CodeLoadState.Loading -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(words.loading, style = Kajet.type.body, color = colors.muted)
+                    }
+
+                    is CodeLoadState.TooLarge -> LargeCodeFileNotice(
+                        state = state,
+                        fileName = model.fileName,
+                        onBack = onBack,
+                        onOpenFailed = model::showError,
+                        context = context,
+                    )
+
+                    CodeLoadState.Ready -> if (previewVisible && model.language == CodeLanguage.HTML) {
+                        HtmlPreview(code, console)
+                    } else {
                     val verticalScroll = rememberScrollState()
                     Row(Modifier.fillMaxSize().verticalScroll(verticalScroll)) {
                         LineNumberGutter(code)
@@ -295,7 +334,11 @@ fun CodeEditor(
                                 ),
                                 visualTransformation = { text ->
                                     androidx.compose.ui.text.input.TransformedText(
-                                        SyntaxHighlight.highlight(text.text, model.language, codeColors),
+                                        if (CodeFileLimits.shouldHighlight(text.text.length)) {
+                                            SyntaxHighlight.highlight(text.text, model.language, codeColors)
+                                        } else {
+                                            androidx.compose.ui.text.AnnotatedString(text.text)
+                                        },
                                         androidx.compose.ui.text.input.OffsetMapping.Identity,
                                     )
                                 },
@@ -314,22 +357,23 @@ fun CodeEditor(
                             modifier = Modifier.align(Alignment.BottomCenter),
                         )
                     }
+                    }
                 }
             }
 
-            HorizontalRule()
+            if (ready) HorizontalRule()
             /*
               Pod HTML-em stoi konsola, a nie wynik uruchomienia - w tym samym
               miejscu, co przy pozostałych językach. Zakładki „Wynik", „Błędy"
               i „Wejście" byłyby przy stronie zawsze puste, bo HTML-a się nie
               uruchamia; ogląda się go.
             */
-            if (model.language == CodeLanguage.HTML) {
+            if (ready && model.language == CodeLanguage.HTML) {
                 HtmlConsolePanel(
                     state = console,
                     modifier = Modifier.weight(if (narrow) 0.45f else 0.38f),
                 )
-            } else {
+            } else if (ready) {
                 ResultPanel(
                     tab = tab,
                     result = result,
@@ -345,6 +389,54 @@ fun CodeEditor(
         }
 
         if (toolbarOnRight) rail()
+    }
+}
+
+@Composable
+private fun LargeCodeFileNotice(
+    state: CodeLoadState.TooLarge,
+    fileName: String,
+    onBack: () -> Unit,
+    onOpenFailed: (String) -> Unit,
+    context: Context,
+) {
+    val words = LocalStrings.current
+    EmptyState(
+        title = words.codeFileTooLargeTitle,
+        description = words.codeFileTooLargeAbout(state.sizeBytes, state.limitBytes),
+        modifier = Modifier.fillMaxSize(),
+        action = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    text = words.openInOtherApp,
+                    onClick = {
+                        openTextFileOutside(
+                            context = context,
+                            source = Uri.parse(state.documentUri),
+                            fileName = fileName,
+                        )?.let(onOpenFailed)
+                    },
+                )
+                SecondaryButton(
+                    text = words.backToLibrary,
+                    onClick = onBack,
+                    icon = KajetIcons.BackArrow,
+                )
+            }
+        },
+    )
+}
+
+/** Przekazuje URI dostawcy SAF bez kopiowania wielkiego pliku do pamięci. */
+private fun openTextFileOutside(context: Context, source: Uri, fileName: String): String? {
+    val mime = context.contentResolver.getType(source) ?: "text/plain"
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(source, mime)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+    }
+    return runCatching { context.startActivity(intent) }.exceptionOrNull()?.let {
+        wojtoteka.ovh.kajet.core.text.words.nothingOpensFile(fileName)
     }
 }
 
@@ -626,24 +718,31 @@ private fun SidewaysScrollMark(state: ScrollState, modifier: Modifier = Modifier
 
 @Composable
 private fun LineNumberGutter(code: String) {
-    val lineCount = code.count { it == '\n' } + 1
-    Column(
-        Modifier
+    val numbers = remember(code) {
+        val lineCount = code.count { it == '\n' } + 1
+        if (!CodeFileLimits.shouldShowLineNumbers(lineCount)) {
+            null
+        } else {
+            buildString(lineCount * 3) {
+                for (number in 1..lineCount) {
+                    if (number > 1) append('\n')
+                    append(number)
+                }
+            }
+        }
+    } ?: return
+    // Jeden układ tekstu zamiast osobnego węzła Compose dla każdego wiersza.
+    Text(
+        text = numbers,
+        style = Kajet.type.codeGutter,
+        color = Kajet.colors.muted,
+        textAlign = TextAlign.End,
+        modifier = Modifier
             .width(52.dp)
             .background(Kajet.colors.desk)
             .marginRule(Kajet.colors.line)
             .padding(top = 8.dp, end = 8.dp, bottom = 40.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        for (number in 1..lineCount) {
-            Text(
-                text = number.toString(),
-                style = Kajet.type.codeGutter,
-                color = Kajet.colors.muted,
-                textAlign = TextAlign.End,
-            )
-        }
-    }
+    )
 }
 
 @Composable

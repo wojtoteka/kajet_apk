@@ -26,6 +26,35 @@ internal object DiskFiles {
     fun readText(resolver: ContentResolver, file: DocumentFile): String =
         readBytes(resolver, file).toString(Charsets.UTF_8)
 
+    /**
+     * Czyta najwyżej [maxBytes]. null oznacza, że strumień miał choć jeden
+     * bajt więcej. Nie polegamy wyłącznie na DocumentFile.length(), bo część
+     * dostawców SAF zwraca tam zero nawet dla dużych plików.
+     */
+    fun readBytesUpTo(
+        resolver: ContentResolver,
+        file: DocumentFile,
+        maxBytes: Int,
+    ): ByteArray? {
+        require(maxBytes >= 0)
+        val stream = plainFile(file)?.inputStream() ?: resolver.openInputStream(file.uri)
+            ?: throw IOException(words.cannotOpenFile(file.name))
+        stream.use { input ->
+            val declared = file.length().coerceAtLeast(0L)
+            val initial = minOf(maxOf(declared.toInt().coerceAtLeast(0), 1024), maxBytes)
+            val output = ByteArrayOutputStream(initial)
+            val chunk = ByteArray(DEFAULT_BUFFER_SIZE)
+            var total = 0
+            while (true) {
+                val read = input.read(chunk)
+                if (read < 0) return output.toByteArray()
+                if (total + read > maxBytes) return null
+                output.write(chunk, 0, read)
+                total += read
+            }
+        }
+    }
+
     fun readBytes(resolver: ContentResolver, file: DocumentFile): ByteArray {
         plainFile(file)?.let { return it.readBytes() }
         val stream = resolver.openInputStream(file.uri)

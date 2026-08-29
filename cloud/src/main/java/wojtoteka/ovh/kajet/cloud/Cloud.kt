@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.cloud
 
 import android.content.Context
 import wojtoteka.ovh.kajet.storage.LibraryRepository
+import wojtoteka.ovh.kajet.storage.Storage
 
 object Cloud {
 
@@ -21,6 +22,7 @@ object Cloud {
           notatki wyłącznie po nim.
         */
         val codeIds: CodeFileIds,
+        val uploads: FileUploader,
     )
 
     fun parts(context: Context, repository: LibraryRepository): Parts {
@@ -33,10 +35,11 @@ object Cloud {
                 val client = CloudClient(appContext, account)
                 val queue = SendQueue(appContext)
                 val codeIds = CodeFileIds(appContext)
-                val sync = Sync(appContext, repository, account, client, queue, codeIds)
+                val uploads = FileUploader(appContext, Storage.uploads(appContext), repository, client)
+                val sync = Sync(appContext, repository, account, client, queue, codeIds, uploads)
                 val auth = AuthWatch(account, client)
 
-                val created = Parts(account, client, queue, sync, auth, codeIds)
+                val created = Parts(account, client, queue, sync, auth, codeIds, uploads)
                 parts = created
 
                 // Background work runs in a separate process and has no other way

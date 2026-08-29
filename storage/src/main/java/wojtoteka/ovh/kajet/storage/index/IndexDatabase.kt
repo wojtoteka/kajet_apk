@@ -14,6 +14,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "entries")
@@ -44,6 +46,75 @@ data class ContentFts(
     val title: String,
     val content: String,
 )
+
+/** Trwały opis jednego uploadu; same bajty leżą w prywatnym pliku aplikacji. */
+@Entity(tableName = "file_uploads")
+data class FileUploadEntry(
+    @PrimaryKey val id: String,
+    val sourceUri: String,
+    val localPath: String,
+    val originalName: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val folderPath: String,
+    val folderId: String? = null,
+    val status: String,
+    val progress: Int = 0,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val retryCount: Int = 0,
+    val remoteFileId: String? = null,
+    val lastError: String? = null,
+    val errorCode: String? = null,
+    /** Pasek zamknięty krzyżykiem. Wgrywanie leci dalej, napis już nie wraca. */
+    @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
+)
+
+@Dao
+interface FileUploadDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(entry: FileUploadEntry)
+
+    @Query("SELECT * FROM file_uploads WHERE hidden = 0 ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<FileUploadEntry>>
+
+    @Query("SELECT * FROM file_uploads WHERE id = :id")
+    suspend fun find(id: String): FileUploadEntry?
+
+    @Query("UPDATE file_uploads SET hidden = 1, updatedAt = :now WHERE id = :id")
+    suspend fun hide(id: String, now: Long)
+
+    @Query("DELETE FROM file_uploads WHERE id = :id")
+    suspend fun delete(id: String)
+
+    /** Wpisy, przy których nie ma już nic do zrobienia - zamknięte i nie. */
+    @Query(
+        "SELECT * FROM file_uploads WHERE status IN ('SYNCED', 'FAILED_PERMANENT') " +
+            "AND updatedAt < :before",
+    )
+    suspend fun finishedBefore(before: Long): List<FileUploadEntry>
+
+    @Query("SELECT * FROM file_uploads WHERE status IN ('PENDING', 'FAILED_RETRYABLE') ORDER BY createdAt ASC")
+    suspend fun ready(): List<FileUploadEntry>
+
+    @Query("UPDATE file_uploads SET status = 'PENDING', progress = 0, updatedAt = :now, lastError = NULL, errorCode = NULL, hidden = 0 WHERE id = :id")
+    suspend fun retry(id: String, now: Long)
+
+    @Query("UPDATE file_uploads SET status = 'PENDING', progress = 0, updatedAt = :now WHERE status = 'UPLOADING'")
+    suspend fun recoverInterrupted(now: Long): Int
+
+    @Query("UPDATE file_uploads SET status = 'UPLOADING', progress = 0, updatedAt = :now, lastError = NULL, errorCode = NULL WHERE id = :id")
+    suspend fun markUploading(id: String, now: Long)
+
+    @Query("UPDATE file_uploads SET progress = :progress, updatedAt = :now WHERE id = :id AND status = 'UPLOADING'")
+    suspend fun setProgress(id: String, progress: Int, now: Long)
+
+    @Query("UPDATE file_uploads SET status = 'SYNCED', progress = 100, updatedAt = :now, remoteFileId = :remoteId, lastError = NULL, errorCode = NULL WHERE id = :id")
+    suspend fun markSynced(id: String, remoteId: String, now: Long)
+
+    @Query("UPDATE file_uploads SET status = :status, progress = 0, updatedAt = :now, retryCount = retryCount + 1, lastError = :message, errorCode = :code WHERE id = :id")
+    suspend fun markFailed(id: String, status: String, message: String, code: String?, now: Long)
+}
 
 @Dao
 interface IndexDao {
@@ -230,7 +301,7 @@ interface IndexDao {
 }
 
 @Database(
-    entities = [IndexEntry::class, ContentFts::class],
+    entities = [IndexEntry::class, ContentFts::class, FileUploadEntry::class],
     // Version 3 renames the tables and columns to English. The index is thrown
     // away and rebuilt, so there is nothing to migrate.
     //
@@ -238,11 +309,17 @@ interface IndexDao {
     // notatek zapisane starą wersją IndexText mają w treści gołe `**`.
     // Podgląd powstaje przy zapisie do spisu, więc bez odbudowy poprawka
     // objęłaby wyłącznie notatki tknięte po aktualizacji.
-    version = 4,
+    // Wersja 5 dodaje trwałą kolejkę uploadów. W przeciwieństwie do samego
+    // indeksu nie wolno jej skasować przy aktualizacji, bo zawiera pracę
+    // oczekującą na sieć.
+    // Wersja 6 zapamiętuje zamknięcie paska wgrywania. Bez tego napis wracał
+    // po każdym uruchomieniu aplikacji, choć ktoś go wcześniej zamknął.
+    version = 6,
     exportSchema = true,
 )
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun index(): IndexDao
+    abstract fun uploads(): FileUploadDao
 
     companion object {
         @Volatile
@@ -255,12 +332,49 @@ abstract class IndexDatabase : RoomDatabase() {
                     IndexDatabase::class.java,
                     "kajet-index.db",
                 )
-                    // The index can be rebuilt from the files, so on a version
-                    // change we drop it and build it again instead of writing
-                    // migrations.
-                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                    // Stare wersje 1-3 zawierały wyłącznie odbudowywalny indeks.
+                    // Od wersji 5 baza niesie też kolejkę uploadów, więc każda
+                    // przyszła zmiana MUSI dostać migrację zamiast kasowania.
+                    .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                     .build()
                     .also { instance = it }
             }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `file_uploads` (
+                        `id` TEXT NOT NULL,
+                        `sourceUri` TEXT NOT NULL,
+                        `localPath` TEXT NOT NULL,
+                        `originalName` TEXT NOT NULL,
+                        `mimeType` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `folderPath` TEXT NOT NULL,
+                        `folderId` TEXT,
+                        `status` TEXT NOT NULL,
+                        `progress` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `retryCount` INTEGER NOT NULL,
+                        `remoteFileId` TEXT,
+                        `lastError` TEXT,
+                        `errorCode` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `file_uploads` ADD COLUMN `hidden` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
     }
 }

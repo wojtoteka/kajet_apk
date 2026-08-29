@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.ui.library
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -9,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,6 +40,7 @@ import wojtoteka.ovh.kajet.core.text.deletingProgress
 import wojtoteka.ovh.kajet.core.text.movingProgress
 import wojtoteka.ovh.kajet.core.text.refreshingIndex
 import wojtoteka.ovh.kajet.core.text.trashingProgress
+import wojtoteka.ovh.kajet.core.text.uploadNotTextAbout
 import wojtoteka.ovh.kajet.core.text.savingFolder
 import wojtoteka.ovh.kajet.core.text.savingNote
 import wojtoteka.ovh.kajet.core.text.words
@@ -47,6 +51,8 @@ import wojtoteka.ovh.kajet.share.IncomingShare
 import wojtoteka.ovh.kajet.share.ShareImport
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
+import wojtoteka.ovh.kajet.cloud.FileUploader
+import wojtoteka.ovh.kajet.storage.index.FileUploadEntry
 
 enum class LibrarySection {
     LIBRARY,
@@ -89,7 +95,11 @@ class LibraryViewModel(
     // na dysku, a biblioteka rysuje się jako pierwsza. Sięgamy po nią dopiero
     // w korutynie poniżej, czyli poza wątkiem rysowania.
     private val stuck: () -> StuckNotes? = { null },
+    private val uploader: () -> FileUploader? = { null },
 ) : ViewModel() {
+
+    val uploads: Flow<List<FileUploadEntry>> =
+        uploader()?.uploads ?: flowOf(emptyList<FileUploadEntry>())
 
     private val _path = MutableStateFlow(saved.get<String>(KEY_PATH).orEmpty())
     val path: StateFlow<String> = _path.asStateFlow()
@@ -394,6 +404,32 @@ class LibraryViewModel(
         onCreated(item)
     }
 
+    fun queueUpload(uri: Uri, name: String, mime: String, size: Long?) = inBackground {
+        val service = uploader() ?: throw IllegalStateException(words.notSignedIn)
+        service.enqueue(uri, name, mime, size, _path.value)
+    }
+
+    /**
+     * Plik nie do wgrania. Komunikat idzie zwykłym paskiem błędu, więc znika
+     * razem z „Zrozumiałem” i nie zostaje po nim wpis w kolejce wysyłania.
+     */
+    fun refuseUpload(name: String) {
+        _error.value = words.uploadNotTextAbout(name)
+    }
+
+    fun retryUpload(id: String) = inBackground {
+        uploader()?.retry(id)
+    }
+
+    /*
+      Zamknięcie paska idzie do bazy, nie do pamięci widoku. Zapamiętane
+      w modelu ginie razem z procesem, więc napis wracał po każdym powrocie
+      do aplikacji i trzeba było zamykać go od nowa.
+    */
+    fun hideUpload(id: String) = inBackground {
+        uploader()?.hide(id)
+    }
+
     fun importIncoming(
         share: IncomingShare,
         context: Context,
@@ -552,12 +588,13 @@ class LibraryViewModel(
         private val repo: LibraryRepository,
         private val export: ExportService,
         private val stuck: () -> StuckNotes? = { null },
+        private val uploader: () -> FileUploader? = { null },
     ) : ViewModelProvider.Factory {
         // Wariant z CreationExtras, bo tylko stamtąd da się wziąć
         // SavedStateHandle - czyli stan, który przeżywa śmierć procesu.
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
-            LibraryViewModel(repo, export, extras.createSavedStateHandle(), stuck) as T
+            LibraryViewModel(repo, export, extras.createSavedStateHandle(), stuck, uploader) as T
     }
 
     private companion object {

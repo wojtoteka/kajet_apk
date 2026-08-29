@@ -81,6 +81,33 @@ class SendQueue(context: Context) {
     }
 
     /**
+     * Przepina oczekujące zapisy po zmianie nazwy albo położenia pliku lub
+     * całego folderu. Dzięki temu ponowiona synchronizacja nie szuka starej,
+     * nieistniejącej ścieżki, tylko wysyła stan z miejsca wybranego ostatnio
+     * przez użytkownika.
+     */
+    @Synchronized
+    fun rebindPaths(oldPath: String, newPath: String) {
+        if (oldPath.isBlank() || newPath.isBlank() || oldPath == newPath) return
+        val current = read().toMutableMap()
+        val moved = current.entries
+            .filter { (key, _) -> key == oldPath || key.startsWith("$oldPath/") }
+            .map { it.key to it.value }
+        if (moved.isEmpty()) return
+
+        for ((key, entry) in moved) {
+            val target = if (key == oldPath) {
+                newPath
+            } else {
+                newPath + key.removePrefix(oldPath)
+            }
+            current.remove(key)
+            current[target] = entry.copy(path = target, revision = entry.revision + 1)
+        }
+        write(current)
+    }
+
+    /**
      * Zdejmuje wpis tylko wtedy, gdy nikt go w międzyczasie nie podmienił.
      * Wysyłka trwa chwilę; jeśli w jej trakcie doszła nowa zmiana (autozapis)
      * albo kosz urósł do trwałego kasowania, wpis ma zostać i pojechać jeszcze

@@ -45,6 +45,7 @@ class Sync(
     private val client: CloudTransport,
     private val queue: SendQueue,
     private val codeIds: CodeFileIds,
+    private val uploads: FileUploader? = null,
 ) {
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -161,6 +162,9 @@ class Sync(
 
     /** Zmiana nazwy albo przeniesienie - rejestr plików z kodem idzie w ślad. */
     fun reportPathMoved(oldPath: String, newPath: String) {
+        // Kolejka może pamiętać zmianę sprzed przeniesienia. Przepinamy ją
+        // zanim biblioteka zgłosi świeży zapis pod nową ścieżką.
+        runCatching { queue.rebindPaths(oldPath, newPath) }
         runCatching { codeIds.rebind(oldPath, newPath) }
     }
 
@@ -212,10 +216,26 @@ class Sync(
      */
     fun synchroniseInBackground(): Deferred<SyncResult> = scope.async { synchronise() }
 
+    /**
+     * Ręczne „Synchronizuj teraz” jest również drogą naprawczą: odnawia pulę
+     * prób wpisom, które wcześniej utknęły, a potem wykonuje pełny przebieg
+     * góra/dół wraz z folderami i położeniem plików.
+     */
+    fun synchroniseManuallyInBackground(): Deferred<SyncResult> = scope.async {
+        queue.retryStuck()
+        _stuck.value = queue.stuckCount()
+        synchronise()
+    }
+
     suspend fun synchronise(): SyncResult = lock.withLock {
         // Dopiero teraz kolejne scheduleSync ma prawo zaplanować nowy przebieg:
         // ten wyśle wszystko, co zdążyło wpaść do kolejki przed tym miejscem.
         syncScheduled.set(false)
+
+        // Proces mógł zginąć po PENDING -> UPLOADING. Cofamy taki stan także
+        // wtedy, gdy urządzenie nadal jest offline; UI od razu pokazuje
+        // oczekiwanie, a kolejny Worker będzie mógł podjąć wpis.
+        uploads?.recoverInterrupted()
 
         if (!account.isSignedIn()) {
             return@withLock SyncResult(reason = words.notSignedIn)
@@ -246,6 +266,18 @@ class Sync(
         // Foldery idą przed notatkami: pobrane notatki muszą mieć już dokąd
         // trafić, a wysyłane - znać identyfikator swojego folderu.
         val folders = syncFolders()
+
+        // Importowane pliki idą po folderach (folderId musi już istnieć), ale
+        // przed pobraniem zmian, żeby odpowiedź serwera wróciła do lokalnej
+        // biblioteki jeszcze w tym samym przebiegu.
+        val uploaded = if (folders.reason == null) {
+            uploads?.processPending() ?: UploadBatchResult()
+        } else {
+            // Nie próbujemy wysłać pliku do folderu, którego zapis właśnie
+            // się nie udał. Serwer odpowiedziałby 404 i tymczasowa awaria
+            // zostałaby błędnie utrwalona jako permanentny błąd uploadu.
+            UploadBatchResult(reason = folders.reason, worthRetrying = folders.worthRetrying)
+        }
 
         val sent = sendPending()
         val fetched = fetchChanges()
@@ -315,13 +347,13 @@ class Sync(
         }
 
         SyncResult(
-            sent = sent.count + sentAfter.count + sentLast.count,
+            sent = sent.count + sentAfter.count + sentLast.count + uploaded.synced,
             fetched = fetched.count,
             conflicts = sent.conflicts + fetched.conflicts + sentAfter.conflicts +
                 sentLast.conflicts,
-            reason = folders.reason ?: sent.reason ?: fetched.reason
+            reason = folders.reason ?: uploaded.reason ?: sent.reason ?: fetched.reason
                 ?: removals.reason ?: sentAfter.reason ?: sentLast.reason,
-            worthRetrying = folders.worthRetrying || sent.worthRetrying ||
+            worthRetrying = folders.worthRetrying || uploaded.worthRetrying || sent.worthRetrying ||
                 fetched.worthRetrying || removals.worthRetrying ||
                 sentAfter.worthRetrying || sentLast.worthRetrying,
         )

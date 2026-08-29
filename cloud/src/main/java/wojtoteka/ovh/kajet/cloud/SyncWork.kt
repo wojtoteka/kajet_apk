@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.cloud
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -54,6 +55,7 @@ class SyncWork(
                 ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<SyncWork>()
                     .setConstraints(constraints)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                     .build(),
             )
         }

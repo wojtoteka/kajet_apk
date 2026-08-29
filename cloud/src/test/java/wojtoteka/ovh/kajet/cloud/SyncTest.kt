@@ -417,4 +417,46 @@ class SyncTest {
         queue.add(path, noteId)
         assertThat(queue.stuckCount()).isEqualTo(0)
     }
+
+    @Test
+    fun `reczna synchronizacja sama ponawia utkniete wpisy`() {
+        library.notes[path] = document()
+        queue.add(path, noteId)
+        transport.onSendNote = {
+            CloudClient.Result.Error("serwer odmawia", worthRetrying = false)
+        }
+        repeat(QueueEntry.MAX_ATTEMPTS) { sync() }
+        assertThat(queue.stuckCount()).isEqualTo(1)
+
+        transport.sentNotes.clear()
+        transport.onSendNote = { CloudClient.Result.Ok(SaveResponse(status = "ok", version = 8)) }
+        val result = runBlocking { sync.synchroniseManuallyInBackground().await() }
+
+        assertThat(result.reason).isNull()
+        assertThat(transport.sentNotes).hasSize(1)
+        assertThat(queue.size()).isEqualTo(0)
+        assertThat(sync.stuck.value).isEqualTo(0)
+    }
+
+    @Test
+    fun `przeniesienie przepina oczekujace sciezki calego folderu`() {
+        queue.add("stary/a.note", "n-a")
+        queue.add("stary/podfolder/b.py", "n-b", QueueEntry.KIND_CODE)
+        queue.addDeletion("n-usunieta", purge = false)
+
+        sync.reportPathMoved("stary", "nowy")
+
+        val entries = queue.all()
+        assertThat(entries.map { it.path }).containsAtLeast(
+            "nowy/a.note",
+            "nowy/podfolder/b.py",
+            "${QueueEntry.DELETION_PREFIX}n-usunieta",
+        )
+        assertThat(entries.map { it.path }).containsNoneOf(
+            "stary/a.note",
+            "stary/podfolder/b.py",
+        )
+        assertThat(entries.single { it.path == "nowy/podfolder/b.py" }.kind)
+            .isEqualTo(QueueEntry.KIND_CODE)
+    }
 }

@@ -18,6 +18,7 @@ import wojtoteka.ovh.kajet.core.text.cannotRunLanguage
 import wojtoteka.ovh.kajet.core.ai.AiHooks
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.storage.SettingsStore
+import wojtoteka.ovh.kajet.storage.BoundedTextRead
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 
 enum class PanelTab {
@@ -31,6 +32,16 @@ enum class PanelTab {
         ERRORS -> words.codeErrors
         INPUT -> words.codeInput
     }
+}
+
+sealed interface CodeLoadState {
+    data object Loading : CodeLoadState
+    data object Ready : CodeLoadState
+    data class TooLarge(
+        val sizeBytes: Long,
+        val limitBytes: Int,
+        val documentUri: String,
+    ) : CodeLoadState
 }
 
 class CodeViewModel(
@@ -62,6 +73,9 @@ class CodeViewModel(
 
     private val _code = MutableStateFlow("")
     val code: StateFlow<String> = _code.asStateFlow()
+
+    private val _loadState = MutableStateFlow<CodeLoadState>(CodeLoadState.Loading)
+    val loadState: StateFlow<CodeLoadState> = _loadState.asStateFlow()
 
     private val _input = MutableStateFlow("")
     val input: StateFlow<String> = _input.asStateFlow()
@@ -129,8 +143,9 @@ class CodeViewModel(
     init {
         viewModelScope.launch {
             try {
-                _code.value = repo.readText(path)
+                loadCode()
             } catch (e: Exception) {
+                _loadState.value = CodeLoadState.Ready
                 _error.value = e.message ?: words.codeOpenFailed
             }
         }
@@ -244,11 +259,35 @@ class CodeViewModel(
     }
 
     override suspend fun reloadAfterAi() {
-        runCatching { repo.readText(path) }.onSuccess {
-            _code.value = it
+        runCatching { loadCode() }.onSuccess {
             _saved.value = true
             refreshCloudSave()
         }
+    }
+
+    private suspend fun loadCode() {
+        val limit = CodeFileLimits.editorBytes(language)
+        when (val loaded = repo.readTextUpTo(path, limit)) {
+            is BoundedTextRead.Content -> {
+                _code.value = loaded.text
+                _loadState.value = CodeLoadState.Ready
+            }
+
+            is BoundedTextRead.TooLarge -> {
+                // Nie zostawiamy poprzedniej wersji w polu: po zmianie przez
+                // synchronizację plik mógł właśnie przekroczyć limit.
+                _code.value = ""
+                _loadState.value = CodeLoadState.TooLarge(
+                    sizeBytes = loaded.sizeBytes,
+                    limitBytes = limit,
+                    documentUri = loaded.documentUri,
+                )
+            }
+        }
+    }
+
+    fun showError(message: String) {
+        _error.value = message
     }
 
     /**

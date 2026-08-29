@@ -36,6 +36,26 @@ class LibraryStoreTest {
     }
 
     @Test
+    fun `bounded text read returns content at the limit`() {
+        File(root, "small.log").writeText("12345")
+
+        val result = store.readTextUpTo("small.log", 5)
+
+        assertThat(result).isEqualTo(BoundedTextRead.Content("12345"))
+    }
+
+    @Test
+    fun `bounded text read refuses a file above the limit`() {
+        File(root, "large.log").writeText("123456")
+
+        val result = store.readTextUpTo("large.log", 5)
+
+        assertThat(result).isInstanceOf(BoundedTextRead.TooLarge::class.java)
+        assertThat((result as BoundedTextRead.TooLarge).sizeBytes).isEqualTo(6)
+        assertThat(result.documentUri).contains("large.log")
+    }
+
+    @Test
     fun `a new folder becomes a directory on disk`() {
         val folder = store.createFolder("", "Matematyka", colorId = "morski", iconId = "dzialania")
 

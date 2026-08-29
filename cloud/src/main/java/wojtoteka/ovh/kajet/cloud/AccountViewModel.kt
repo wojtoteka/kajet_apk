@@ -277,7 +277,9 @@ class AccountViewModel(
             // Synchronizacja chodzi we własnym zakresie Sync, nie w zakresie
             // tego ekranu: wyjście z ekranu w trakcie już jej nie przerywa
             // (przerwana w pół kroku mnożyła kopie „kopia z chmury").
-            val result = runCatching { sync.synchroniseInBackground().await() }.getOrElse { failure ->
+            val result = runCatching {
+                sync.synchroniseManuallyInBackground().await()
+            }.getOrElse { failure ->
                 SyncResult(
                     reason = failure.message
                         ?: words.syncFailedSafe,

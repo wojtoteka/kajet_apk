@@ -18,4 +18,7 @@ object Storage {
     /** Sprzątanie po kasowaniu - woła je aplikacja przy starcie, raz na dobę. */
     fun housekeeping(context: Context, library: LibraryRepository): Housekeeping =
         Housekeeping(context.applicationContext, library)
+
+    fun uploads(context: Context): FileUploadStore =
+        FileUploadStore(context.applicationContext, IndexDatabase.get(context).uploads())
 }

@@ -494,6 +494,11 @@ class LibraryRepository(
         requireStore().readText(path)
     }
 
+    /** Odczyt dla UI: nigdy nie ładuje więcej niż [maxBytes] do pamięci. */
+    suspend fun readTextUpTo(path: String, maxBytes: Int): BoundedTextRead = withContext(io) {
+        requireStore().readTextUpTo(path, maxBytes)
+    }
+
     suspend fun writeText(path: String, content: String) = withContext(io) {
         requireStore().writeText(path, content)
         onCodeSaved?.invoke(path)
