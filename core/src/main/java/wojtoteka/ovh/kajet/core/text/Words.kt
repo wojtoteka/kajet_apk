@@ -174,7 +174,10 @@ interface Strings {
     val calculatorBackspace: String
     val calculatorClear: String
     val calculatorParens: String
-    val calculatorMove: String
+    val calculatorRoot: String
+    val calculatorResize: String
+    val calculatorBigger: String
+    val calculatorSmaller: String
     val insertDrawing: String
     val clearDrawing: String
     val drawWithFingerOrStylus: String
@@ -1570,7 +1573,10 @@ object PolishStrings : Strings {
     override val calculatorBackspace = "Usuń ostatni znak"
     override val calculatorClear = "Wyczyść"
     override val calculatorParens = "Nawias"
-    override val calculatorMove = "Przesuń kalkulator"
+    override val calculatorRoot = "Pierwiastek"
+    override val calculatorResize = "Zmień wielkość kalkulatora"
+    override val calculatorBigger = "Większy kalkulator"
+    override val calculatorSmaller = "Mniejszy kalkulator"
     override val insertDrawing = "Wstaw rysunek"
     override val clearDrawing = "Wyczyść"
     override val drawWithFingerOrStylus = "Rysuj palcem albo rysikiem"
@@ -2307,7 +2313,10 @@ object EnglishStrings : Strings {
     override val calculatorBackspace = "Delete last character"
     override val calculatorClear = "Clear"
     override val calculatorParens = "Bracket"
-    override val calculatorMove = "Move calculator"
+    override val calculatorRoot = "Square root"
+    override val calculatorResize = "Resize calculator"
+    override val calculatorBigger = "Larger calculator"
+    override val calculatorSmaller = "Smaller calculator"
     override val insertDrawing = "Insert the drawing"
     override val clearDrawing = "Clear"
     override val drawWithFingerOrStylus = "Draw with a finger or a stylus"

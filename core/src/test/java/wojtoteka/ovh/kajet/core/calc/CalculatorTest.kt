@@ -98,4 +98,28 @@ class CalculatorTest {
         assertThat(result.press(CalcKey.TIMES).press(CalcKey.D2).preview?.let(Calculator::format))
             .isEqualTo("−6")
     }
+
+    @Test
+    fun `pierwiastek`() {
+        assertThat(eval("√9")).isEqualTo("3")
+        assertThat(eval("√2")).isEqualTo("1.41421356237")
+        assertThat(eval("√9×4")).isEqualTo("12")
+        assertThat(eval("√(16+9)")).isEqualTo("5")
+        assertThat(eval("√0.25")).isEqualTo("0.5")
+        assertThat(eval("√0")).isEqualTo("0")
+        assertThat(Calculator.evaluate("√−4")).isNull()
+        assertThat(Calculator.evaluate("√")).isNull()
+    }
+
+    @Test
+    fun `klawisz pierwiastka`() {
+        assertThat(press(CalcKey.D2, CalcKey.ROOT, CalcKey.D9).expression).isEqualTo("2×√9")
+        assertThat(press(CalcKey.ROOT, CalcKey.PARENS, CalcKey.D1, CalcKey.D6).expression)
+            .isEqualTo("√(16")
+        // Minus ani znak działania nie stają zaraz po pierwiastku.
+        assertThat(press(CalcKey.ROOT, CalcKey.MINUS, CalcKey.PLUS).expression).isEqualTo("√")
+        val result = press(CalcKey.D1, CalcKey.D6, CalcKey.EQUALS).press(CalcKey.ROOT)
+        assertThat(result.expression).isEqualTo("√16")
+        assertThat(result.press(CalcKey.EQUALS).expression).isEqualTo("4")
+    }
 }

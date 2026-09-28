@@ -23,6 +23,7 @@ enum class CalcKey(val symbol: String) {
     DOT("."),
     PLUS("+"), MINUS("−"), TIMES("×"), DIVIDE("÷"),
     PERCENT("%"),
+    ROOT("√"),
     PARENS("()"),
     BACKSPACE("⌫"),
     CLEAR("C"),
@@ -68,6 +69,8 @@ data class CalculatorState(
         val base = when {
             // Po wyniku cyfra zaczyna od nowa, znak działania liczy dalej.
             showsResult && (key.isDigit() || key == CalcKey.DOT || key == CalcKey.PARENS) -> ""
+            // Pierwiastek po wyniku bierze sam wynik: 16 = √ daje √16.
+            showsResult && key == CalcKey.ROOT -> return CalculatorState("√$expression")
             else -> expression
         }
         val next = when (key) {
@@ -80,6 +83,7 @@ data class CalculatorState(
                 base
             }
             CalcKey.PARENS -> parens(base)
+            CalcKey.ROOT -> root(base)
             else -> digit(base, key.symbol)
         }
         if (next.length > MAX_LENGTH) return this
@@ -110,7 +114,7 @@ data class CalculatorState(
         }
 
         fun operator(text: String, op: String): String {
-            if (text.isEmpty() || text.last() == '(') return text
+            if (text.isEmpty() || text.last() == '(' || text.last() == '√') return text
             // Drugi znak z rzędu zamienia poprzedni, zamiast psuć działanie.
             val trimmed = text.dropLastWhile { it in OPERATORS || it == '.' }
             if (trimmed.isEmpty() || trimmed.last() == '(') return trimmed
@@ -120,6 +124,8 @@ data class CalculatorState(
         fun minus(text: String): String {
             // Minus na początku albo po nawiasie to znak liczby.
             if (text.isEmpty() || text.last() == '(') return "$text−"
+            // Pod pierwiastkiem nie ma liczb ujemnych.
+            if (text.last() == '√') return text
             if (text.last() in "×÷") return "$text−"
             return operator(text, "−")
         }
@@ -130,9 +136,19 @@ data class CalculatorState(
             val closes = open > 0 && last != null && (last.isDigit() || last == ')' || last == '%')
             return when {
                 closes -> "$text)"
-                last == null || last in OPERATORS || last == '(' -> "$text("
+                last == null || last in OPERATORS || last == '(' || last == '√' -> "$text("
                 // Liczba przed nawiasem to mnożenie: 2(3+4) = 2×(3+4).
                 else -> "$text×("
+            }
+        }
+
+        fun root(text: String): String {
+            val last = text.lastOrNull()
+            // Liczba przed pierwiastkiem to mnożenie: 2√9 = 2×√9.
+            return if (last != null && (last.isDigit() || last == ')' || last == '%' || last == '.')) {
+                "$text×√"
+            } else {
+                "$text√"
             }
         }
 
@@ -172,6 +188,23 @@ object Calculator {
         val rounded = value.round(MathContext(12, RoundingMode.HALF_EVEN)).stripTrailingZeros()
         if (rounded.signum() == 0) return "0"
         return rounded.toPlainString().replace('-', '−')
+    }
+
+    /*
+      BigDecimal.sqrt jest w Androidzie dopiero od API 33, a Kajet chodzi od 26.
+      Dlatego pierwiastek liczymy sami: przybliżenie z double i kilka kroków
+      metody Newtona, każdy podwaja liczbę dobrych cyfr.
+    */
+    private fun squareRoot(value: BigDecimal): BigDecimal {
+        if (value.signum() < 0) throw ArithmeticException("pierwiastek z liczby ujemnej")
+        if (value.signum() == 0) return BigDecimal.ZERO
+        var guess = BigDecimal(Math.sqrt(value.toDouble()), context)
+        if (guess.signum() == 0) guess = BigDecimal.ONE
+        val two = BigDecimal(2)
+        repeat(6) {
+            guess = guess.add(value.divide(guess, context), context).divide(two, context)
+        }
+        return guess
     }
 
     private val BARE_PERCENT = Regex("""[0-9.]+%""")
@@ -221,6 +254,11 @@ object Calculator {
             if (at < text.length && (text[at] == '−' || text[at] == '-')) {
                 at++
                 return unary().negate()
+            }
+            // Pierwiastek obejmuje najbliższą liczbę albo nawias: √9×4 = 12.
+            if (at < text.length && text[at] == '√') {
+                at++
+                return squareRoot(unary())
             }
             return postfix()
         }

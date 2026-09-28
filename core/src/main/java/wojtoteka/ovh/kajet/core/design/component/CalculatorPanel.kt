@@ -1,5 +1,14 @@
 package wojtoteka.ovh.kajet.core.design.component
 
+import android.content.Context
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -28,6 +36,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,12 +88,34 @@ fun CalculatorAction(enabled: Boolean = true) {
 private val PANEL_WIDTH = 288.dp
 private val KEY_HEIGHT = 52.dp
 
+/*
+  Wielkość kalkulatora.
+
+  Domyślna to ta, która była od początku (skala 1). Człowiek zmienia ją
+  minusem i plusem na pasku albo ciągnąc uchwyt w lewym górnym rogu - okienko
+  stoi przy prawym dolnym rogu, więc rośnie w górę i w lewo, tam gdzie się
+  ciągnie. Pasek z tytułem ma stałą wielkość, żeby przyciski dało się trafić
+  także w najmniejszym kalkulatorze; skaluje się wyświetlacz i klawisze.
+
+  Wybrana wielkość zostaje zapamiętana na urządzeniu, więc następne otwarcie
+  kalkulatora - w dowolnej notatce - ma już tę samą.
+*/
+private const val SCALE_MIN = 0.85f
+private const val SCALE_MAX = 1.8f
+private const val SCALE_STEP = 0.1f
+private const val PREFS = "kajet_kalkulator"
+private const val PREF_SCALE = "skala"
+
+/** Wysokość okienka w skali 1, rozbita na część stałą i skalowaną. */
+private val FIXED_HEIGHT = 126.dp
+private val SCALED_HEIGHT = 294.dp
+
 private val KEYPAD = listOf(
-    listOf(CalcKey.CLEAR, CalcKey.PARENS, CalcKey.PERCENT, CalcKey.DIVIDE),
+    listOf(CalcKey.CLEAR, CalcKey.ROOT, CalcKey.PARENS, CalcKey.DIVIDE),
     listOf(CalcKey.D7, CalcKey.D8, CalcKey.D9, CalcKey.TIMES),
     listOf(CalcKey.D4, CalcKey.D5, CalcKey.D6, CalcKey.MINUS),
     listOf(CalcKey.D1, CalcKey.D2, CalcKey.D3, CalcKey.PLUS),
-    listOf(CalcKey.BACKSPACE, CalcKey.D0, CalcKey.DOT, CalcKey.EQUALS),
+    listOf(CalcKey.PERCENT, CalcKey.D0, CalcKey.DOT, CalcKey.EQUALS),
 )
 
 /*
@@ -105,11 +136,20 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val colors = Kajet.colors
     val density = LocalDensity.current
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
     var state by remember { mutableStateOf(CalculatorState()) }
     // Przesunięcie od prawego dolnego rogu, w pikselach. Przeżywa obrót ekranu.
     var dragX by rememberSaveable { mutableStateOf(0f) }
     var dragY by rememberSaveable { mutableStateOf(0f) }
+    var scale by remember {
+        mutableFloatStateOf(prefs.getFloat(PREF_SCALE, 1f).coerceIn(SCALE_MIN, SCALE_MAX))
+    }
+    fun keepScale(next: Float) {
+        scale = next.coerceIn(SCALE_MIN, SCALE_MAX)
+        prefs.edit().putFloat(PREF_SCALE, scale).apply()
+    }
 
     val decimal = if (words.english) '.' else ','
     fun shown(text: String) = text.replace('.', decimal)
@@ -120,13 +160,20 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             .safeDrawingPadding()
             .padding(16.dp),
     ) {
-        val panelWidth = if (maxWidth < PANEL_WIDTH) maxWidth else PANEL_WIDTH
+        // Zapamiętana wielkość może nie zmieścić się na mniejszym ekranie albo
+        // po obrocie - wtedy okienko jest tak duże, jak się da, a zapamiętana
+        // wartość zostaje na później.
+        val fitsWidth = maxWidth / PANEL_WIDTH
+        val fitsHeight = (maxHeight - FIXED_HEIGHT) / SCALED_HEIGHT
+        val shownScale = minOf(scale, fitsWidth, fitsHeight).coerceAtLeast(0.6f)
+        val panelWidth = minOf(PANEL_WIDTH * shownScale, maxWidth)
         val maxShiftX = with(density) { (maxWidth - panelWidth).toPx() }.coerceAtLeast(0f)
         // Wysokość okienka nie jest znana przed pomiarem; tyle wystarczy, by
         // pasek z tytułem nigdy nie uciekł nad górną krawędź.
         val maxShiftY = with(density) { (maxHeight - 120.dp).toPx() }.coerceAtLeast(0f)
         val x = dragX.coerceIn(-maxShiftX, 0f)
         val y = dragY.coerceIn(-maxShiftY, 0f)
+        val basePx = with(density) { PANEL_WIDTH.toPx() }
 
         Column(
             Modifier
@@ -151,22 +198,43 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             dragY = (dragY.coerceIn(-maxShiftY, 0f) + amount.y).coerceIn(-maxShiftY, 0f)
                         }
                     }
-                    .padding(start = 14.dp, end = 4.dp),
+                    .padding(end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = KajetIcons.Operations,
-                    contentDescription = words.calculatorMove,
-                    tint = colors.muted,
-                    modifier = Modifier.width(18.dp),
+                // Uchwyt wielkości: ciągnięty w górę i w lewo powiększa.
+                ResizeGrip(
+                    description = words.calculatorResize,
+                    onDrag = { dx, dy -> scale = (scale + (-dx - dy) / 2f / basePx).coerceIn(SCALE_MIN, SCALE_MAX) },
+                    onDragEnd = { keepScale(scale) },
                 )
-                Text(
-                    words.calculator,
-                    style = Kajet.type.titleSmall,
-                    color = colors.text,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 8.dp),
+                // W małym kalkulatorze napis nie ma gdzie stanąć obok pięciu
+                // przycisków, więc zostaje samo puste miejsce do chwytania.
+                Box(Modifier.weight(1f)) {
+                    if (panelWidth >= 280.dp) {
+                        Text(
+                            words.calculator,
+                            style = Kajet.type.titleSmall,
+                            color = colors.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                IconAction(
+                    icon = KajetIcons.Minus,
+                    description = words.calculatorSmaller,
+                    onClick = { keepScale(shownScale - SCALE_STEP) },
+                    enabled = shownScale > SCALE_MIN + 0.001f,
+                    iconSize = 18.dp,
+                    touchTarget = 40.dp,
+                )
+                IconAction(
+                    icon = KajetIcons.Plus,
+                    description = words.calculatorBigger,
+                    onClick = { keepScale(shownScale + SCALE_STEP) },
+                    enabled = scale < SCALE_MAX - 0.001f && shownScale >= scale - 0.001f,
+                    iconSize = 18.dp,
+                    touchTarget = 40.dp,
                 )
                 val result = if (state.showsResult) state.expression else null
                 IconAction(
@@ -190,41 +258,71 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             }
             HorizontalRule()
 
-            // Wyświetlacz: działanie u góry, podgląd wyniku pod nim.
-            Column(
+            // Wyświetlacz: działanie u góry, podgląd wyniku pod nim, a obok
+            // działania kasowanie ostatniego znaku - jak w kalkulatorze telefonu.
+            Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.End,
+                    .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = shown(state.expression).ifEmpty { "0" },
-                    style = Kajet.type.title.copy(fontSize = 28.sp, lineHeight = 34.sp),
-                    color = colors.text,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.StartEllipsis,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                val preview = state.preview
-                val hint = when {
-                    state.error -> words.calculatorError
-                    state.showsResult -> ""
-                    preview != null && Calculator.format(preview) != state.expression ->
-                        "= " + shown(Calculator.format(preview))
-                    else -> ""
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = shown(state.expression).ifEmpty { "0" },
+                        style = Kajet.type.title.copy(
+                            fontSize = (28 * shownScale).sp,
+                            lineHeight = (34 * shownScale).sp,
+                        ),
+                        color = colors.text,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        overflow = TextOverflow.StartEllipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val preview = state.preview
+                    val hint = when {
+                        state.error -> words.calculatorError
+                        state.showsResult -> ""
+                        preview != null && Calculator.format(preview) != state.expression ->
+                            "= " + shown(Calculator.format(preview))
+                        else -> ""
+                    }
+                    Text(
+                        text = hint,
+                        style = Kajet.type.body.copy(
+                            fontSize = (15 * shownScale).sp,
+                            lineHeight = (24 * shownScale).sp,
+                        ),
+                        color = if (state.error) colors.danger else colors.muted,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        overflow = TextOverflow.StartEllipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp * shownScale),
+                    )
                 }
-                Text(
-                    text = hint,
-                    style = Kajet.type.body,
-                    color = if (state.error) colors.danger else colors.muted,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.StartEllipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(24.dp),
-                )
+                Box(
+                    Modifier
+                        .padding(start = 4.dp)
+                        .size(44.dp * shownScale.coerceAtLeast(1f))
+                        .clip(RoundedCornerShape(Kajet.dimens.corner))
+                        .focusProperties { canFocus = false }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = colors.accent),
+                            role = Role.Button,
+                            onClickLabel = words.calculatorBackspace,
+                            onClick = { state = state.press(CalcKey.BACKSPACE) },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        CalcKey.BACKSPACE.symbol,
+                        style = Kajet.type.title.copy(fontSize = (22 * shownScale).sp),
+                        color = colors.muted,
+                    )
+                }
             }
             HorizontalRule()
 
@@ -239,11 +337,12 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                                 key = key,
                                 label = if (key == CalcKey.DOT) decimal.toString() else key.symbol,
                                 description = when (key) {
-                                    CalcKey.BACKSPACE -> words.calculatorBackspace
                                     CalcKey.CLEAR -> words.calculatorClear
                                     CalcKey.PARENS -> words.calculatorParens
+                                    CalcKey.ROOT -> words.calculatorRoot
                                     else -> null
                                 },
+                                scale = shownScale,
                                 onClick = { state = state.press(key) },
                                 modifier = Modifier.weight(1f),
                             )
@@ -255,18 +354,52 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** Trzy ukośne kreski w rogu - znany z okien znak „tu się ciągnie". */
+@Composable
+private fun ResizeGrip(
+    description: String,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+) {
+    val color = Kajet.colors.muted
+    val drag by rememberUpdatedState(onDrag)
+    val end by rememberUpdatedState(onDragEnd)
+    Box(
+        Modifier
+            .size(40.dp)
+            .semantics { contentDescription = description }
+            .pointerInput(Unit) {
+                detectDragGestures(onDragEnd = { end() }, onDragCancel = { end() }) { change, amount ->
+                    change.consume()
+                    drag(amount.x, amount.y)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(14.dp)) {
+            val w = size.width
+            val stroke = 1.5.dp.toPx()
+            for (i in 1..3) {
+                val t = w * i / 3f
+                drawLine(color, Offset(0f, t), Offset(t, 0f), strokeWidth = stroke, cap = StrokeCap.Round)
+            }
+        }
+    }
+}
+
 @Composable
 private fun CalculatorKey(
     key: CalcKey,
     label: String,
     description: String?,
+    scale: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = Kajet.colors
     val operator = key in setOf(
         CalcKey.PLUS, CalcKey.MINUS, CalcKey.TIMES, CalcKey.DIVIDE,
-        CalcKey.PERCENT, CalcKey.PARENS,
+        CalcKey.PERCENT, CalcKey.PARENS, CalcKey.ROOT,
     )
     val background = when {
         key == CalcKey.EQUALS -> colors.accent
@@ -281,7 +414,7 @@ private fun CalculatorKey(
     }
     Box(
         modifier
-            .height(KEY_HEIGHT)
+            .height(KEY_HEIGHT * scale)
             .clip(RoundedCornerShape(Kajet.dimens.corner))
             .background(background)
             .focusProperties { canFocus = false }
@@ -296,7 +429,7 @@ private fun CalculatorKey(
     ) {
         Text(
             text = label,
-            style = Kajet.type.title.copy(fontSize = 22.sp),
+            style = Kajet.type.title.copy(fontSize = (22 * scale).sp),
             color = textColor,
         )
     }
