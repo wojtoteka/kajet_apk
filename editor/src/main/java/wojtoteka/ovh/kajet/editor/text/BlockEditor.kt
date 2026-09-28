@@ -43,6 +43,12 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -79,6 +85,9 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.percentOf
 import wojtoteka.ovh.kajet.core.text.photoOfMany
 import wojtoteka.ovh.kajet.core.text.photoNotFound
+
+/** Zapas pod kursorem, który ma być widać przy pisaniu - mniej więcej linia. */
+private val CURSOR_MARGIN = 56.dp
 
 @Composable
 fun BlockEditor(
@@ -310,6 +319,21 @@ private fun TextBlock(
         )
     }
 
+    /*
+      Kartka jedzie za kursorem.
+
+      Pole samo z siebie nie przewija listy, gdy pisany tekst zejdzie pod dolną
+      krawędź ekranu albo pod klawiaturę - Enter na końcu zapisanej strony
+      stawiał kursor tam, gdzie go nie widać. Po każdej zmianie, gdy pole ma
+      już nowy układ, prosimy listę o pokazanie kursora razem z zapasem
+      mniej więcej jednej linii pod nim, żeby było widać, gdzie pisze się dalej.
+    */
+    val bringIntoView = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    var hasFocus by remember { mutableStateOf(false) }
+    var followCursor by remember { mutableStateOf(false) }
+
     Box(modifier.fillMaxWidth()) {
         BasicTextField(
             value = field,
@@ -318,9 +342,25 @@ private fun TextBlock(
                 // kawałek. Pole zostaje to samo - nie ma mowy o ustawianiu
                 // treści od nowa, bo wtedy kursor skakałby na początek.
                 val next = onTyped(field.text, typed) ?: typed
+                if (next.text != field.text || next.selection != field.selection) followCursor = true
                 field = next
                 onSelection(next)
                 if (next.text != content) onContent(next.text)
+            },
+            onTextLayout = { layout ->
+                if (followCursor && hasFocus) {
+                    followCursor = false
+                    val shown = inlineStyle.filter(AnnotatedString(field.text)).offsetMapping
+                        .originalToTransformed(field.selection.end)
+                        .coerceIn(0, layout.layoutInput.text.length)
+                    val cursor = layout.getCursorRect(shown)
+                    val below = with(density) { CURSOR_MARGIN.toPx() }
+                    scope.launch {
+                        bringIntoView.bringIntoView(
+                            Rect(cursor.left, cursor.top, cursor.right, cursor.bottom + below),
+                        )
+                    }
+                }
             },
             textStyle = style,
             // To jest cała rzecz, dzięki której nie ma osobnego podglądu:
@@ -332,8 +372,10 @@ private fun TextBlock(
                 .fillMaxWidth()
                 .widthIn(max = Kajet.dimens.readingWidth)
                 .heightIn(min = 32.dp)
+                .bringIntoViewRequester(bringIntoView)
                 .focusRequester(focus)
                 .onFocusChanged { state ->
+                    hasFocus = state.isFocused
                     if (state.isFocused) {
                         // Oddajemy w górę sposób ustawienia tego pola, żeby pasek
                         // formatowania mógł wstawić znacznik i wrócić z kursorem
