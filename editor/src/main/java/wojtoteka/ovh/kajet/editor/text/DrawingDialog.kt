@@ -144,9 +144,16 @@ fun DrawingDialog(
       stanu. Dialog rysunku nie może wołać KajetDialog z :app, więc właściwości
       i wcięcia są tu lokalnie.
     */
+    /*
+      Rysunek zamyka się tylko przyciskiem: „Wstaw rysunek", „Zamknij" albo
+      krzyżykiem w nagłówku. Dotknięcie obok kartki czy gest wstecz nie robią
+      nic - dłoń oparta o ekran przy rysowaniu zamykała okno razem z rysunkiem.
+    */
     Dialog(
-        onDismissRequest = onClose,
+        onDismissRequest = {},
         properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
             decorFitsSystemWindows = false,
             usePlatformDefaultWidth = false,
         ),
@@ -154,7 +161,8 @@ fun DrawingDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures { onClose() } }
+                // Tło łapie stuknięcia, żeby nie przechodziły pod okno.
+                .pointerInput(Unit) { detectTapGestures { } }
                 // Rysik ma drgać nad kartką, a nie nad całym oknem. Wjazd nad
                 // okno wycisza go z góry; kartka zgłosi się zaraz potem sama.
                 .penQuietSurface(context)
