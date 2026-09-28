@@ -110,6 +110,7 @@ interface Strings {
     val placeholderWord: String
     val savingPhoto: String
     val savingDrawing: String
+    val savingDrawingChanges: String
     val photoSaveFailed: String
     val drawingSaveFailed: String
     val exportTitle: String
@@ -179,6 +180,9 @@ interface Strings {
     val calculatorBigger: String
     val calculatorSmaller: String
     val insertDrawing: String
+    val editDrawing: String
+    val saveDrawingChanges: String
+    val drawingWithoutStrokes: String
     val clearDrawing: String
     val drawWithFingerOrStylus: String
     val yourColours: String
@@ -1507,6 +1511,7 @@ object PolishStrings : Strings {
     override val placeholderWord = "tekst"
     override val savingPhoto = "Zapisuję zdjęcie…"
     override val savingDrawing = "Zapisuję rysunek…"
+    override val savingDrawingChanges = "Zapisuję poprawiony rysunek…"
     override val photoSaveFailed = "Nie udało się zapisać zdjęcia w notatce."
     override val drawingSaveFailed = "Nie udało się zapisać rysunku w notatce."
     override val exportTitle = "Zapisz notatkę do pliku"
@@ -1578,6 +1583,10 @@ object PolishStrings : Strings {
     override val calculatorBigger = "Większy kalkulator"
     override val calculatorSmaller = "Mniejszy kalkulator"
     override val insertDrawing = "Wstaw rysunek"
+    override val editDrawing = "Popraw rysunek"
+    override val saveDrawingChanges = "Zapisz poprawki"
+    override val drawingWithoutStrokes =
+        "Ten rysunek nie ma zapisanych kresek, więc nie da się go poprawić."
     override val clearDrawing = "Wyczyść"
     override val drawWithFingerOrStylus = "Rysuj palcem albo rysikiem"
     override val yourColours = "Twoje kolory"
@@ -2247,6 +2256,7 @@ object EnglishStrings : Strings {
     override val placeholderWord = "text"
     override val savingPhoto = "Saving the photo…"
     override val savingDrawing = "Saving the drawing…"
+    override val savingDrawingChanges = "Saving the edited drawing…"
     override val photoSaveFailed = "The photo would not save into the note."
     override val drawingSaveFailed = "The drawing would not save into the note."
     override val exportTitle = "Save the note to a file"
@@ -2318,6 +2328,10 @@ object EnglishStrings : Strings {
     override val calculatorBigger = "Larger calculator"
     override val calculatorSmaller = "Smaller calculator"
     override val insertDrawing = "Insert the drawing"
+    override val editDrawing = "Edit the drawing"
+    override val saveDrawingChanges = "Save the changes"
+    override val drawingWithoutStrokes =
+        "This drawing has no strokes saved, so it cannot be edited."
     override val clearDrawing = "Clear"
     override val drawWithFingerOrStylus = "Draw with a finger or a stylus"
     override val yourColours = "Your colours"

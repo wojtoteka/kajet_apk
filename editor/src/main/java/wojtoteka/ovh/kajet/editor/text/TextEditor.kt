@@ -81,6 +81,7 @@ fun TextEditor(
     val words = LocalStrings.current
     val document by model.document.collectAsStateWithLifecycle()
     val drawing by model.drawing.collectAsStateWithLifecycle()
+    val drawingRevision by model.drawingRevision.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
     val saveState by model.saveState.collectAsStateWithLifecycle()
     val lastSave by model.lastSave.collectAsStateWithLifecycle()
@@ -105,7 +106,7 @@ fun TextEditor(
         onDispose { PenHaptics.leave(context) }
     }
     LaunchedEffect(drawing) {
-        if (!drawing) PenHaptics.use(context, PenHaptics.WRITING)
+        if (drawing == null) PenHaptics.use(context, PenHaptics.WRITING)
     }
 
     var field by remember(document?.id) {
@@ -527,6 +528,9 @@ fun TextEditor(
                     BlockEditor(
                         blocks = blocks,
                         attachment = model::attachment,
+                        attachmentRevision = drawingRevision,
+                        isDrawing = { name -> appearance.drawings.any { it.asset == name } },
+                        onEditDrawing = model::editDrawing,
                         onBlocksChange = { next ->
                             blocks = next
                             model.setContent(Blocks.join(next))
@@ -577,14 +581,22 @@ fun TextEditor(
         if (toolbarOnRight) rail()
     }
 
-    if (drawing) {
+    val open = drawing
+    if (open != null) {
+        val entry = open.entry
         DrawingDialog(
             onClose = model::closeDrawing,
             onDone = { strokes, width, height ->
-                // Rysunek ma trafić za wybrane zdjęcie albo za blok, w którym
-                // stoi kursor - a nie na koniec całej notatki.
-                model.insertDrawing(strokes, width, height, photoSpot())
+                if (entry != null) {
+                    // Poprawka wraca w miejsce rysunku, który już stoi w notatce.
+                    model.saveDrawing(entry, strokes, width, height)
+                } else {
+                    // Rysunek ma trafić za wybrane zdjęcie albo za blok, w którym
+                    // stoi kursor - a nie na koniec całej notatki.
+                    model.insertDrawing(strokes, width, height, photoSpot())
+                }
             },
+            initial = open.source,
         )
     }
 }

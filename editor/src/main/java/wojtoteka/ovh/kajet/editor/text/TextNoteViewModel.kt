@@ -30,8 +30,27 @@ class TextNoteViewModel(
     path: String,
 ) : NoteViewModel(repo, settings, path) {
 
-    private val _drawing = MutableStateFlow(false)
-    val drawing: StateFlow<Boolean> = _drawing.asStateFlow()
+    /**
+     * Otwarte okno rysunku. [entry] puste znaczy nowy rysunek; wypełnione –
+     * poprawianie rysunku, który już stoi w notatce, a [source] ma wtedy jego
+     * kreski w barwach, w jakich je postawiono.
+     */
+    data class DrawingEdit(
+        val entry: InlineDrawing? = null,
+        val source: DrawingSource? = null,
+    )
+
+    private val _drawing = MutableStateFlow<DrawingEdit?>(null)
+    val drawing: StateFlow<DrawingEdit?> = _drawing.asStateFlow()
+
+    /*
+      Poprawiony rysunek wraca do TEGO SAMEGO pliku, więc adres w treści notatki
+      zostaje na miejscu, a przy odczycie ze schowka nic by się nie zmieniło:
+      blok obrazka czyta plik raz, po adresie. Ten licznik rośnie po każdym
+      zapisie poprawek i każe blokom wczytać rysunek jeszcze raz.
+    */
+    private val _drawingRevision = MutableStateFlow(0)
+    val drawingRevision: StateFlow<Int> = _drawingRevision.asStateFlow()
 
     private val _busy = MutableStateFlow<String?>(null)
     val busy: StateFlow<String?> = _busy.asStateFlow()
@@ -68,11 +87,27 @@ class TextNoteViewModel(
     fun setAlign(align: NoteAlign) = changeAppearance { it.copy(align = align) }
 
     fun openDrawing() {
-        _drawing.value = true
+        _drawing.value = DrawingEdit()
     }
 
     fun closeDrawing() {
-        _drawing.value = false
+        _drawing.value = null
+    }
+
+    /**
+     * Otwiera rysunek spod [asset] do poprawki. Bez zapisanych kresek nie ma
+     * czego poprawiać – zostaje samo zdjęcie i o tym mówi komunikat.
+     */
+    fun editDrawing(asset: String) {
+        viewModelScope.launch {
+            val entry = document.value?.text?.drawings?.lastOrNull { it.asset == asset }
+            val source = entry?.let { repo.store()?.readInlineDrawing(path, it.source) }
+            if (entry == null || source == null) {
+                setError(words.drawingWithoutStrokes)
+                return@launch
+            }
+            _drawing.value = DrawingEdit(entry = entry, source = source)
+        }
     }
 
     fun setContent(markdown: String) {
@@ -180,7 +215,7 @@ class TextNoteViewModel(
         spot: PhotoSpot,
     ) {
         if (strokes.isEmpty()) {
-            _drawing.value = false
+            _drawing.value = null
             return
         }
         viewModelScope.launch {
@@ -224,7 +259,64 @@ class TextNoteViewModel(
                 setError(e.message ?: words.drawingSaveFailed)
             } finally {
                 _busy.value = null
-                _drawing.value = false
+                _drawing.value = null
+            }
+        }
+    }
+
+    /**
+     * Poprawiony rysunek. Wraca pod tą samą nazwą pliku, którą ma w treści
+     * notatki – dzięki temu poprawka nie zostawia po sobie ani drugiego
+     * obrazka w notatce, ani porzuconego pliku w załącznikach.
+     */
+    fun saveDrawing(
+        entry: InlineDrawing,
+        strokes: List<InkStroke>,
+        width: Float,
+        height: Float,
+    ) {
+        if (strokes.isEmpty()) {
+            _drawing.value = null
+            return
+        }
+        viewModelScope.launch {
+            _busy.value = words.savingDrawingChanges
+            try {
+                val png = DrawingToImage.png(
+                    strokes = PaperStrokes.of(strokes),
+                    width = width,
+                    height = height,
+                    backgroundColor = PaperStrokes.PAGE,
+                )
+                repo.putAttachment(path, entry.asset, png, "image/png")
+
+                val store = repo.store()
+                store?.writeInlineDrawing(
+                    notePath = path,
+                    name = entry.source,
+                    drawing = DrawingSource(width = width, height = height, strokes = strokes),
+                )
+
+                editWithoutHistory { document ->
+                    val text = document.text ?: TextContent()
+                    document.copy(
+                        text = text.copy(
+                            drawings = text.drawings.map { drawing ->
+                                if (drawing.asset == entry.asset) {
+                                    drawing.copy(width = width, height = height)
+                                } else {
+                                    drawing
+                                }
+                            },
+                        ),
+                    )
+                }
+                _drawingRevision.value += 1
+            } catch (e: Exception) {
+                setError(e.message ?: words.drawingSaveFailed)
+            } finally {
+                _busy.value = null
+                _drawing.value = null
             }
         }
     }

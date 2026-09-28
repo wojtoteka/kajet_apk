@@ -93,6 +93,18 @@ private val CURSOR_MARGIN = 56.dp
 fun BlockEditor(
     blocks: List<Block>,
     attachment: suspend (String) -> ByteArray?,
+    /**
+     * Czy zdjęcie o tej nazwie pliku to rysunek wstawiony w notatce. Tylko taki
+     * ma zapisane kreski, więc tylko taki da się otworzyć i poprawić.
+     */
+    isDrawing: (String) -> Boolean,
+    onEditDrawing: (String) -> Unit,
+    /**
+     * Rośnie po każdej poprawce rysunku. Poprawiony rysunek wraca pod tą samą
+     * nazwą pliku, więc bez tego licznika blok zostawałby przy raz wczytanym
+     * obrazku i poprawki nie byłoby widać.
+     */
+    attachmentRevision: Int,
     onBlocksChange: (List<Block>) -> Unit,
     /**
      * Stuknięcie w pustą kartkę pod tekstem. Notatka ma wtedy wejść w pisanie
@@ -222,6 +234,9 @@ fun BlockEditor(
                 is Block.Image -> ImageRowBlock(
                     photos = group.filterIsInstance<Block.Image>(),
                     attachment = attachment,
+                    attachmentRevision = attachmentRevision,
+                    isDrawing = isDrawing,
+                    onEditDrawing = onEditDrawing,
                     selectedKey = selectedPhoto,
                     onSelect = onSelectPhoto,
                     canMoveUp = { key -> blocks.firstOrNull()?.key != key },
@@ -654,6 +669,9 @@ private fun TableCell(
 private fun ImageRowBlock(
     photos: List<Block.Image>,
     attachment: suspend (String) -> ByteArray?,
+    attachmentRevision: Int,
+    isDrawing: (String) -> Boolean,
+    onEditDrawing: (String) -> Unit,
     selectedKey: String?,
     onSelect: (String?) -> Unit,
     canMoveUp: (String) -> Boolean,
@@ -708,6 +726,7 @@ private fun ImageRowBlock(
                     PhotoBox(
                         photo = photo,
                         attachment = attachment,
+                        attachmentRevision = attachmentRevision,
                         width = room * parts[index],
                         roomPx = roomPx,
                         chosen = photo.key == block?.key,
@@ -775,6 +794,18 @@ private fun ImageRowBlock(
                 iconSize = 16.dp,
                 touchTarget = 40.dp,
             )
+            // Rysunek wstawiony w notatkę wraca pod rysik tym przyciskiem.
+            // Przy zwykłym zdjęciu nie ma czego poprawiać, więc go nie ma.
+            val drawingName = block.attachmentName?.takeIf(isDrawing)
+            if (drawingName != null) {
+                IconAction(
+                    icon = KajetIcons.Pen,
+                    description = words.editDrawing,
+                    onClick = { onEditDrawing(drawingName) },
+                    iconSize = 16.dp,
+                    touchTarget = 40.dp,
+                )
+            }
             IconAction(
                 icon = KajetIcons.Bin,
                 description = words.photoRemove,
@@ -919,6 +950,7 @@ private fun sideOf(align: NoteAlign): Alignment.Horizontal = when (align) {
 private fun PhotoBox(
     photo: Block.Image,
     attachment: suspend (String) -> ByteArray?,
+    attachmentRevision: Int,
     width: Dp,
     roomPx: Float,
     chosen: Boolean,
@@ -929,6 +961,8 @@ private fun PhotoBox(
     val words = LocalStrings.current
     val colors = Kajet.colors
     val density = LocalDensity.current
+    // Klucz to sam adres: po poprawce rysunku stary obrazek zostaje na ekranie,
+    // dopóki nowy się nie wczyta - inaczej notatka mrugałaby pustym polem.
     var image by remember(photo.url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var failed by remember(photo.url) { mutableStateOf(false) }
 
@@ -944,7 +978,7 @@ private fun PhotoBox(
     var shift by remember(photo.key) { mutableStateOf(Offset.Zero) }
     val step = with(density) { NUDGE_STEP.toPx() }
 
-    LaunchedEffect(photo.url) {
+    LaunchedEffect(photo.url, attachmentRevision) {
         val name = photo.attachmentName
         if (name == null) {
             failed = true

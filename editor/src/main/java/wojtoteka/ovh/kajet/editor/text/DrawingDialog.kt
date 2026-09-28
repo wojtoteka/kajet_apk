@@ -56,6 +56,7 @@ import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.PrimaryButton
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
+import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InkTool
 import wojtoteka.ovh.kajet.core.model.PageBackground
@@ -108,22 +109,32 @@ private const val DRAWING_MAX_HEIGHT = DRAWING_HEIGHT * 3
 private const val DRAWING_TRIM_MARGIN = 40f
 private const val DRAWING_MIN_HEIGHT = DRAWING_GROW_STEP
 
+/**
+ * Okno rysunku. Bez [initial] zaczyna się od pustej kartki; z [initial] otwiera
+ * rysunek, który już stoi w notatce, razem z jego kreskami – wtedy przycisk
+ * zapisuje poprawki zamiast wstawiać kolejny rysunek.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawingDialog(
     onClose: () -> Unit,
     onDone: (strokes: List<InkStroke>, width: Float, height: Float) -> Unit,
+    initial: DrawingSource? = null,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
-    var strokes by remember { mutableStateOf<List<InkStroke>>(emptyList()) }
+    var strokes by remember { mutableStateOf(initial?.strokes.orEmpty()) }
     var tool by remember { mutableStateOf(EditorTool.PEN) }
     var color by remember { mutableStateOf(colors.defaultInk.toArgb()) }
     var width by remember { mutableStateOf(2.4f) }
 
     // Wysokość kartki. Rośnie razem z rysunkiem i tyle samo trafia do notatki,
     // więc wstawiony rysunek ma dokładnie te proporcje, co pod rysikiem.
-    var pageHeight by remember { mutableFloatStateOf(DRAWING_HEIGHT) }
+    var pageHeight by remember { mutableFloatStateOf(startHeight(initial)) }
+
+    // Szerokość kartki poprawianego rysunku zostaje ta, na której go narysowano
+    // - inaczej kreski wjechałyby poza kartkę albo skurczyły się w jej rogu.
+    val pageWidth = initial?.width?.takeIf { it > 0f } ?: DRAWING_WIDTH
     var canvas by remember { mutableStateOf<StrokeCanvas?>(null) }
 
     // Rysunek w notatce tekstowej to też pisanie rysikiem, więc i tu rysik ma
@@ -188,7 +199,7 @@ fun DrawingDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        words.drawingInNote,
+                        if (initial == null) words.drawingInNote else words.editDrawing,
                         style = Kajet.type.title,
                         color = colors.text,
                         modifier = Modifier.weight(1f),
@@ -348,7 +359,7 @@ fun DrawingDialog(
                             view.pages = listOf(
                                 OnScreenPage(
                                     index = 0,
-                                    width = DRAWING_WIDTH,
+                                    width = pageWidth,
                                     height = pageHeight,
                                     background = PageBackground.PLAIN,
                                     strokes = strokes,
@@ -387,8 +398,8 @@ fun DrawingDialog(
                         itemVerticalAlignment = Alignment.CenterVertically,
                     ) {
                         PrimaryButton(
-                            text = words.insertDrawing,
-                            onClick = { onDone(strokes, DRAWING_WIDTH, trimmedHeight(strokes, pageHeight)) },
+                            text = if (initial == null) words.insertDrawing else words.saveDrawingChanges,
+                            onClick = { onDone(strokes, pageWidth, trimmedHeight(strokes, pageHeight)) },
                             icon = KajetIcons.Confirm,
                             enabled = strokes.isNotEmpty(),
                         )
@@ -400,6 +411,17 @@ fun DrawingDialog(
             }
         }
     }
+}
+
+/**
+ * Wysokość kartki na starcie. Pusta kartka zaczyna od [DRAWING_HEIGHT];
+ * poprawiany rysunek dostaje co najmniej tyle samo, nawet gdy przy wstawianiu
+ * przycięło go do niższego paska - inaczej nie byłoby gdzie dorysować, a sama
+ * kartka rośnie dopiero pod kreską przy dolnej krawędzi.
+ */
+private fun startHeight(initial: DrawingSource?): Float {
+    val stored = initial?.height ?: return DRAWING_HEIGHT
+    return stored.coerceIn(DRAWING_HEIGHT, DRAWING_MAX_HEIGHT)
 }
 
 /**
