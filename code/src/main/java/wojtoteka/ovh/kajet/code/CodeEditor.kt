@@ -70,6 +70,7 @@ import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
 import wojtoteka.ovh.kajet.core.design.component.EmptyState
+import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
@@ -189,6 +190,7 @@ fun CodeEditor(
                 enabled = ready,
             )
             if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi, enabled = ready)
+            CalculatorAction()
             Spacer(Modifier.height(12.dp))
         }
         }
