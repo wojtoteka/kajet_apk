@@ -2,9 +2,11 @@ package wojtoteka.ovh.kajet.navigation
 
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,9 @@ import wojtoteka.ovh.kajet.AppContainer
 import wojtoteka.ovh.kajet.code.CodeEditor
 import wojtoteka.ovh.kajet.code.CodeViewModel
 import wojtoteka.ovh.kajet.core.design.Kajet
+import wojtoteka.ovh.kajet.core.design.component.CalculatorControl
+import wojtoteka.ovh.kajet.core.design.component.CalculatorPanel
+import wojtoteka.ovh.kajet.core.design.component.LocalCalculator
 import wojtoteka.ovh.kajet.core.design.component.NoticeBar
 import wojtoteka.ovh.kajet.core.design.component.SecondaryButton
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -159,6 +164,22 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         )
     }
 
+    /*
+      Kalkulator stoi nad całym stosem ekranów, a nie w każdym edytorze osobno:
+      jeden stan dla notatki odręcznej, tekstowej, mapy myśli i kodu, a edytor
+      stawia tylko przycisk (CalculatorAction). Poza edytorami się chowa -
+      w bibliotece czy ustawieniach nie ma czego liczyć.
+    */
+    var calculatorOpen by rememberSaveable { mutableStateOf(false) }
+    val calculator = remember(calculatorOpen) {
+        CalculatorControl(calculatorOpen) { calculatorOpen = !calculatorOpen }
+    }
+    LaunchedEffect(route) {
+        if (route != Routes.NOTE && route != Routes.CODE && route != Routes.VIEW) calculatorOpen = false
+    }
+
+    CompositionLocalProvider(LocalCalculator provides calculator) {
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         /*
           Pasek z biblioteki nie widać na notatce, kodzie ani podglądzie.
@@ -349,6 +370,10 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 },
             )
         }
+    }
+    }
+
+    if (calculatorOpen) CalculatorPanel(onClose = { calculatorOpen = false })
     }
     }
 

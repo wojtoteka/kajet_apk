@@ -165,6 +165,16 @@ interface Strings {
     val colourNamed: String
     val drawingInNote: String
     val closeWithoutSaving: String
+
+    // --- Kalkulator ---
+    val calculator: String
+    val calculatorClose: String
+    val calculatorCopyResult: String
+    val calculatorError: String
+    val calculatorBackspace: String
+    val calculatorClear: String
+    val calculatorParens: String
+    val calculatorMove: String
     val insertDrawing: String
     val clearDrawing: String
     val drawWithFingerOrStylus: String
@@ -1553,6 +1563,14 @@ object PolishStrings : Strings {
     override val colourNamed = "Kolor"
     override val drawingInNote = "Rysunek w notatce"
     override val closeWithoutSaving = "Zamknij bez zapisywania"
+    override val calculator = "Kalkulator"
+    override val calculatorClose = "Zamknij kalkulator"
+    override val calculatorCopyResult = "Kopiuj wynik"
+    override val calculatorError = "Nie da się policzyć"
+    override val calculatorBackspace = "Usuń ostatni znak"
+    override val calculatorClear = "Wyczyść"
+    override val calculatorParens = "Nawias"
+    override val calculatorMove = "Przesuń kalkulator"
     override val insertDrawing = "Wstaw rysunek"
     override val clearDrawing = "Wyczyść"
     override val drawWithFingerOrStylus = "Rysuj palcem albo rysikiem"
@@ -2282,6 +2300,14 @@ object EnglishStrings : Strings {
     override val colourNamed = "Colour"
     override val drawingInNote = "Drawing in the note"
     override val closeWithoutSaving = "Close without saving"
+    override val calculator = "Calculator"
+    override val calculatorClose = "Close calculator"
+    override val calculatorCopyResult = "Copy result"
+    override val calculatorError = "Can't calculate that"
+    override val calculatorBackspace = "Delete last character"
+    override val calculatorClear = "Clear"
+    override val calculatorParens = "Bracket"
+    override val calculatorMove = "Move calculator"
     override val insertDrawing = "Insert the drawing"
     override val clearDrawing = "Clear"
     override val drawWithFingerOrStylus = "Draw with a finger or a stylus"

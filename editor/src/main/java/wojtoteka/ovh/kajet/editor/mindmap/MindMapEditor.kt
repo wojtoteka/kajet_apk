@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
+import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.ColourDot
@@ -313,6 +314,7 @@ fun MindMapEditor(
             )
             IconAction(KajetIcons.Export, words.exportMap, onExport)
             if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi)
+            CalculatorAction()
             Spacer(Modifier.height(12.dp))
         }
         }

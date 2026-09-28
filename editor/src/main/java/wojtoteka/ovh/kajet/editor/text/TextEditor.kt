@@ -49,6 +49,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
+import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.ColourDot
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
@@ -384,6 +385,7 @@ fun TextEditor(
             )
             IconAction(KajetIcons.Export, words.exportNote, onExport)
             if (onAi != null) IconAction(KajetIcons.Bulb, words.aiOpen, onAi)
+            CalculatorAction()
             Spacer(Modifier.height(12.dp))
         }
         }

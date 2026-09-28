@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
+import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
 import wojtoteka.ovh.kajet.core.design.component.IconAction
 import wojtoteka.ovh.kajet.core.design.component.NoticeBar
 import wojtoteka.ovh.kajet.core.design.component.ColourDot
@@ -719,6 +720,7 @@ private fun DrawingRail(
 
         IconAction(KajetIcons.Favourites, if (favorite) words.removeFromFavorites else words.addToFavorites, onFavorite, selected = favorite)
         IconAction(KajetIcons.Export, words.exportNote, onExport)
+        CalculatorAction()
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -806,6 +808,7 @@ private fun NarrowToolRow(
 
         IconAction(KajetIcons.Favourites, if (favorite) words.removeFromFavorites else words.addToFavorites, onFavorite, selected = favorite)
         IconAction(KajetIcons.Export, words.exportNote, onExport)
+        CalculatorAction()
     }
 }
 
