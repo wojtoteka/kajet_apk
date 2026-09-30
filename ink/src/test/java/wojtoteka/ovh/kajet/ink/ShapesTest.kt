@@ -164,6 +164,70 @@ class ShapesTest {
         assertThat(result.points).isEqualTo(Strokes.straighten(tiny).points)
     }
 
+    /** Łuk o [turns] obrotu (1 = pełne koło), owal o półosiach [a] i [b], punkty gęstsze na końcach. */
+    private fun arc(turns: Float, a: Float = 100f, b: Float = a, rotation: Float = 0f, jitter: Float = 3f): InkStroke {
+        val coordinates = (0..80).map { i ->
+            // Ręka zwalnia na początku i końcu - tam punkty leżą gęściej.
+            val t = i / 80f
+            val eased = t * t * (3f - 2f * t)
+            val angle = eased * turns * 2f * Math.PI.toFloat()
+            val wobble = jitter * sin(i * 1.7f)
+            val u = (a + wobble) * cos(angle)
+            val v = (b + wobble) * sin(angle)
+            (300f + u * cos(rotation) - v * sin(rotation)) to (300f + u * sin(rotation) + v * cos(rotation))
+        }
+        return stroke(coordinates)
+    }
+
+    private fun assertCircle(result: InkStroke, radius: Float) {
+        checkInvariants(result)
+        val cx = (0 until result.pointCount).map { result.x(it) }.average().toFloat()
+        val cy = (0 until result.pointCount).map { result.y(it) }.average().toFloat()
+        for (i in 0 until result.pointCount) {
+            assertThat(hypot(result.x(i) - cx, result.y(i) - cy)).isWithin(radius * 0.05f).of(radius)
+        }
+        assertThat(cx).isWithin(10f).of(300f)
+        assertThat(cy).isWithin(10f).of(300f)
+    }
+
+    @Test
+    fun `niedomkniete kolo tez staje sie kolem`() {
+        // Końce rozchodzą się o jedną szóstą obwodu - tak często kończy się koło rysowane ręką.
+        assertCircle(Shapes.snap(arc(turns = 0.83f)), radius = 100f)
+    }
+
+    @Test
+    fun `kolo przeciagniete za poczatek staje sie jednym kolem`() {
+        assertCircle(Shapes.snap(arc(turns = 1.3f)), radius = 100f)
+    }
+
+    @Test
+    fun `owal staje sie rownym owalem wzdluz osi`() {
+        val result = Shapes.snap(arc(turns = 1f, a = 150f, b = 90f, rotation = 0.08f))
+
+        checkInvariants(result)
+        val xs = (0 until result.pointCount).map { result.x(it) }
+        val ys = (0 until result.pointCount).map { result.y(it) }
+        assertThat(xs.max() - xs.min()).isWithin(20f).of(300f)
+        assertThat(ys.max() - ys.min()).isWithin(20f).of(180f)
+        // Każdy punkt leży na owalu wzdłuż osi.
+        val cx = (xs.max() + xs.min()) / 2f
+        val cy = (ys.max() + ys.min()) / 2f
+        val a = (xs.max() - xs.min()) / 2f
+        val b = (ys.max() - ys.min()) / 2f
+        for (i in xs.indices) {
+            val u = (xs[i] - cx) / a
+            val v = (ys[i] - cy) / b
+            assertThat(u * u + v * v).isWithin(0.03f).of(1f)
+        }
+    }
+
+    @Test
+    fun `luk na nieco ponad pol kola zostaje otwarty i sie prostuje`() {
+        val open = arc(turns = 0.6f)
+        assertThat(Shapes.snap(open).points).isEqualTo(Strokes.straighten(open).points)
+    }
+
     @Test
     fun `nacisk na koncach jest ten sam co w kresce reki`() {
         val result = Shapes.snap(roughCircle())

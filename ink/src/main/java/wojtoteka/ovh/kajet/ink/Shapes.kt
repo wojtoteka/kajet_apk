@@ -13,9 +13,12 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
  * Rozpoznawanie kształtów dla narzędzia „Linijka i kształty".
  *
  * Kreska OTWARTA prostuje się jak dotąd ([Strokes.straighten]). Kreska
- * ZAMKNIĘTA - końce blisko siebie - zamienia się w równą figurę: koło,
- * trójkąt albo prostokąt. Zamknięty bazgroł, który nie przypomina żadnej
- * z nich, zostaje odręczny - lepszy własny rysunek niż zgadnięty kształt.
+ * ZAMKNIĘTA zamienia się w równą figurę: koło, owal, trójkąt albo
+ * prostokąt. Za zamkniętą uchodzi też kreska, która okrąża środek prawie
+ * cały raz, choć końce się nie zeszły, i kreska przeciągnięta za swój
+ * początek - tak rysuje się koła ręką. Zamknięty bazgroł, który nie
+ * przypomina żadnej figury, zostaje odręczny - lepszy własny rysunek niż
+ * zgadnięty kształt.
  *
  * Wynik jest zwykłą łamaną w tym samym zapisie punktów co każda kreska,
  * więc gumka, lasso i eksport działają na nim bez żadnych zmian.
@@ -23,10 +26,22 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 object Shapes {
 
     /** Odstęp końców względem długości kreski, poniżej którego jest „zamknięta". */
-    private const val CLOSED_GAP_RATIO = 0.15f
+    private const val CLOSED_GAP_RATIO = 0.2f
+
+    /** Obrót kreski (stopnie), od którego jest zamknięta mimo przerwy między końcami. */
+    private const val CLOSED_TURN_DEG = 280f
 
     /** Rozrzut odległości od środka względem promienia, poniżej którego to koło. */
     private const val CIRCLE_ROUNDNESS = 0.15f
+
+    /** To samo dla owalu, liczone po sprowadzeniu owalu do koła. */
+    private const val OVAL_ROUNDNESS = 0.12f
+
+    /** Stosunek osi, do którego owal jest po prostu kołem. */
+    private const val CIRCLE_MAX_RATIO = 1.2f
+
+    /** Dłuższy i węższy zamknięty kształt to już nie owal, tylko pętla. */
+    private const val OVAL_MAX_RATIO = 4f
 
     /** Epsilon upraszczania łamanej względem przekątnej obrysu. */
     private const val SIMPLIFY_RATIO = 0.04f
@@ -34,7 +49,7 @@ object Shapes {
     /** O ile kąt w rogu może odbiegać od prostego, żeby czworokąt był prostokątem. */
     private const val RIGHT_ANGLE_TOLERANCE_DEG = 15f
 
-    /** Odchylenie od poziomu/pionu, przy którym prostokąt dosnapowuje się do osi. */
+    /** Odchylenie od poziomu/pionu, przy którym prostokąt i owal dosnapowują się do osi. */
     private const val AXIS_SNAP_DEG = 10f
 
     /** Zgięcie mniejsze niż tyle to nie róg, tylko punkt w środku boku. */
@@ -50,28 +65,43 @@ object Shapes {
 
     private const val CIRCLE_POINTS = 64
 
+    /** Ile punktów w równych odstępach bierze się z kreski do rozpoznawania. */
+    private const val SAMPLE_POINTS = 48
+
     fun snap(stroke: InkStroke): InkStroke {
         val count = stroke.pointCount
         if (count < 8) return Strokes.straighten(stroke)
 
-        val xs = FloatArray(count) { stroke.x(it) }
-        val ys = FloatArray(count) { stroke.y(it) }
-        val length = pathLength(xs, ys)
+        val rawX = FloatArray(count) { stroke.x(it) }
+        val rawY = FloatArray(count) { stroke.y(it) }
+        val length = pathLength(rawX, rawY)
         if (length < 24f) return Strokes.straighten(stroke)
 
-        if (!isClosed(xs, ys, length)) return Strokes.straighten(stroke)
+        // Punkty w równych odstępach: ręka zwalnia na zakrętach i przy końcach,
+        // a zagęszczone punkty w jednym miejscu przesuwałyby środek koła.
+        var (xs, ys) = resample(rawX, rawY, length, SAMPLE_POINTS)
+        // Kreska przeciągnięta za swój początek kończy się tam, gdzie zatoczyła
+        // pełny obrót - reszta to tylko zakładka.
+        val fullTurn = fullTurnIndex(xs, ys)
+        if (fullTurn != null) {
+            xs = xs.copyOf(fullTurn + 1)
+            ys = ys.copyOf(fullTurn + 1)
+        }
+
+        val closed = fullTurn != null ||
+            isClosed(xs, ys, pathLength(xs, ys)) ||
+            abs(totalTurn(xs, ys)) >= CLOSED_TURN_DEG
+        if (!closed) return Strokes.straighten(stroke)
 
         // Najpierw wyraźne rogi, potem koło - w tej kolejności, bo kwadrat
         // jest „okrąglejszy", niż się wydaje, i wygrywałby test koła.
         val corners = corners(xs, ys)
         val crisp = corners.size in 3..4 && turnAngles(corners).all { it >= CRISP_TURN_DEG }
-        return when {
-            crisp && corners.size == 3 -> polygon(stroke, corners)
-            crisp -> rectangleOrQuad(stroke, corners)
-            circleness(xs, ys) < CIRCLE_ROUNDNESS -> circle(stroke, xs, ys)
-            // Zamknięta gwiazdka czy chmurka to nie figura - zostaje odręczna.
-            else -> stroke
-        }
+        if (crisp && corners.size == 3) return polygon(stroke, corners)
+        if (crisp) return rectangleOrQuad(stroke, corners)
+        // Zamknięta gwiazdka czy chmurka to nie figura - zostaje odręczna.
+        val oval = fitOval(xs, ys) ?: return stroke
+        return ovalStroke(stroke, oval, xs, ys)
     }
 
     // --- Miary ---
@@ -89,20 +119,159 @@ object Shapes {
         return gap <= CLOSED_GAP_RATIO * length
     }
 
-    /** Rozrzut odległości od środka ciężkości podzielony przez średnią - 0 to idealne koło. */
-    internal fun circleness(xs: FloatArray, ys: FloatArray): Float {
-        val cx = xs.average().toFloat()
-        val cy = ys.average().toFloat()
-        var sum = 0f
-        for (i in xs.indices) sum += hypot(xs[i] - cx, ys[i] - cy)
-        val mean = sum / xs.size
-        if (mean < 1e-3f) return Float.MAX_VALUE
-        var variance = 0f
-        for (i in xs.indices) {
-            val d = hypot(xs[i] - cx, ys[i] - cy) - mean
-            variance += d * d
+    /** [n] punktów w równych odstępach wzdłuż łamanej o długości [length]. */
+    internal fun resample(xs: FloatArray, ys: FloatArray, length: Float, n: Int): Pair<FloatArray, FloatArray> {
+        val outX = FloatArray(n)
+        val outY = FloatArray(n)
+        val step = length / (n - 1)
+        var segment = 1
+        var segmentStart = 0f
+        var segmentLength = hypot(xs[1] - xs[0], ys[1] - ys[0])
+        for (k in 0 until n) {
+            val target = step * k
+            while (segment < xs.size - 1 && segmentStart + segmentLength < target) {
+                segmentStart += segmentLength
+                segment++
+                segmentLength = hypot(xs[segment] - xs[segment - 1], ys[segment] - ys[segment - 1])
+            }
+            val t = if (segmentLength > 1e-6f) ((target - segmentStart) / segmentLength).coerceIn(0f, 1f) else 0f
+            outX[k] = xs[segment - 1] + (xs[segment] - xs[segment - 1]) * t
+            outY[k] = ys[segment - 1] + (ys[segment] - ys[segment - 1]) * t
         }
-        return sqrt(variance / xs.size) / mean
+        return outX to outY
+    }
+
+    /** Zmiana kierunku między kolejnymi odcinkami, ze znakiem (stopnie). */
+    private fun turns(xs: FloatArray, ys: FloatArray): FloatArray {
+        if (xs.size < 3) return FloatArray(0)
+        return FloatArray(xs.size - 2) { i ->
+            val inAngle = atan2(ys[i + 1] - ys[i], xs[i + 1] - xs[i])
+            val outAngle = atan2(ys[i + 2] - ys[i + 1], xs[i + 2] - xs[i + 1])
+            var turn = Math.toDegrees((outAngle - inAngle).toDouble()).toFloat()
+            while (turn > 180f) turn -= 360f
+            while (turn < -180f) turn += 360f
+            turn
+        }
+    }
+
+    /** O ile stopni obróciła się kreska od początku do końca - pełne koło to ~360. */
+    internal fun totalTurn(xs: FloatArray, ys: FloatArray): Float = turns(xs, ys).sum()
+
+    /** Indeks punktu, w którym kreska zatoczyła pełny obrót, albo null. */
+    internal fun fullTurnIndex(xs: FloatArray, ys: FloatArray): Int? {
+        var turned = 0f
+        for ((i, turn) in turns(xs, ys).withIndex()) {
+            turned += turn
+            if (abs(turned) >= 360f) return i + 1
+        }
+        return null
+    }
+
+    // --- Koło i owal ---
+
+    /** Owal o środku ([cx], [cy]), półosiach [a] i [b], obrócony o [angle] (radiany). */
+    internal data class Oval(val cx: Float, val cy: Float, val a: Float, val b: Float, val angle: Float)
+
+    /**
+     * Koło albo owal najlepiej pasujący do kreski, albo null, gdy kreska
+     * nie przypomina żadnego z nich. Osie owalu wychodzą z rozrzutu punktów
+     * wokół środka; prawie równe osie dają koło dopasowane wprost do punktów,
+     * więc i niedomknięty łuk trafia w swój środek.
+     */
+    internal fun fitOval(xs: FloatArray, ys: FloatArray): Oval? {
+        val n = xs.size
+        val mx = xs.average().toFloat()
+        val my = ys.average().toFloat()
+        var sxx = 0f
+        var syy = 0f
+        var sxy = 0f
+        for (i in 0 until n) {
+            val dx = xs[i] - mx
+            val dy = ys[i] - my
+            sxx += dx * dx
+            syy += dy * dy
+            sxy += dx * dy
+        }
+        sxx /= n
+        syy /= n
+        sxy /= n
+        val half = (sxx + syy) / 2f
+        val spread = hypot((sxx - syy) / 2f, sxy)
+        val major = half + spread
+        val minor = half - spread
+        if (minor < 1e-3f) return null
+        val ratio = sqrt(major / minor)
+
+        if (ratio <= CIRCLE_MAX_RATIO) {
+            val circle = fitCircle(xs, ys)
+            if (circle != null) return circle
+        }
+        if (ratio > OVAL_MAX_RATIO) return null
+
+        var angle = 0.5f * atan2(2f * sxy, sxx - syy)
+        // Dla punktów rozłożonych równo po obwodzie wariancja wzdłuż osi to połowa jej kwadratu.
+        val a0 = sqrt(2f * major)
+        val b0 = sqrt(2f * minor)
+        val c = cos(angle)
+        val s = sin(angle)
+        val normalized = FloatArray(n) { i ->
+            val dx = xs[i] - mx
+            val dy = ys[i] - my
+            hypot((dx * c + dy * s) / a0, (-dx * s + dy * c) / b0)
+        }
+        val mean = normalized.average().toFloat()
+        if (spreadOf(normalized, mean) / mean >= OVAL_ROUNDNESS) return null
+
+        // Owal prawie wzdłuż osi staje wzdłuż osi - jak prostokąt.
+        val degrees = Math.toDegrees(angle.toDouble()).toFloat()
+        val snapped = round(degrees / 90f) * 90f
+        if (abs(degrees - snapped) <= AXIS_SNAP_DEG) {
+            angle = Math.toRadians(snapped.toDouble()).toFloat()
+        }
+        return Oval(mx, my, a0 * mean, b0 * mean, angle)
+    }
+
+    /** Koło metodą najmniejszych kwadratów (Kåsa) - trafia w środek także łuku. */
+    private fun fitCircle(xs: FloatArray, ys: FloatArray): Oval? {
+        val n = xs.size
+        val mx = xs.average()
+        val my = ys.average()
+        var suu = 0.0
+        var svv = 0.0
+        var suv = 0.0
+        var suuu = 0.0
+        var svvv = 0.0
+        var suvv = 0.0
+        var svuu = 0.0
+        for (i in 0 until n) {
+            val u = xs[i] - mx
+            val v = ys[i] - my
+            suu += u * u
+            svv += v * v
+            suv += u * v
+            suuu += u * u * u
+            svvv += v * v * v
+            suvv += u * v * v
+            svuu += v * u * u
+        }
+        val det = suu * svv - suv * suv
+        if (abs(det) < 1e-9) return null
+        val r1 = (suuu + suvv) / 2.0
+        val r2 = (svvv + svuu) / 2.0
+        val cx = (mx + (r1 * svv - r2 * suv) / det).toFloat()
+        val cy = (my + (r2 * suu - r1 * suv) / det).toFloat()
+
+        val distances = FloatArray(n) { hypot(xs[it] - cx, ys[it] - cy) }
+        val radius = distances.average().toFloat()
+        if (radius < 1e-3f) return null
+        if (spreadOf(distances, radius) / radius >= CIRCLE_ROUNDNESS) return null
+        return Oval(cx, cy, radius, radius, 0f)
+    }
+
+    private fun spreadOf(values: FloatArray, mean: Float): Float {
+        var variance = 0f
+        for (value in values) variance += (value - mean) * (value - mean)
+        return sqrt(variance / values.size)
     }
 
     // --- Rogi ---
@@ -191,16 +360,15 @@ object Shapes {
 
     // --- Figury ---
 
-    private fun circle(stroke: InkStroke, xs: FloatArray, ys: FloatArray): InkStroke {
-        val cx = xs.average().toFloat()
-        val cy = ys.average().toFloat()
-        var radius = 0f
-        for (i in xs.indices) radius += hypot(xs[i] - cx, ys[i] - cy)
-        radius /= xs.size
+    private fun ovalStroke(stroke: InkStroke, oval: Oval, xs: FloatArray, ys: FloatArray): InkStroke {
+        val c = cos(oval.angle)
+        val s = sin(oval.angle)
 
-        // Koło zaczyna się tam, gdzie zaczęła się kreska, i biegnie w tę samą
+        // Owal zaczyna się tam, gdzie zaczęła się kreska, i biegnie w tę samą
         // stronę - pole ze znakiem mówi, czy rysowano zgodnie z zegarem.
-        val start = atan2(ys[0] - cy, xs[0] - cx)
+        val dx = xs[0] - oval.cx
+        val dy = ys[0] - oval.cy
+        val start = atan2((-dx * s + dy * c) / oval.b, (dx * c + dy * s) / oval.a)
         var area = 0f
         for (i in xs.indices) {
             val j = (i + 1) % xs.size
@@ -211,9 +379,11 @@ object Shapes {
         val outX = FloatArray(CIRCLE_POINTS + 1)
         val outY = FloatArray(CIRCLE_POINTS + 1)
         for (i in 0..CIRCLE_POINTS) {
-            val angle = start + direction * 2f * Math.PI.toFloat() * (i / CIRCLE_POINTS.toFloat())
-            outX[i] = cx + radius * cos(angle)
-            outY[i] = cy + radius * sin(angle)
+            val t = start + direction * 2f * Math.PI.toFloat() * (i / CIRCLE_POINTS.toFloat())
+            val u = oval.a * cos(t)
+            val v = oval.b * sin(t)
+            outX[i] = oval.cx + u * c - v * s
+            outY[i] = oval.cy + u * s + v * c
         }
         return polylineStroke(stroke, outX, outY)
     }
