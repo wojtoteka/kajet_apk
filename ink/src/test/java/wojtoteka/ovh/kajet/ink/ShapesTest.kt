@@ -228,6 +228,103 @@ class ShapesTest {
         assertThat(Shapes.snap(open).points).isEqualTo(Strokes.straighten(open).points)
     }
 
+    /**
+     * Otwarta łamana przez [vertices] z drżeniem ręki; ostatni bok kończy się
+     * po [lastSide] swojej długości (1 = w ostatnim wierzchołku).
+     */
+    private fun roughOpenPath(
+        vertices: List<Pair<Float, Float>>,
+        lastSide: Float = 1f,
+        jitter: Float = 2f,
+    ): InkStroke {
+        val coordinates = mutableListOf<Pair<Float, Float>>()
+        for (i in 1 until vertices.size) {
+            val (ax, ay) = vertices[i - 1]
+            val (bx, by) = vertices[i]
+            val steps = 16
+            val until = if (i == vertices.size - 1) (steps * lastSide).toInt() else steps - 1
+            for (step in 0..until) {
+                val t = step / steps.toFloat()
+                val wobble = jitter * sin(coordinates.size.toFloat())
+                coordinates += (ax + (bx - ax) * t + wobble) to (ay + (by - ay) * t + wobble)
+            }
+        }
+        return stroke(coordinates)
+    }
+
+    private fun distanceToSides(x: Float, y: Float, vertices: List<Pair<Float, Float>>, closed: Boolean): Float {
+        val sides = if (closed) vertices.size else vertices.size - 1
+        return (0 until sides).minOf { v ->
+            val (ax, ay) = vertices[v]
+            val (bx, by) = vertices[(v + 1) % vertices.size]
+            Strokes.distanceToSegment(x, y, ax, ay, bx, by)
+        }
+    }
+
+    @Test
+    fun `ksztalt L staje sie dwoma prostymi odcinkami`() {
+        val corners = listOf(0f to 0f, 0f to 200f, 150f to 200f)
+        val result = Shapes.snap(roughOpenPath(corners))
+
+        checkInvariants(result)
+        for (i in 0 until result.pointCount) {
+            assertThat(distanceToSides(result.x(i), result.y(i), corners, closed = false)).isLessThan(6f)
+        }
+        // Boki równo w pionie i w poziomie: pierwszy odcinek ma jedno x, ostatni jedno y.
+        assertThat(result.x(1)).isWithin(0.01f).of(result.x(0))
+        val last = result.pointCount - 1
+        assertThat(result.y(last - 1)).isWithin(0.01f).of(result.y(last))
+        // Koniec zostaje tam, gdzie był - to nie figura.
+        assertThat(hypot(result.x(last) - result.x(0), result.y(last) - result.y(0))).isGreaterThan(200f)
+    }
+
+    @Test
+    fun `niedomkniety trojkat staje sie trojkatem`() {
+        val vertices = listOf(100f to 0f, 200f to 180f, 0f to 180f)
+        val result = Shapes.snap(roughOpenPath(vertices + vertices.first(), lastSide = 0.6f))
+
+        checkInvariants(result)
+        for (i in 0 until result.pointCount) {
+            assertThat(distanceToSides(result.x(i), result.y(i), vertices, closed = true)).isLessThan(8f)
+        }
+        val last = result.pointCount - 1
+        assertThat(hypot(result.x(last) - result.x(0), result.y(last) - result.y(0))).isLessThan(1f)
+    }
+
+    @Test
+    fun `niedomkniety prostokat staje sie prostokatem`() {
+        val vertices = listOf(0f to 0f, 200f to 0f, 200f to 150f, 0f to 150f)
+        val result = Shapes.snap(roughOpenPath(vertices + vertices.first(), lastSide = 0.6f))
+
+        checkInvariants(result)
+        for (i in 0 until result.pointCount) {
+            assertThat(distanceToSides(result.x(i), result.y(i), vertices, closed = true)).isLessThan(8f)
+        }
+        val last = result.pointCount - 1
+        assertThat(hypot(result.x(last) - result.x(0), result.y(last) - result.y(0))).isLessThan(1f)
+    }
+
+    @Test
+    fun `ksztalt U zostaje otwarty`() {
+        val corners = listOf(0f to 0f, 0f to 200f, 150f to 200f, 150f to 0f)
+        val result = Shapes.snap(roughOpenPath(corners))
+
+        checkInvariants(result)
+        for (i in 0 until result.pointCount) {
+            assertThat(distanceToSides(result.x(i), result.y(i), corners, closed = false)).isLessThan(6f)
+        }
+        val last = result.pointCount - 1
+        assertThat(hypot(result.x(last) - result.x(0), result.y(last) - result.y(0))).isGreaterThan(120f)
+    }
+
+    @Test
+    fun `haczyk na koncu linii nie robi z niej ksztaltu L`() {
+        val hooked = stroke((0..40).map { (it * 5f) to 100f } + listOf(203f to 104f, 204f to 109f))
+        val result = Shapes.snap(hooked)
+
+        assertThat(result.points).isEqualTo(Strokes.straighten(hooked).points)
+    }
+
     @Test
     fun `nacisk na koncach jest ten sam co w kresce reki`() {
         val result = Shapes.snap(roughCircle())

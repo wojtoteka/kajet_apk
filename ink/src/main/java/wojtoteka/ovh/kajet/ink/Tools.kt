@@ -32,7 +32,7 @@ enum class EditorTool {
             ERASER_PARTIAL -> "Wyciera tylko to, po czym przejedziesz."
             ERASER_STROKE -> "Kasuje całą kreskę, której dotkniesz."
             LASSO -> "Obrysuj fragment, żeby go przesunąć albo skasować."
-            RULER -> "Zamienia kreskę w prostą linię, a zamkniętą - w koło, owal, trójkąt albo prostokąt."
+            RULER -> "Prostuje kreskę w linię albo łamaną, a zamkniętą zamienia w koło, owal, trójkąt albo prostokąt."
             SHAPES -> "Przeciągnij rysik, żeby wstawić kształt. Stuknięcie bierze kształt do poprawek."
         }
 
@@ -52,7 +52,7 @@ enum class EditorTool {
         ERASER_PARTIAL -> "Rubs out only what you run over."
         ERASER_STROKE -> "Removes the whole stroke you touch."
         LASSO -> "Draw around a piece to move it or delete it."
-        RULER -> "Turns a stroke into a straight line, and a closed one into a circle, oval, triangle, or rectangle."
+        RULER -> "Straightens a stroke into a line or straight segments, and turns a closed one into a circle, oval, triangle, or rectangle."
         SHAPES -> "Drag the stylus to place a shape. A tap picks a shape up for changes."
     }
 

@@ -12,7 +12,10 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 /**
  * Rozpoznawanie kształtów dla narzędzia „Linijka i kształty".
  *
- * Kreska OTWARTA prostuje się jak dotąd ([Strokes.straighten]). Kreska
+ * Kreska OTWARTA prostuje się jak dotąd ([Strokes.straighten]), a z
+ * wyraźnymi rogami - jak L czy Z - staje się łamaną z prostych odcinków.
+ * Łamana, która prawie wraca do początku, to trójkąt albo prostokąt
+ * narysowany bez domknięcia - ostatni bok dorysowuje się sam. Kreska
  * ZAMKNIĘTA zamienia się w równą figurę: koło, owal, trójkąt albo
  * prostokąt. Za zamkniętą uchodzi też kreska, która okrąża środek prawie
  * cały raz, choć końce się nie zeszły, i kreska przeciągnięta za swój
@@ -63,6 +66,28 @@ object Shapes {
      */
     private const val CRISP_TURN_DEG = 60f
 
+    /**
+     * Zgięcie, od którego róg otwartej kreski jest rogiem łamanej. Wyżej niż
+     * [CRISP_TURN_DEG], bo łuk po uproszczeniu też się łamie (~50 stopni),
+     * a nie powinien zamienić się w łamaną.
+     */
+    private const val OPEN_CORNER_DEG = 70f
+
+    /** Najwięcej rogów otwartej łamanej - gęsty zygzak to bazgroł, nie figura. */
+    private const val MAX_OPEN_CORNERS = 4
+
+    /** Najkrótszy bok łamanej względem długości kreski; krótszy na końcu to haczyk rysika. */
+    private const val MIN_SIDE_RATIO = 0.08f
+
+    /** Obrót łamanej (stopnie), od którego to niedomknięta figura, a nie litera U. */
+    private const val OPEN_SHAPE_TURN_DEG = 200f
+
+    /** Przerwa między końcami niedomkniętej figury względem długości kreski. */
+    private const val OPEN_SHAPE_GAP_RATIO = 0.4f
+
+    /** Odchylenie boku łamanej od wielokrotności 45 stopni, przy którym dosnapowuje się do niej. */
+    private const val SIDE_SNAP_DEG = 6f
+
     private const val CIRCLE_POINTS = 64
 
     /** Ile punktów w równych odstępach bierze się z kreski do rozpoznawania. */
@@ -91,7 +116,7 @@ object Shapes {
         val closed = fullTurn != null ||
             isClosed(xs, ys, pathLength(xs, ys)) ||
             abs(totalTurn(xs, ys)) >= CLOSED_TURN_DEG
-        if (!closed) return Strokes.straighten(stroke)
+        if (!closed) return snapOpen(stroke, xs, ys)
 
         // Najpierw wyraźne rogi, potem koło - w tej kolejności, bo kwadrat
         // jest „okrąglejszy", niż się wydaje, i wygrywałby test koła.
@@ -310,25 +335,17 @@ object Shapes {
      * kreska zaczęta w środku boku nie ma tam przecież rogu.
      */
     internal fun corners(xs: FloatArray, ys: FloatArray): List<Pair<Float, Float>> {
-        var minX = xs[0]
-        var maxX = xs[0]
-        var minY = ys[0]
-        var maxY = ys[0]
-        for (i in xs.indices) {
-            if (xs[i] < minX) minX = xs[i]
-            if (xs[i] > maxX) maxX = xs[i]
-            if (ys[i] < minY) minY = ys[i]
-            if (ys[i] > maxY) maxY = ys[i]
+        val kept = douglasPeucker(xs, ys, simplifyEpsilon(xs, ys)).map { xs[it] to ys[it] }
+        // Początek i koniec to ten sam róg - kreska jest zamknięta. Przy
+        // przerwie między końcami róg leży na przecięciu pierwszego i
+        // ostatniego boku, nie w połowie przerwy.
+        val cyclic = if (kept.size >= 4) {
+            closeUp(kept, pathLength(xs, ys))
+        } else {
+            listOf(
+                ((kept.first().first + kept.last().first) / 2f) to ((kept.first().second + kept.last().second) / 2f),
+            ) + kept.subList(1, kept.size - 1)
         }
-        val epsilon = SIMPLIFY_RATIO * hypot(maxX - minX, maxY - minY)
-
-        val kept = douglasPeucker(xs, ys, epsilon)
-        // Początek i koniec to ten sam róg - kreska jest zamknięta.
-        val cyclic = ArrayList<Pair<Float, Float>>(kept.size)
-        val first = kept.first()
-        val last = kept.last()
-        cyclic += ((xs[first] + xs[last]) / 2f) to ((ys[first] + ys[last]) / 2f)
-        for (i in 1 until kept.size - 1) cyclic += xs[kept[i]] to ys[kept[i]]
 
         // Punkt bez zgięcia to nie róg. Powtarzamy, bo zdjęcie jednego punktu
         // potrafi wyprostować sąsiedni.
@@ -340,6 +357,154 @@ object Shapes {
             vertices = ArrayList(vertices).apply { removeAt(straightest) }
         }
         return vertices
+    }
+
+    private fun simplifyEpsilon(xs: FloatArray, ys: FloatArray): Float {
+        var minX = xs[0]
+        var maxX = xs[0]
+        var minY = ys[0]
+        var maxY = ys[0]
+        for (i in xs.indices) {
+            if (xs[i] < minX) minX = xs[i]
+            if (xs[i] > maxX) maxX = xs[i]
+            if (ys[i] < minY) minY = ys[i]
+            if (ys[i] > maxY) maxY = ys[i]
+        }
+        return SIMPLIFY_RATIO * hypot(maxX - minX, maxY - minY)
+    }
+
+    /**
+     * Wierzchołki otwartej kreski: oba końce i punkty, w których kreska
+     * wyraźnie się zgina. Jak w [corners], punkt prawie bez zgięcia odpada.
+     */
+    internal fun openVertices(xs: FloatArray, ys: FloatArray): List<Pair<Float, Float>> {
+        var vertices: List<Pair<Float, Float>> =
+            douglasPeucker(xs, ys, simplifyEpsilon(xs, ys)).map { xs[it] to ys[it] }
+        while (vertices.size > 2) {
+            val bends = signedTurns(vertices)
+            val straightest = bends.indices.minByOrNull { abs(bends[it]) } ?: break
+            if (abs(bends[straightest]) >= STRAIGHT_DEG) break
+            vertices = ArrayList(vertices).apply { removeAt(straightest + 1) }
+        }
+        return vertices
+    }
+
+    /** Zgięcie ze znakiem w każdym wewnętrznym wierzchołku otwartej łamanej (stopnie). */
+    private fun signedTurns(vertices: List<Pair<Float, Float>>): List<Float> =
+        List((vertices.size - 2).coerceAtLeast(0)) { i ->
+            turnBetween(vertices[i], vertices[i + 1], vertices[i + 1], vertices[i + 2])
+        }
+
+    /** O ile stopni skręca kierunek z odcinka [a0]→[a1] na odcinek [b0]→[b1], ze znakiem. */
+    private fun turnBetween(
+        a0: Pair<Float, Float>,
+        a1: Pair<Float, Float>,
+        b0: Pair<Float, Float>,
+        b1: Pair<Float, Float>,
+    ): Float {
+        val inAngle = atan2(a1.second - a0.second, a1.first - a0.first)
+        val outAngle = atan2(b1.second - b0.second, b1.first - b0.first)
+        var turn = Math.toDegrees((outAngle - inAngle).toDouble()).toFloat()
+        while (turn > 180f) turn -= 360f
+        while (turn < -180f) turn += 360f
+        return turn
+    }
+
+    private fun distance(a: Pair<Float, Float>, b: Pair<Float, Float>): Float =
+        hypot(b.first - a.first, b.second - a.second)
+
+    // --- Otwarta kreska ---
+
+    /**
+     * Otwarta kreska: bez rogów prostuje się w linię, z kilkoma wyraźnymi
+     * rogami staje się łamaną (L, Z, U), a łamana, która zawraca prawie do
+     * początku, to niedomknięty trójkąt albo prostokąt.
+     */
+    private fun snapOpen(stroke: InkStroke, xs: FloatArray, ys: FloatArray): InkStroke {
+        val length = pathLength(xs, ys)
+        val vertices = ArrayList(openVertices(xs, ys))
+        // Haczyk przy przyłożeniu albo oderwaniu rysika to nie bok.
+        while (vertices.size > 2 && distance(vertices[0], vertices[1]) < MIN_SIDE_RATIO * length) {
+            vertices.removeAt(0)
+        }
+        while (vertices.size > 2 &&
+            distance(vertices[vertices.size - 2], vertices.last()) < MIN_SIDE_RATIO * length
+        ) {
+            vertices.removeAt(vertices.size - 1)
+        }
+
+        val turns = signedTurns(vertices)
+        val polyline = turns.size in 1..MAX_OPEN_CORNERS &&
+            turns.all { abs(it) >= OPEN_CORNER_DEG } &&
+            (1 until vertices.size).all { distance(vertices[it - 1], vertices[it]) >= MIN_SIDE_RATIO * length }
+        if (!polyline) return Strokes.straighten(stroke)
+
+        val oneWay = turns.all { it > 0f } || turns.all { it < 0f }
+        val gap = distance(vertices.first(), vertices.last())
+        if (turns.size >= 2 && oneWay &&
+            abs(turns.sum()) >= OPEN_SHAPE_TURN_DEG &&
+            gap <= OPEN_SHAPE_GAP_RATIO * length
+        ) {
+            val shape = closeUp(vertices, length)
+            if (shape.size in 3..4 && turnAngles(shape).all { it >= CRISP_TURN_DEG }) {
+                return if (shape.size == 3) polygon(stroke, shape) else rectangleOrQuad(stroke, shape)
+            }
+        }
+        return polygon(stroke, straightSides(vertices), closed = false)
+    }
+
+    /**
+     * Rogi figury z niedomkniętej łamanej. Brakujący róg leży tam, gdzie
+     * przecinają się pierwszy i ostatni bok. Gdy te boki biegną w jedną
+     * stronę, kreska zaczęła się i skończyła na tym samym boku - wtedy
+     * brakującego rogu nie ma.
+     */
+    private fun closeUp(vertices: List<Pair<Float, Float>>, length: Float): List<Pair<Float, Float>> {
+        val inner = vertices.subList(1, vertices.size - 1)
+        val a0 = vertices[0]
+        val a1 = vertices[1]
+        val b0 = vertices[vertices.size - 2]
+        val b1 = vertices.last()
+        if (abs(turnBetween(b0, b1, a0, a1)) < STRAIGHT_DEG) return inner
+
+        val d1x = a1.first - a0.first
+        val d1y = a1.second - a0.second
+        val d2x = b1.first - b0.first
+        val d2y = b1.second - b0.second
+        val denominator = d1x * d2y - d1y * d2x
+        val middle = ((a0.first + b1.first) / 2f) to ((a0.second + b1.second) / 2f)
+        if (abs(denominator) < 1e-6f) return listOf(middle) + inner
+        val t = ((b0.first - a0.first) * d2y - (b0.second - a0.second) * d2x) / denominator
+        val corner = (a0.first + d1x * t) to (a0.second + d1y * t)
+        // Przecięcie daleko od końców kreski to nie róg, który ręka pominęła.
+        val reach = OPEN_SHAPE_GAP_RATIO * length
+        return if (distance(corner, a0) <= reach && distance(corner, b1) <= reach) {
+            listOf(corner) + inner
+        } else {
+            listOf(middle) + inner
+        }
+    }
+
+    /**
+     * Boki łamanej po kolei, z zachowaną długością; bok prawie poziomy,
+     * pionowy albo pod 45 stopni dosnapowuje się do tego kierunku - jak
+     * pojedyncza linia z linijki.
+     */
+    private fun straightSides(vertices: List<Pair<Float, Float>>): List<Pair<Float, Float>> {
+        val out = ArrayList<Pair<Float, Float>>(vertices.size)
+        out += vertices.first()
+        for (i in 1 until vertices.size) {
+            val (ax, ay) = vertices[i - 1]
+            val (bx, by) = vertices[i]
+            val side = hypot(bx - ax, by - ay)
+            var degrees = Math.toDegrees(atan2(by - ay, bx - ax).toDouble()).toFloat()
+            val snapped = round(degrees / 45f) * 45f
+            if (abs(degrees - snapped) <= SIDE_SNAP_DEG) degrees = snapped
+            val radians = Math.toRadians(degrees.toDouble()).toFloat()
+            val (px, py) = out.last()
+            out += (px + side * cos(radians)) to (py + side * sin(radians))
+        }
+        return out
     }
 
     /** Zgięcie w każdym rogu (stopnie, 0 = prosto, 90 = kąt prosty), cyklicznie. */
@@ -388,10 +553,14 @@ object Shapes {
         return polylineStroke(stroke, outX, outY)
     }
 
-    private fun polygon(stroke: InkStroke, vertices: List<Pair<Float, Float>>): InkStroke {
-        // Łamana przez rogi, z powrotem do pierwszego. Każdy bok dostaje
-        // punkty proporcjonalnie do długości, rogi zostają ostre.
-        val path = vertices + vertices.first()
+    private fun polygon(
+        stroke: InkStroke,
+        vertices: List<Pair<Float, Float>>,
+        closed: Boolean = true,
+    ): InkStroke {
+        // Łamana przez rogi, przy figurze z powrotem do pierwszego. Każdy bok
+        // dostaje punkty proporcjonalnie do długości, rogi zostają ostre.
+        val path = if (closed) vertices + vertices.first() else vertices
         var perimeter = 0f
         for (i in 1 until path.size) {
             perimeter += hypot(
