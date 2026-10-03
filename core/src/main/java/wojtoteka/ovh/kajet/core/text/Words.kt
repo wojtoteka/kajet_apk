@@ -688,6 +688,7 @@ interface Strings {
     val aiTitle: String
     val aiOpen: String
     val aiClose: String
+    val aiMove: String
     val aiHint: String
     val aiAsk: String
     val aiWorking: String
@@ -2145,6 +2146,7 @@ object PolishStrings : Strings {
     override val aiTitle = "KajetAI"
     override val aiOpen = "Poproś KajetAI o zmianę"
     override val aiClose = "Zamknij KajetAI"
+    override val aiMove = "Przesuń okienko KajetAI"
     override val aiHint = "Co zmienić w tej notatce?"
     override val aiAsk = "Poproś"
     override val aiWorking = "KajetAI pracuje nad notatką…"
@@ -2892,6 +2894,7 @@ object EnglishStrings : Strings {
     override val aiTitle = "KajetAI"
     override val aiOpen = "Ask KajetAI for a change"
     override val aiClose = "Close KajetAI"
+    override val aiMove = "Move the KajetAI window"
     override val aiHint = "What should change in this note?"
     override val aiAsk = "Ask"
     override val aiWorking = "KajetAI is working on the note…"

@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
+import wojtoteka.ovh.kajet.core.design.pressRipple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -122,7 +122,7 @@ fun IconAction(
                 onClick = onClick,
                 role = Role.Button,
                 interactionSource = interactionSource,
-                indication = ripple(color = Kajet.colors.accent),
+                indication = pressRipple(Kajet.colors.accent),
             ),
         contentAlignment = Alignment.Center,
     ) {
