@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.export
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 
 object MarkdownExport {
 
@@ -15,7 +16,12 @@ object MarkdownExport {
         }
 
         when {
-            document.text != null -> append(document.text!!.markdown)
+            // Ułożenie akapitu to znacznik HTML wokół całego wiersza - inne
+            // czytniki markdownu pokazałyby go jako tekst, a nagłówek w nim
+            // przestałby być nagłówkiem. Zwykły markdown ułożenia nie zna.
+            document.text != null -> append(
+                document.text!!.markdown.split('\n').joinToString("\n") { ParagraphAlign.unwrap(it) },
+            )
             document.mindMap != null -> append(fromMindMap(document.mindMap!!))
             document.handwriting != null -> append(fromHandwriting(document))
         }

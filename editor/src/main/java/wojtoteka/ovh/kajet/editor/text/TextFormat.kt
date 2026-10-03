@@ -2,6 +2,9 @@ package wojtoteka.ovh.kajet.editor.text
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import wojtoteka.ovh.kajet.core.model.ImageLines
+import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 
 /**
  * Formaty zapamiętane na przyszłość.
@@ -30,6 +33,14 @@ data class PendingFormat(
         type in off -> false
         else -> active
     }
+}
+
+/** Formaty znaku po nałożeniu tych, które czekają na pisanie. */
+internal fun PendingFormat.appliedTo(attrs: RichTextCodec.Attrs): RichTextCodec.Attrs {
+    var result = attrs
+    for ((type, value) in on) result = result.with(type, value)
+    for (type in off) result = result.without(type)
+    return result
 }
 
 /**
@@ -360,7 +371,7 @@ object TextFormat {
 
     private val checkedBox = Regex("""\[[xX]]""")
 
-    private fun carryOf(attrs: RichTextCodec.Attrs): PendingFormat {
+    internal fun carryOf(attrs: RichTextCodec.Attrs): PendingFormat {
         var carry = PendingFormat()
         for (type in SpanType.entries) {
             if (attrs.has(type)) carry = carry.with(type, attrs.valueOf(type))
@@ -368,12 +379,6 @@ object TextFormat {
         return carry
     }
 
-    private fun PendingFormat.appliedTo(attrs: RichTextCodec.Attrs): RichTextCodec.Attrs {
-        var result = attrs
-        for ((type, value) in on) result = result.with(type, value)
-        for (type in off) result = result.without(type)
-        return result
-    }
 
     /**
      * Co się zmieniło między dwoma zapisami: od [from] zniknęło wszystko do
@@ -381,9 +386,9 @@ object TextFormat {
      * początku i wspólnego końca, więc obejmuje i dopisanie, i skasowanie,
      * i podmianę zaznaczenia. Null, gdy zapisy są takie same.
      */
-    private class Change(val from: Int, val removedTo: Int, val added: String)
+    internal class Change(val from: Int, val removedTo: Int, val added: String)
 
-    private fun change(before: String, after: String): Change? {
+    internal fun change(before: String, after: String): Change? {
         if (before == after) return null
 
         val shorter = minOf(before.length, after.length)
@@ -449,11 +454,17 @@ object TextFormat {
         val cursor = field.selection.start.coerceIn(0, content.length)
 
         val lineStart = content.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0))
-            .let { if (it < 0) 0 else it + 1 }
+            .let { if (it < 0 || cursor == 0) 0 else it + 1 }
         val lineEnd = content.indexOf('\n', lineStart).let { if (it < 0) content.length else it }
         val line = content.substring(lineStart, lineEnd)
-        val indentLen = line.indexOfFirst { it != ' ' && it != '\t' }.let { if (it < 0) line.length else it }
-        val body = line.substring(indentLen)
+
+        // Znacznik ułożenia akapitu obejmuje cały wiersz - budowa wiersza
+        // (kratki, punkt, cytat) siedzi w jego środku.
+        val open = ParagraphAlign.openingLength(line)
+        val close = ParagraphAlign.closingLength(line, open)
+        val inner = line.substring(open, line.length - close)
+        val indentLen = inner.indexOfFirst { it != ' ' && it != '\t' }.let { if (it < 0) inner.length else it }
+        val body = inner.substring(indentLen)
 
         /*
           Nagłówek to JEDEN znacznik wiersza. Doklejanie „## " do „# Tytuł"
@@ -479,24 +490,169 @@ object TextFormat {
             else -> marker + rest
         }
 
+        // Zadanie stoi zawsze przy lewej krawędzi, obok kwadracika - i tylko
+        // bez znacznika ułożenia zostaje zadaniem po ponownym otwarciu notatki.
+        val keepWrapper = !(marker == Blocks.TASK_MARKER && !rest.startsWith(marker))
+        val openText = if (keepWrapper) line.substring(0, open) else ""
+        val closeText = if (keepWrapper) line.substring(line.length - close) else ""
+
         val next = content.substring(0, lineStart) +
-            line.substring(0, indentLen) +
+            openText +
+            inner.substring(0, indentLen) +
             nextBody +
+            closeText +
             content.substring(lineEnd)
 
-        val bodyAt = lineStart + indentLen
+        val bodyAt = lineStart + open + indentLen
+        val newBodyAt = lineStart + openText.length + indentLen
         val newPrefixLen = when {
             RichTextCodec.isHeadingMarker(marker) && existing == marker -> 0
             RichTextCodec.isHeadingMarker(marker) -> marker.length
             rest.startsWith(marker) -> 0
             else -> marker.length
         }
+        val newBodyEnd = newBodyAt + nextBody.length
         val cursorAfter = when {
-            cursor < bodyAt -> cursor.coerceIn(0, next.length)
-            cursor < bodyAt + prefixLen -> (bodyAt + newPrefixLen).coerceIn(0, next.length)
-            else -> (cursor + (nextBody.length - body.length)).coerceIn(0, next.length)
+            cursor < bodyAt -> if (keepWrapper) cursor else newBodyAt
+            cursor < bodyAt + prefixLen -> newBodyAt + newPrefixLen
+            else -> (cursor - (bodyAt + prefixLen) + newBodyAt + newPrefixLen).coerceAtMost(newBodyEnd)
         }
-        return TextFieldValue(next, TextRange(cursorAfter))
+        return TextFieldValue(next, TextRange(cursorAfter.coerceIn(0, next.length)))
+    }
+
+    // --- Ułożenie akapitu ---
+
+    /** Ułożenie zapisane w wierszu pod kursorem; null, gdy wiersz nie ma własnego. */
+    fun alignAt(field: TextFieldValue): NoteAlign? {
+        val content = field.text
+        val at = field.selection.start.coerceIn(0, content.length)
+        val start = content.lastIndexOf('\n', (at - 1).coerceAtLeast(0))
+            .let { if (it < 0 || at == 0) 0 else it + 1 }
+        val end = content.indexOf('\n', start).let { if (it < 0) content.length else it }
+        return ParagraphAlign.alignOf(content.substring(start, end))
+    }
+
+    /**
+     * Ułożenie akapitów pod kursorem albo w zaznaczeniu - i tylko ich, jak
+     * w Wordzie. Ułożenie równe [noteDefault] (ułożeniu całej notatki) nie
+     * potrzebuje znacznika, więc znika z wiersza.
+     *
+     * Kursor i zaznaczenie zostają przy tych samych słowach.
+     */
+    fun alignLines(field: TextFieldValue, align: NoteAlign, noteDefault: NoteAlign): TextFieldValue {
+        val content = field.text
+        val from = field.selection.min.coerceIn(0, content.length)
+        val to = field.selection.max.coerceIn(from, content.length)
+        val firstLine = content.lastIndexOf('\n', (from - 1).coerceAtLeast(0))
+            .let { if (it < 0 || from == 0) 0 else it + 1 }
+        val lastLine = content.indexOf('\n', to).let { if (it < 0) content.length else it }
+        val many = content.substring(firstLine, lastLine).contains('\n')
+        val wanted = if (align == noteDefault) null else align
+
+        return realign(field, firstLine, lastLine) { line, inCode ->
+            val inner = ParagraphAlign.unwrap(line)
+            when {
+                inCode || !alignable(inner) -> line
+                // W zaznaczeniu przez kilka akapitów puste wiersze to tylko
+                // odstęp między nimi - nie dostają znacznika.
+                many && inner.isBlank() -> line
+                else -> ParagraphAlign.wrap(inner, wanted)
+            }
+        }
+    }
+
+    /**
+     * Jedno ułożenie przy każdym akapicie notatki - przejście ze starego
+     * ułożenia całej notatki na ułożenie akapitów.
+     */
+    fun alignEveryLine(markdown: String, align: NoteAlign): String {
+        val wanted = if (align == NoteAlign.LEFT) null else align
+        return realign(TextFieldValue(markdown), 0, markdown.length) { line, inCode ->
+            val inner = ParagraphAlign.unwrap(line)
+            if (inCode || inner.isBlank() || !alignable(inner) || ParagraphAlign.openingLength(line) > 0) {
+                line
+            } else {
+                ParagraphAlign.wrap(inner, wanted)
+            }
+        }.text
+    }
+
+    /** Czy wiersz może mieć własne ułożenie - zdjęcia, tabele i zadania mają swoje. */
+    private fun alignable(inner: String): Boolean {
+        val trimmed = inner.trim()
+        return when {
+            RichTextCodec.opensFence(trimmed) != null -> false
+            trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length > 1 -> false
+            ImageLines.read(inner) != null -> false
+            Blocks.isTaskLine(inner) -> false
+            trimmed == "---" || trimmed == "***" || trimmed == "___" -> false
+            else -> true
+        }
+    }
+
+    /**
+     * Przepisuje wiersze od [from] do [to] (granice wierszy) funkcją [change]
+     * i przestawia zaznaczenie tak, żeby zostało przy tej samej treści.
+     * [change] dostaje też informację, czy wiersz leży w bloku kodu.
+     */
+    private fun realign(
+        field: TextFieldValue,
+        from: Int,
+        to: Int,
+        change: (line: String, inCode: Boolean) -> String,
+    ): TextFieldValue {
+        val content = field.text
+
+        class Row(val oldStart: Int, val old: String, val newStart: Int, val new: String)
+
+        val rows = ArrayList<Row>()
+        val out = StringBuilder()
+        // Blok kodu liczy się od początku treści, nie od zaznaczenia.
+        var fence: String? = null
+        var lineStart = 0
+        while (true) {
+            val lineEnd = content.indexOf('\n', lineStart).let { if (it < 0) content.length else it }
+            val line = content.substring(lineStart, lineEnd)
+            val trimmed = line.trimStart()
+            val inCode = when {
+                fence != null -> {
+                    if (RichTextCodec.closesFence(trimmed, fence)) fence = null
+                    true
+                }
+
+                RichTextCodec.opensFence(trimmed) != null -> {
+                    fence = RichTextCodec.opensFence(trimmed)
+                    true
+                }
+
+                else -> false
+            }
+            val rewritten = if (lineStart in from..to) change(line, inCode) else line
+            rows += Row(lineStart, line, out.length, rewritten)
+            out.append(rewritten)
+            if (lineEnd >= content.length) break
+            out.append('\n')
+            lineStart = lineEnd + 1
+        }
+
+        // Pozycja w starej treści -> ta sama treść w nowej. W przepisanym
+        // wierszu liczy się od początku treści, za znacznikiem ułożenia.
+        fun moved(position: Int): Int {
+            val row = rows.lastOrNull { it.oldStart <= position } ?: return position
+            val inLine = (position - row.oldStart).coerceIn(0, row.old.length)
+            if (row.old == row.new) return row.newStart + inLine
+            val oldOpen = ParagraphAlign.openingLength(row.old)
+            val oldClose = ParagraphAlign.closingLength(row.old, oldOpen)
+            val newOpen = ParagraphAlign.openingLength(row.new)
+            val newClose = ParagraphAlign.closingLength(row.new, newOpen)
+            val inContent = (inLine - oldOpen).coerceIn(0, row.old.length - oldOpen - oldClose)
+            return row.newStart + newOpen + inContent.coerceAtMost(row.new.length - newOpen - newClose)
+        }
+
+        return TextFieldValue(
+            out.toString(),
+            TextRange(moved(field.selection.start), moved(field.selection.end)),
+        )
     }
 
     /** Lista, zadanie, cytat - wszystko, co nie jest kratkami nagłówka. */
@@ -504,8 +660,19 @@ object TextFormat {
 
     fun insert(field: TextFieldValue, fragment: String, stepBack: Int = 0): TextFieldValue {
         val content = field.text
-        val from = field.selection.min.coerceIn(0, content.length)
-        val to = field.selection.max.coerceIn(from, content.length)
+        var from = field.selection.min.coerceIn(0, content.length)
+        var to = field.selection.max.coerceIn(from, content.length)
+
+        /*
+          Fragment od nowego wiersza (linia, blok) to nowy akapit - staje za
+          całym wierszem z kursorem, a nie w jego środku. W środku rozciąłby
+          wiersz razem z jego znacznikiem ułożenia i domknięcie „</p>"
+          wyszłoby na wierzch w następnym wierszu.
+        */
+        if (fragment.startsWith("\n") && from == to) {
+            from = content.indexOf('\n', from).let { if (it < 0) content.length else it }
+            to = from
+        }
 
         val next = content.substring(0, from) + fragment + content.substring(to)
         val cursor = (from + fragment.length - stepBack).coerceIn(0, next.length)

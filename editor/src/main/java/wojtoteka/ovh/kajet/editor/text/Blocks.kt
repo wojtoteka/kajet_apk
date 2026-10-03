@@ -30,6 +30,30 @@ sealed interface Block {
         fun cell(row: Int, column: Int): String = rows.getOrNull(row)?.getOrNull(column).orEmpty()
     }
 
+    /**
+     * Blok kodu (```) albo wzoru ($$). W pliku zostaje zwykłym zapisem
+     * markdownu z płotami, ale w notatce jest osobnym polem z czcionką
+     * maszynową - płotów nie widać i nie da się ich rozbić klawiaturą.
+     *
+     * Dawniej kod siedział w akapicie, a płoty były w nim tylko schowane:
+     * Backspace na początku kodu zjadał ukryty koniec wiersza, płot sklejał
+     * się z kodem („```print(1)") i cała treść znikała albo wychodziła
+     * na wierzch razem z grawisami.
+     */
+    data class Code(
+        override val key: String,
+        /** Wiersz otwierający, znak w znak: „```", „```python" albo „$$". */
+        val open: String,
+        val content: String,
+        /** Wiersz domykający, znak w znak - zwykle taki sam jak otwierający. */
+        val close: String = closingFor(open),
+    ) : Block {
+        val isFormula: Boolean get() = open.trim() == FORMULA_FENCE
+
+        /** Język z wiersza otwierającego („```python" -> „python"). */
+        val language: String get() = if (isFormula) "" else open.trim().removePrefix(CODE_FENCE).trim()
+    }
+
     data class Image(
         override val key: String,
         val alt: String,
@@ -65,6 +89,12 @@ sealed interface Block {
     }
 
     companion object {
+        const val CODE_FENCE = "```"
+        const val FORMULA_FENCE = "$$"
+
+        fun closingFor(open: String): String =
+            if (open.trim() == FORMULA_FENCE) FORMULA_FENCE else CODE_FENCE
+
         const val ATTACHMENT_PREFIX = "assets/"
         const val FULL_WIDTH = ImageLines.FULL_WIDTH
         /** Najmniejsza szerokość przy zapisie i suwaku - ten sam próg co serwer. */
@@ -101,7 +131,6 @@ object Blocks {
     fun split(markdown: String): List<Block> {
         val result = mutableListOf<Block>()
         val buffer = StringBuilder()
-        var inCode = false
         var number = 0
 
         fun closeText() {
@@ -119,17 +148,39 @@ object Blocks {
         while (at < lines.size) {
             val line = lines[at]
 
-            if (line.trimStart().startsWith("```")) {
-                inCode = !inCode
-                buffer.append(line).append('\n')
+            /*
+              Blok kodu albo wzoru: od płotu do płotu. Zbiera się w jeden blok,
+              żeby w notatce był osobnym polem bez widocznych płotów. Płot bez
+              domknięcia ciągnie się do końca notatki - tak samo czyta go strona.
+            */
+            val fence = RichTextCodec.opensFence(line.trimStart())
+            if (fence != null) {
+                closeText()
+                val body = mutableListOf<String>()
                 at++
+                var close: String? = null
+                while (at < lines.size) {
+                    if (RichTextCodec.closesFence(lines[at].trimStart(), fence)) {
+                        close = lines[at]
+                        at++
+                        break
+                    }
+                    body += lines[at]
+                    at++
+                }
+                result += Block.Code(
+                    key = "k${number++}",
+                    open = line,
+                    content = body.joinToString("\n"),
+                    close = close ?: Block.closingFor(line),
+                )
                 continue
             }
 
             // Tabelka: kolejne wiersze z kreskami zbierają się w jeden blok,
             // żeby dało się ją pokazać jako tabelkę, a nie jako wiersze pełne
             // kresek. Wiersz z myślnikami to sama składnia - nie treść.
-            if (!inCode && tableRow.matches(line)) {
+            if (tableRow.matches(line)) {
                 closeText()
                 val rows = mutableListOf<List<String>>()
                 while (at < lines.size && tableRow.matches(lines[at])) {
@@ -143,7 +194,7 @@ object Blocks {
             // Kilka zdjęć w jednym wierszu pliku to kilka zdjęć stojących
             // obok siebie w notatce. Każde ma swój blok - własną szerokość,
             // podpis i przyciski - a trzyma je razem znacznik [Block.Image.inRow].
-            val photos = if (inCode) null else ImageLines.read(line)
+            val photos = ImageLines.read(line)
             if (photos != null) {
                 closeText()
                 photos.forEachIndexed { index, photo ->
@@ -160,7 +211,7 @@ object Blocks {
                 continue
             }
 
-            val task = if (inCode) null else taskOnly.find(line)
+            val task = taskOnly.find(line)
             if (task != null) {
                 closeText()
                 result += Block.Task(
@@ -182,7 +233,7 @@ object Blocks {
         // która kończy się zdjęciem, nie ma już żadnego pola tekstowego i nie da
         // się w niej dopisać ani słowa. Do treści ten pusty akapit nie trafia,
         // bo join zdejmuje puste akapity z końca.
-        if (result.last() is Block.Image || result.last() is Block.Table) {
+        if (result.last() is Block.Image || result.last() is Block.Table || result.last() is Block.Code) {
             result += Block.Text("t${number++}", "")
         }
         return result
@@ -205,6 +256,11 @@ object Blocks {
         is Block.Image -> ImageLines.write(photoOf(block))
         is Block.Task -> "- [${if (block.done) "x" else " "}] ${block.content}"
         is Block.Table -> renderTable(block)
+        is Block.Code -> if (block.content.isEmpty()) {
+            "${block.open}\n${block.close}"
+        } else {
+            "${block.open}\n${block.content}\n${block.close}"
+        }
     }
 
     private fun photoOf(block: Block.Image): NotePhoto =
@@ -239,6 +295,74 @@ object Blocks {
                 else -> block
             }
         }
+
+    // --- Kod i wzór ---
+
+    fun setCode(blocks: List<Block>, key: String, content: String): List<Block> =
+        blocks.map { block ->
+            if (block is Block.Code && block.key == key) {
+                // Płot wpisany w treść kodu zamknąłby blok w połowie przy
+                // najbliższym odczycie - reszta kodu wyszłaby na wierzch.
+                // Niewidoczna spacja przed nim zostawia go treścią.
+                val fence = if (block.isFormula) Block.FORMULA_FENCE else Block.CODE_FENCE
+                block.copy(
+                    content = content.split('\n').joinToString("\n") { line ->
+                        if (RichTextCodec.closesFence(line.trimStart(), fence)) "\u200B$line" else line
+                    },
+                )
+            } else {
+                block
+            }
+        }
+
+    /**
+     * Wstawia pusty blok kodu (albo wzoru) w miejscu kursora.
+     *
+     * Kursor stoi w akapicie [key], w zapisie na pozycji [cursor]. Pusty
+     * wiersz pod kursorem zamienia się w blok; wiersz z treścią zostaje,
+     * a blok staje zaraz pod nim - reszta akapitu idzie pod blok. Bez kursora
+     * blok idzie na koniec notatki. Pod blokiem zawsze zostaje miejsce na
+     * dalsze pisanie.
+     */
+    fun insertCode(blocks: List<Block>, key: String?, cursor: Int, fence: String): Split {
+        val code = Block.Code(key = freshKey(blocks), open = fence, content = "")
+        val position = blocks.indexOfFirst { it.key == key }
+        val result = blocks.toMutableList()
+
+        val host = blocks.getOrNull(position)
+        if (host is Block.Text) {
+            val content = host.content
+            val at = cursor.coerceIn(0, content.length)
+            val lineStart = content.lastIndexOf('\n', (at - 1).coerceAtLeast(0))
+                .let { if (it < 0 || at == 0) 0 else it + 1 }
+            val lineEnd = content.indexOf('\n', at).let { if (it < 0) content.length else it }
+            val emptyLine = content.substring(lineStart, lineEnd).isBlank()
+            val before = (if (emptyLine) content.substring(0, lineStart) else content.substring(0, lineEnd))
+                .trimEnd('\n')
+            val after = content.substring(lineEnd).trimStart('\n')
+
+            result.removeAt(position)
+            var at2 = position
+            if (before.isNotEmpty()) result.add(at2++, host.copy(content = before))
+            result.add(at2++, code)
+            if (after.isNotEmpty()) {
+                result.add(at2, Block.Text(freshKey(result), after))
+            }
+        } else if (position >= 0) {
+            result.add(position + 1, code)
+        } else {
+            // Bez kursora: na koniec, ale przed pustym akapitem do pisania.
+            val trailing = result.lastOrNull()
+            if (trailing is Block.Text && trailing.content.isEmpty() && result.size > 1) {
+                result.add(result.lastIndex, code)
+            } else {
+                result.add(code)
+            }
+        }
+
+        if (result.last() !is Block.Text) result.add(Block.Text(freshKey(result), ""))
+        return Split(result, code.key)
+    }
 
     // --- Tabelka ---
 

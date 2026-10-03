@@ -1,14 +1,37 @@
 package wojtoteka.ovh.kajet.ui.note
 
-import androidx.compose.foundation.gestures.detectTapGestures
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.Window
+import android.view.WindowManager
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.DialogWindowProvider
+import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.design.Kajet
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -19,7 +42,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -90,30 +112,14 @@ fun AiOverlay(
         return
     }
 
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            decorFitsSystemWindows = false,
-            usePlatformDefaultWidth = false,
-        ),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures { onClose() } }
-                .systemBarsPadding()
-                .imePadding()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Kliknięcie w sam panel nie ma go zamykać - stąd druga, pusta łapka.
+    // Okienko z boku, jak kalkulator - notatka pod spodem zostaje widoczna,
+    // da się ją przewijać i czytać, a sam asystent przesuwa się za uchwyt.
+    Dialog(onDismissRequest = onClose, properties = FLOATING) {
+        FloatingWindow {
             Box(
                 Modifier
-                    .widthIn(max = 460.dp)
-                    .fillMaxWidth()
-                    .heightIn(max = 640.dp)
-                    .verticalScroll(rememberScrollState())
-                    .pointerInput(Unit) { detectTapGestures { } },
+                    .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp)
+                    .verticalScroll(rememberScrollState()),
             ) {
                 AiPanel(
                     assistant = assistant,
@@ -124,6 +130,130 @@ fun AiOverlay(
                 )
             }
         }
+    }
+}
+
+/*
+  Okno dialogowe zamienione w pływające okienko.
+
+  Własne okno zostaje (patrz wyżej: WebView), ale:
+  - bez przyciemnienia i bez zajmowania całego ekranu - ma tylko swoją wielkość
+    i stoi w prawym dolnym rogu, tak jak kalkulator,
+  - dotknięcie obok niego idzie do notatki (FLAG_NOT_TOUCH_MODAL), a nie
+    zamyka asystenta,
+  - po dotknięciu notatki okienko oddaje jej klawiaturę (NOT_FOCUSABLE), a po
+    dotknięciu okienka bierze ją z powrotem - inaczej pisałoby się
+    w polecenie, patrząc na kursor w notatce.
+*/
+private val FLOATING = DialogProperties(
+    dismissOnClickOutside = false,
+    usePlatformDefaultWidth = false,
+)
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun FloatingWindow(content: @Composable () -> Unit) {
+    val view = LocalView.current
+    val window = remember(view) { (view.parent as? DialogWindowProvider)?.window }
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    // Przesunięcie od prawego dolnego rogu ekranu, w pikselach.
+    var shiftX by rememberSaveable { mutableIntStateOf(0) }
+    var shiftY by rememberSaveable { mutableIntStateOf(0) }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val margin = with(density) { 16.dp.roundToPx() }
+    val screenWidth = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val screenHeight = with(density) { configuration.screenHeightDp.dp.roundToPx() }
+
+    DisposableEffect(window) {
+        if (window == null) return@DisposableEffect onDispose { }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+        )
+        window.setGravity(Gravity.BOTTOM or Gravity.END)
+        window.setLayout(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        val original = window.callback
+        window.callback = object : Window.Callback by original {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_OUTSIDE -> {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+                        return false
+                    }
+                    MotionEvent.ACTION_DOWN ->
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+                }
+                return original.dispatchTouchEvent(event)
+            }
+        }
+        onDispose { window.callback = original }
+    }
+
+    // Okienko nie ucieka za krawędź ekranu - także po obrocie.
+    val maxX = (screenWidth - size.width - 2 * margin).coerceAtLeast(0)
+    val maxY = (screenHeight - size.height - 2 * margin).coerceAtLeast(0)
+    val x = shiftX.coerceIn(0, maxX)
+    val y = shiftY.coerceIn(0, maxY)
+    SideEffect {
+        if (window != null) {
+            val attributes = window.attributes
+            if (attributes.x != x + margin || attributes.y != y + margin) {
+                attributes.x = x + margin
+                attributes.y = y + margin
+                window.attributes = attributes
+            }
+        }
+    }
+
+    val words = LocalStrings.current
+    val colors = Kajet.colors
+    val width = minOf(420.dp, configuration.screenWidthDp.dp - 32.dp)
+    Column(
+        Modifier
+            .width(width)
+            .onSizeChanged { size = it }
+            .shadow(8.dp, RoundedCornerShape(Kajet.dimens.corner))
+            .clip(RoundedCornerShape(Kajet.dimens.corner))
+            .background(colors.sheet),
+    ) {
+        // Uchwyt do przesuwania. Liczony w surowych współrzędnych ekranu, bo
+        // okno jedzie razem z palcem - współrzędne wewnątrz okna by stały.
+        var lastX by remember { mutableFloatStateOf(0f) }
+        var lastY by remember { mutableFloatStateOf(0f) }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(22.dp)
+                .background(colors.desk)
+                .semantics { contentDescription = words.aiMove }
+                .pointerInteropFilter { event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            lastX = event.rawX
+                            lastY = event.rawY
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            shiftX = (shiftX.coerceIn(0, maxX) - (event.rawX - lastX).roundToInt()).coerceIn(0, maxX)
+                            shiftY = (shiftY.coerceIn(0, maxY) - (event.rawY - lastY).roundToInt()).coerceIn(0, maxY)
+                            lastX = event.rawX
+                            lastY = event.rawY
+                        }
+                    }
+                    true
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(colors.line),
+            )
+        }
+        content()
     }
 }
 

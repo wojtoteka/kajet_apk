@@ -426,6 +426,27 @@ class LibraryRepository(
     }
 
     /**
+     * Zapis notatki i skasowanie załączników, których już nie używa - po
+     * kolei, w zakresie aplikacji. Najpierw treść: notatka zapisana bez
+     * odnośnika nie wskaże na plik, którego już nie ma.
+     */
+    fun writeAndDropAttachmentsInBackground(
+        path: String,
+        document: NoteDocument?,
+        unused: Collection<String>,
+    ) {
+        backgroundScope.launch {
+            if (document != null) runCatching { writeNote(path, document) }
+            if (unused.isNotEmpty()) runCatching { deleteAttachments(path, unused) }
+        }
+    }
+
+    suspend fun deleteAttachments(notePath: String, names: Collection<String>) = withContext(io) {
+        val store = store() ?: return@withContext
+        for (name in names) runCatching { store.deleteAttachment(notePath, name) }
+    }
+
+    /**
      * Czy wpisu nie ma już na dysku, choć sama biblioteka jest dostępna.
      *
      * Rozróżnienie ma znaczenie: odpięta karta albo cofnięte prawo do katalogu

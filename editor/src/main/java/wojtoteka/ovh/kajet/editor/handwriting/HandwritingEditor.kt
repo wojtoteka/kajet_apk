@@ -675,7 +675,10 @@ private fun DrawingRail(
         IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.label(words), { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
         IconAction(KajetIcons.Lasso, EditorTool.LASSO.label(words), { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
         IconAction(KajetIcons.Ruler, EditorTool.RULER.label(words), { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
-        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
+        // Drugie stuknięcie w wybrane już „Kształty" (albo dwuklik) otwiera
+        // wybór kształtu - wcześniej trzeba było wiedzieć, że siedzi pod kropką
+        // koloru. Kolejne stuknięcie go chowa.
+        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { if (tool == EditorTool.SHAPES) onColor() else onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
 
         HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
@@ -766,7 +769,10 @@ private fun NarrowToolRow(
         IconAction(KajetIcons.EraserStroke, EditorTool.ERASER_STROKE.label(words), { onTool(EditorTool.ERASER_STROKE) }, selected = tool == EditorTool.ERASER_STROKE)
         IconAction(KajetIcons.Lasso, EditorTool.LASSO.label(words), { onTool(EditorTool.LASSO) }, selected = tool == EditorTool.LASSO)
         IconAction(KajetIcons.Ruler, EditorTool.RULER.label(words), { onTool(EditorTool.RULER) }, selected = tool == EditorTool.RULER)
-        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
+        // Drugie stuknięcie w wybrane już „Kształty" (albo dwuklik) otwiera
+        // wybór kształtu - wcześniej trzeba było wiedzieć, że siedzi pod kropką
+        // koloru. Kolejne stuknięcie go chowa.
+        IconAction(KajetIcons.Shapes, EditorTool.SHAPES.label(words), { if (tool == EditorTool.SHAPES) onColor() else onTool(EditorTool.SHAPES) }, selected = tool == EditorTool.SHAPES)
 
         VerticalDivider()
 

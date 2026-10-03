@@ -169,6 +169,18 @@ fun TextEditor(
         if (document == null) return@LaunchedEffect
         val repaired = RichTextCodec.flatten(model.markdown)
         if (repaired != model.markdown) model.setContent(repaired)
+
+        /*
+          Ułożenie jest teraz cechą akapitu, a nie całej notatki. Notatka, której
+          kiedyś nadano jedno ułożenie dla całości, dostaje je przy każdym
+          akapicie - wygląda tak samo jak wcześniej, ale od teraz każdy akapit
+          da się przestawić osobno, a nowy tekst nie wskakuje już na środek
+          tylko dlatego, że coś kiedyś było na środku.
+        */
+        val wholeNote = model.document.value?.text?.align ?: NoteAlign.LEFT
+        if (wholeNote != NoteAlign.LEFT) {
+            model.alignEveryParagraph(TextFormat.alignEveryLine(model.markdown, wholeNote))
+        }
     }
 
     /*
@@ -221,6 +233,10 @@ fun TextEditor(
         if (blockMode) {
             val key = focusedKey ?: return false
             val set = setFocusedField ?: return false
+            // Pasek formatowania pisze znaczniki markdownu - w bloku kodu
+            // byłyby zwykłymi gwiazdkami w środku kodu.
+            val focused = blocks.firstOrNull { it.key == key }
+            if (focused !is Block.Text && focused !is Block.Task) return false
             val next = transform(focusedField) ?: return false
 
             focusedField = next
@@ -315,36 +331,60 @@ fun TextEditor(
      * pole albo null, gdy nie ma czego zmieniać - wtedy pole zostaje takie,
      * jakie przyszło z klawiatury i nic nie gubi kursora.
      */
-    fun onTyped(previous: String, typed: TextFieldValue): TextFieldValue? {
-        if (previous == typed.text) {
+    fun onTyped(previous: TextFieldValue, typed: TextFieldValue): TextFieldValue? {
+        if (previous.text == typed.text) {
             // Sam ruch kursora: zapamiętany format przestaje obowiązywać.
             if (!pending.isEmpty) pending = PendingFormat()
             return null
         }
 
         /*
-          W widoku blokowym znaczników nie widać, więc zmiany przebudowujące
-          treść idą przez model. Inaczej Compose kasuje i rozcina znaki
-          ZAPISU - połówka znacznika przestaje być znacznikiem i wychodzi
+          W widoku blokowym znaczników nie widać, więc każda zmiana idzie przez
+          model tego, co widać (TextEdit). Inaczej Compose kasuje i rozcina
+          znaki ZAPISU - połówka znacznika przestaje być znacznikiem i wychodzi
           na wierzch jako goły tekst. W widoku surowego Markdownu znaczniki
           są widoczne i pisze się je wprost, więc tam nic nie pośredniczy.
         */
         if (blockMode) {
-            // Nowa linia: format spod kursora idzie dalej, a lista sama
-            // zaczyna następną pozycję.
-            val newline = TextFormat.typedNewline(previous, typed, pending)
-            if (newline != null) {
-                pending = newline.carry
-                return newline.field
-            }
-
-            // Kasowanie i podmiana zaznaczenia: liczy się to, co widać.
-            TextFormat.typedDeletion(previous, typed)?.let { return it }
+            val outcome = TextEdit.typed(previous, typed, pending)
+            pending = outcome.pending
+            return outcome.field
         }
 
-        val applied = TextFormat.applyPending(typed, previous, pending) ?: return null
+        val applied = TextFormat.applyPending(typed, previous.text, pending) ?: return null
         pending = PendingFormat()
         return applied
+    }
+
+    /**
+     * Blok kodu albo wzoru w miejscu kursora. W widoku blokowym to osobny
+     * blok bez widocznych płotów; w surowym Markdownie - płoty wprost.
+     */
+    fun insertCode(fence: String) {
+        if (!blockMode) {
+            format { TextFormat.insert(it, "\n$fence\n\n$fence\n", fence.length + 2) }
+            return
+        }
+        val key = focusedKey
+        val cursor = if (key != null && blocks.firstOrNull { it.key == key } is Block.Text) {
+            focusedField.selection.start
+        } else {
+            0
+        }
+        applySplit(Blocks.insertCode(blocks, key, cursor, fence))
+    }
+
+    /** Ułożenie akapitu, w którym stoi kursor - to ono świeci na pasku. */
+    val lineAlign = TextFormat.alignAt(cursorField) ?: appearance.align
+
+    /**
+     * Ułożenie akapitów pod kursorem albo w zaznaczeniu - jak w Wordzie, a nie
+     * całej notatki. Zadanie stoi zawsze przy swoim kwadraciku, więc ułożenia
+     * nie dostaje.
+     */
+    fun alignParagraphs(align: NoteAlign) {
+        if (taskUnderCursor() != null) return
+        format { TextFormat.alignLines(it, align, appearance.align) }
     }
 
     val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
@@ -470,7 +510,8 @@ fun TextEditor(
                 },
                 onTextColor = model::setTextColor,
                 onRememberColor = model::rememberColor,
-                onAlign = model::setAlign,
+                lineAlign = lineAlign,
+                onAlign = { alignParagraphs(it) },
                 onToggle = { type -> toggleFormat(type) },
                 onBeforeLine = { marker ->
                     val task = taskUnderCursor()
@@ -494,6 +535,7 @@ fun TextEditor(
                     }
                 },
                 onInsert = { fragment, stepBack -> format { TextFormat.insert(it, fragment, stepBack) } },
+                onInsertCode = { fence -> insertCode(fence) },
                 // Okno koloru to osobne okno - pole traci skupienie i zaznaczenie
                 // zwija się, zanim człowiek wybierze barwę. Dlatego pasek bierze
                 // zrzut pola PRZED otwarciem okna i to jemu nadaje kolor.
@@ -554,7 +596,7 @@ fun TextEditor(
                     BasicTextField(
                         value = field,
                         onValueChange = { typed ->
-                            val next = onTyped(field.text, typed) ?: typed
+                            val next = onTyped(field, typed) ?: typed
                             field = next
                             model.setContent(next.text)
                         },
@@ -659,10 +701,14 @@ private fun FormatBar(
     onTextColor: (Int) -> Unit,
     /** Dokłada barwę do spisu „twoich kolorów" - po zamknięciu okna z tęczą. */
     onRememberColor: (Int) -> Unit,
+    /** Ułożenie akapitu pod kursorem. */
+    lineAlign: NoteAlign,
     onAlign: (NoteAlign) -> Unit,
     onToggle: (SpanType) -> Unit,
     onBeforeLine: (String) -> Unit,
     onInsert: (fragment: String, stepBack: Int) -> Unit,
+    /** Blok kodu (```) albo wzoru ($$) jako osobny blok notatki. */
+    onInsertCode: (fence: String) -> Unit,
     /** Pole z zaznaczeniem w chwili naciśnięcia - zrzut na czas okna koloru. */
     currentField: () -> TextFieldValue,
     /** Nadaje kolor zaznaczeniu ze zrzutu (zaznaczenie w polu już nie żyje). */
@@ -791,7 +837,7 @@ private fun FormatBar(
                     },
                     description = variant.label(words),
                     onClick = { onAlign(variant) },
-                    selected = appearance.align == variant,
+                    selected = lineAlign == variant,
                     iconSize = 18.dp,
                 )
             }
@@ -927,11 +973,10 @@ private fun FormatBar(
             IconAction(
                 icon = KajetIcons.CodeFile,
                 description = words.codeBlock,
-                // Kursor ma stanąć w środku, między znacznikami, bo tam pisze się kod.
-                onClick = { onInsert("\n```\n\n```\n", 5) },
+                onClick = { onInsertCode(Block.CODE_FENCE) },
                 iconSize = 18.dp,
             )
-            FormatGlyph("Σ", words.formula, { onInsert("\n$$\n\n$$\n", 4) })
+            FormatGlyph("Σ", words.formula, { onInsertCode(Block.FORMULA_FENCE) })
             IconAction(
                 icon = KajetIcons.DividerLine,
                 description = words.dividerLine,

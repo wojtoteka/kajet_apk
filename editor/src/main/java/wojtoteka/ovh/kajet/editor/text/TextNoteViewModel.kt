@@ -16,6 +16,8 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.InlineDrawing
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePhoto
+import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.TextAttachments
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.editor.NoteViewModel
@@ -55,6 +57,47 @@ class TextNoteViewModel(
     private val _busy = MutableStateFlow<String?>(null)
     val busy: StateFlow<String?> = _busy.asStateFlow()
 
+    /*
+      Pliki z katalogu notatki i te z nich, na które treść wskazywała w trakcie
+      tej wizyty. Zdjęcie albo rysunek usunięty z treści zostawiał dotąd swój
+      plik - synchronizacja wysyłała go dalej i na stronie wisiał w
+      załącznikach. Przy zamknięciu notatki plik, na który treść wskazywała,
+      a już nie wskazuje, idzie do kasowania (patrz [tidyOnClose]).
+    */
+    private val knownFiles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val usedFiles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    init {
+        viewModelScope.launch {
+            runCatching { repo.attachmentNames(path) }.getOrNull()?.let { knownFiles += it }
+            document.collect { current -> current?.text?.let(::noteUsedFiles) }
+        }
+    }
+
+    private fun noteUsedFiles(text: TextContent) {
+        for (name in knownFiles) {
+            if (name !in usedFiles && TextAttachments.inUse(text, name)) usedFiles += name
+        }
+    }
+
+    override fun tidyOnClose(document: NoteDocument): Tidy {
+        val text = document.text ?: return Tidy(document)
+        val removed = TextAttachments.removedDrawings(text)
+        val unused = buildSet {
+            for (drawing in removed) {
+                add(drawing.asset)
+                add(drawing.source)
+            }
+            for (name in usedFiles) if (!TextAttachments.inUse(text, name)) add(name)
+        }.filterNot { TextAttachments.inUse(text, it) }
+        val cleaned = if (removed.isEmpty()) {
+            document
+        } else {
+            document.copy(text = TextAttachments.withoutRemovedDrawings(text))
+        }
+        return Tidy(cleaned, unused)
+    }
+
     val markdown: String get() = document.value?.text?.markdown.orEmpty()
 
     val appearance: StateFlow<TextContent> = MutableStateFlow(TextContent()).also { state ->
@@ -85,6 +128,19 @@ class TextNoteViewModel(
     }
 
     fun setAlign(align: NoteAlign) = changeAppearance { it.copy(align = align) }
+
+    /**
+     * Przejście ze starego ułożenia całej notatki na ułożenie akapitów:
+     * [markdown] ma już znacznik przy każdym akapicie, a notatka jako całość
+     * wraca do lewej. Jedna zmiana, więc zapis i synchronizacja widzą obie
+     * rzeczy naraz.
+     */
+    fun alignEveryParagraph(markdown: String) {
+        editWithoutHistory { document ->
+            val text = document.text ?: TextContent()
+            document.copy(text = text.copy(markdown = markdown, align = NoteAlign.LEFT))
+        }
+    }
 
     fun openDrawing() {
         _drawing.value = DrawingEdit()
@@ -199,6 +255,7 @@ class TextNoteViewModel(
                     data = data,
                     mime = if (extension == "png") "image/png" else "image/jpeg",
                 )
+                knownFiles += name
                 insert(photoMarkdown(words.photoAltText, name, spot), spot.at, spot.at)
             } catch (e: Exception) {
                 setError(e.message ?: words.photoSaveFailed)
@@ -233,6 +290,8 @@ class TextNoteViewModel(
                 val imageName =
                     repo.writeAttachment(path, "rysunek-${System.currentTimeMillis()}.png", png, "image/png")
                 val sourceName = imageName.removeSuffix(".png") + ".strokes.json"
+                knownFiles += imageName
+                knownFiles += sourceName
 
                 val store = repo.store()
                 store?.writeInlineDrawing(

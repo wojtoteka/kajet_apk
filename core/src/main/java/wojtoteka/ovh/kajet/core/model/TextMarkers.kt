@@ -44,7 +44,7 @@ object TextMarkers {
     private val inlineCode = Regex("""`([^`]+)`""")
     private val link = Regex("""\[([^\]]+)]\(([^)]+)\)""")
 
-    fun plain(line: String): String = line
+    fun plain(line: String): String = ParagraphAlign.unwrap(line)
         .replace(spanOpening, "")
         .replace(spanClosing, "")
         .replace(underline, "$1")

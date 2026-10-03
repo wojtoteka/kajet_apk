@@ -29,7 +29,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
+import wojtoteka.ovh.kajet.core.design.pressRipple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
@@ -310,7 +310,7 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                         .focusProperties { canFocus = false }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = colors.accent),
+                            indication = pressRipple(colors.accent),
                             role = Role.Button,
                             onClickLabel = words.calculatorBackspace,
                             onClick = { state = state.press(CalcKey.BACKSPACE) },
@@ -420,7 +420,7 @@ private fun CalculatorKey(
             .focusProperties { canFocus = false }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = colors.accent),
+                indication = pressRipple(colors.accent),
                 role = Role.Button,
                 onClickLabel = description,
                 onClick = onClick,

@@ -40,8 +40,11 @@ class BlocksTest {
         val markdown = "```\n![to](assets/a.png)\n```"
         val blocks = Blocks.split(markdown)
 
-        assertThat(blocks).hasSize(1)
-        assertThat(blocks[0]).isInstanceOf(Block.Text::class.java)
+        // Blok kodu i puste miejsce do pisania pod nim.
+        assertThat(blocks).hasSize(2)
+        assertThat(blocks[0]).isInstanceOf(Block.Code::class.java)
+        assertThat((blocks[0] as Block.Code).content).isEqualTo("![to](assets/a.png)")
+        assertThat(Blocks.join(blocks)).isEqualTo(markdown)
     }
 
     @Test
@@ -332,8 +335,8 @@ class BlocksTest {
     fun `zadanie w bloku kodu nie jest zadaniem`() {
         val blocks = Blocks.split("```\n- [ ] to jest przykład\n```")
 
-        assertThat(blocks).hasSize(1)
-        assertThat(blocks[0]).isInstanceOf(Block.Text::class.java)
+        assertThat(blocks.filterIsInstance<Block.Task>()).isEmpty()
+        assertThat(blocks[0]).isInstanceOf(Block.Code::class.java)
     }
 
     @Test

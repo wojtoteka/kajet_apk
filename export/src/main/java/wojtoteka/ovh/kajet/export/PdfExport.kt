@@ -30,6 +30,7 @@ import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePage
@@ -308,9 +309,10 @@ object PdfExport {
         drawText(page.canvas, document.title, leftMargin, y, width, 22f, PaperInk.INK, true)
         y += 40f
 
+        val noteAlign = document.text?.align ?: NoteAlign.LEFT
         for (line in content.split('\n')) {
-            val trimmed = line.trim()
             if (fence != null) {
+                val trimmed = line.trim()
                 if (PdfMarkdown.closesFence(trimmed, fence)) {
                     fence = null
                     continue
@@ -321,6 +323,9 @@ object PdfExport {
                 y += height + 2f
                 continue
             }
+            // Ułożenie akapitu siedzi w znaczniku obejmującym wiersz.
+            val paragraphAlign = ParagraphAlign.alignOf(line.trim()) ?: noteAlign
+            val trimmed = ParagraphAlign.unwrap(line.trim()).trim()
             val opens = PdfMarkdown.opensFence(trimmed)
             if (opens != null) {
                 fence = opens
@@ -372,7 +377,7 @@ object PdfExport {
             )
             val height = styledHeight(block, width, look.size)
             place(height)
-            drawStyled(page.canvas, block, leftMargin, y, width, look.size)
+            drawStyled(page.canvas, block, leftMargin, y, width, look.size, align = paragraphAlign)
             y += height + 4f
         }
 
@@ -540,11 +545,19 @@ object PdfExport {
         width: Float,
         size: Float,
         mono: Boolean = false,
+        align: NoteAlign = NoteAlign.LEFT,
     ): StaticLayout {
         val paint = textPaint(size, PaperInk.INK, bold = false, mono = mono)
         return StaticLayout.Builder
             .obtain(text, 0, text.length, paint, width.toInt().coerceAtLeast(1))
             .setLineSpacing(size * 0.55f, 1f)
+            .setAlignment(
+                when (align) {
+                    NoteAlign.LEFT -> Layout.Alignment.ALIGN_NORMAL
+                    NoteAlign.CENTER -> Layout.Alignment.ALIGN_CENTER
+                    NoteAlign.RIGHT -> Layout.Alignment.ALIGN_OPPOSITE
+                },
+            )
             .build()
     }
 
@@ -559,10 +572,11 @@ object PdfExport {
         width: Float,
         size: Float,
         mono: Boolean = false,
+        align: NoteAlign = NoteAlign.LEFT,
     ) {
         canvas.save()
         canvas.translate(x, y)
-        styledLayout(text, width, size, mono).draw(canvas)
+        styledLayout(text, width, size, mono, align).draw(canvas)
         canvas.restore()
     }
 

@@ -27,6 +27,9 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Testy edytora piszą w prawdziwym polu Compose (Robolectric),
+        // a ono potrzebuje zasobów Androida.
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -44,4 +47,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

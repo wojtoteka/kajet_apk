@@ -15,8 +15,13 @@ Serwer, z którym się synchronizuje, leży w repo
 koło, prostokąt, strzałkę), gumką, zaznaczaniem, ramkami na zdjęcia i polami tekstowymi
 na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmiar kartki.
 
-**Notatki tekstowe.** Markdown z tabelami, listami, obrazkami ze skalowaniem szerokości
-(`![alt|60%]`) i rozmiarem czcionki. Rozmiar `0` znaczy „domyślny z motywu", więc notatka
+**Notatki tekstowe.** Pisze się jak w Wordzie: znaczników (`**`, `#`, `<span>`, płotów
+```` ``` ````) nie widać nigdy, także pod kursorem, a Backspace i Enter nie potrafią ich
+rozbić - każda zmiana z klawiatury przelicza się na to, co widać (`TextLayout`, `TextEdit`).
+Ułożenie (lewo, środek, prawo) ma każdy akapit osobno: `<p style="text-align:center">…</p>`
+wokół wiersza, ten sam zapis po stronie serwera. Blok kodu i wzór to osobne pola z czcionką
+maszynową, bez widocznych płotów. Pod spodem nadal Markdown z tabelami, listami, obrazkami
+ze skalowaniem szerokości (`![alt|60%]`) i rozmiarem czcionki. Rozmiar `0` znaczy „domyślny z motywu", więc notatka
 nie zamarza na wartości sprzed zmiany motywu. Zdjęcia i rysunki stojące w jednym wierszu
 pliku stoją obok siebie także w notatce, a ułożenie wiersza (lewo, środek, prawo) siedzi
 w tytule zdjęcia: `![a|25%](assets/a.png "srodek") ![b|25%](assets/b.png "srodek")`.

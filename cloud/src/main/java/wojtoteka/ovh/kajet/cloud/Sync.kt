@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.TextAttachments
+import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.storage.CloudLibrary
 import wojtoteka.ovh.kajet.storage.FormatException
 import wojtoteka.ovh.kajet.storage.NoteCodec
@@ -913,7 +915,7 @@ class Sync(
                                     }
                                     else -> {
                                         rememberVersion(document.id, response.data.version)
-                                        if (sendAttachments(document.id, entry.path)) {
+                                        if (sendAttachments(document.id, entry.path, document.text)) {
                                             queue.removeIfUnchanged(entry)
                                             sent += 1
                                         } else {
@@ -944,8 +946,20 @@ class Sync(
      * Kiedyś porażka przechodziła bez śladu i brakujący załącznik nie miał
      * już żadnej okazji, żeby pojechać - aż do następnej zmiany notatki.
      */
-    private suspend fun sendAttachments(noteId: String, path: String): Boolean {
+    private suspend fun sendAttachments(
+        noteId: String,
+        path: String,
+        /** Treść notatki tekstowej; null dla innych rodzajów notatek. */
+        text: TextContent? = null,
+    ): Boolean {
+        /*
+          Notatka tekstowa wysyła tylko pliki, na które jej treść wskazuje.
+          Zdjęcie albo rysunek usunięty z treści zostaje na dysku do zamknięcia
+          notatki - bez tego filtra jechał na serwer z powrotem i wisiał na
+          stronie w załącznikach, choć w notatce go nie było.
+        */
         val onDisk = runCatching { repository.attachmentNames(path) }.getOrDefault(emptyList())
+            .filter { name -> text == null || TextAttachments.inUse(text, name) }
         if (onDisk.isEmpty()) return true
 
         val onServer = when (val listing = client.listAttachments(noteId)) {

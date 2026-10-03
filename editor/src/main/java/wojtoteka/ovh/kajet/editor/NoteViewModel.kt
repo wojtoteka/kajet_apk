@@ -389,13 +389,29 @@ open class NoteViewModel(
         // w spokoju: zapis pod martwą ścieżką i tak by padł, a po „Odrzuć
         // zmiany" nie wolno niczego dopisywać za plecami człowieka.
         val document = _document.value
-        if (!discarded && !_remotelyDeleted.value &&
-            document != null && _saveState.value != SaveState.SAVED
-        ) {
-            repo.writeInBackground(path, withSuggestedTitle(document))
+        if (!discarded && !_remotelyDeleted.value && document != null) {
+            val tidy = tidyOnClose(withSuggestedTitle(document))
+            val changed = _saveState.value != SaveState.SAVED || tidy.document != document
+            if (changed || tidy.unused.isNotEmpty()) {
+                repo.writeAndDropAttachmentsInBackground(
+                    path = path,
+                    document = if (changed) tidy.document else null,
+                    unused = tidy.unused,
+                )
+            }
         }
         super.onCleared()
     }
+
+    /** Notatka do ostatniego zapisu i załączniki, których już nie używa. */
+    protected class Tidy(val document: NoteDocument, val unused: Collection<String> = emptyList())
+
+    /**
+     * Porządki przy zamknięciu notatki: rodzaj notatki może zdjąć z niej to,
+     * czego już nie używa, i wskazać pliki do skasowania. Pliki znikają
+     * dopiero PO zapisie treści.
+     */
+    protected open fun tidyOnClose(document: NoteDocument): Tidy = Tidy(document)
 
     class Factory(
         private val repo: LibraryRepository,

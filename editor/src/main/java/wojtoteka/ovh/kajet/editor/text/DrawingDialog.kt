@@ -71,7 +71,7 @@ import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.ink.Strokes
 
 private const val DRAWING_WIDTH = 560f
-private const val DRAWING_HEIGHT = 300f
+internal const val DRAWING_HEIGHT = 300f
 
 /** Wysokość pudła kartki przy [DRAWING_HEIGHT]. Z tej pary bierze się skala. */
 private val DRAWING_BOX_HEIGHT = 320.dp
@@ -93,21 +93,60 @@ private const val DRAWING_GROW_STEP = 120f
 private const val DRAWING_MAX_HEIGHT = DRAWING_HEIGHT * 3
 
 /*
-  Kartka przycięta przy wstawianiu.
+  Kartka przy wstawianiu.
 
-  Miejsce dołożone w trakcie rysowania zostaje puste, gdy kreska, dla której
-  urosło, pójdzie pod gumkę. Zamiast kurczyć kartkę pod rysikiem - czego nie
-  da się trafić - liczymy to raz, na „Wstaw rysunek": kartka kończy się tuż
-  pod ostatnią kreską, więc w notatce nie ma pustego pasa. Odstęp jest ciut
-  mniejszy od tego, przy którym kartka rośnie, żeby przycięcie nie wyglądało
-  jak ucięta kreska.
+  Do notatki idzie CAŁA kartka, którą widać w oknie - na pełną szerokość
+  i co najmniej na wysokość, od której okno zaczyna. Mały rysunek w lewym
+  rogu zostaje małym rysunkiem w lewym rogu kartki, a nie wyciętym paskiem
+  wokół kreski.
 
-  Dół i tylko dół: przycięcie od góry przesuwałoby rysunek względem tego, co
-  było widać pod rysikiem. Najniższa kartka to jeden krok wzrostu - z samej
-  kropki nie robimy paska o wysokości kropki.
+  Przycinane jest tylko miejsce dołożone w trakcie rysowania, które zostało
+  puste - gdy kreska, dla której kartka urosła, poszła pod gumkę. Wtedy
+  kartka kończy się tuż pod ostatnią kreską.
+
+  Kreska wychodząca poza kartkę - na margines z boku albo nad górną
+  krawędzią - nie jest ucinana: ramka rysunku rozszerza się, żeby objąć
+  wszystko, co narysowano.
 */
 private const val DRAWING_TRIM_MARGIN = 40f
-private const val DRAWING_MIN_HEIGHT = DRAWING_GROW_STEP
+private const val DRAWING_EDGE_MARGIN = 8f
+
+/** Rysunek gotowy do wstawienia: kreski w mierze ramki i sama ramka. */
+internal class DrawingFrame(val strokes: List<InkStroke>, val width: Float, val height: Float) {
+    companion object {
+        /**
+         * Ramka dla kresek [strokes] narysowanych na kartce [pageWidth] x
+         * [pageHeight]. Wysokość nie schodzi poniżej [startHeight] - tyle
+         * kartki widać na starcie okna.
+         */
+        fun of(
+            strokes: List<InkStroke>,
+            pageWidth: Float,
+            pageHeight: Float,
+            startHeight: Float = DRAWING_HEIGHT,
+        ): DrawingFrame {
+            val bounds = Strokes.bounds(strokes)
+                ?: return DrawingFrame(strokes, pageWidth, pageHeight)
+            // Kreska ma grubość - sam środek kreski przy krawędzi to pół
+            // kreski za krawędzią.
+            val pad = (strokes.maxOfOrNull { it.size } ?: 0f) / 2f + DRAWING_EDGE_MARGIN
+
+            val left = minOf(0f, bounds.left - pad)
+            val top = minOf(0f, bounds.top - pad)
+            val right = maxOf(pageWidth, bounds.right + pad)
+            val trimmed = (bounds.bottom + DRAWING_TRIM_MARGIN)
+                .coerceIn(minOf(startHeight, pageHeight), pageHeight)
+            val bottom = maxOf(trimmed, bounds.bottom + pad)
+
+            val moved = if (left == 0f && top == 0f) {
+                strokes
+            } else {
+                strokes.map { it.translated(-left, -top) }
+            }
+            return DrawingFrame(moved, right - left, bottom - top)
+        }
+    }
+}
 
 /**
  * Okno rysunku. Bez [initial] zaczyna się od pustej kartki; z [initial] otwiera
@@ -399,7 +438,10 @@ fun DrawingDialog(
                     ) {
                         PrimaryButton(
                             text = if (initial == null) words.insertDrawing else words.saveDrawingChanges,
-                            onClick = { onDone(strokes, pageWidth, trimmedHeight(strokes, pageHeight)) },
+                            onClick = {
+                                val frame = DrawingFrame.of(strokes, pageWidth, pageHeight)
+                                onDone(frame.strokes, frame.width, frame.height)
+                            },
                             icon = KajetIcons.Confirm,
                             enabled = strokes.isNotEmpty(),
                         )
@@ -422,17 +464,6 @@ fun DrawingDialog(
 private fun startHeight(initial: DrawingSource?): Float {
     val stored = initial?.height ?: return DRAWING_HEIGHT
     return stored.coerceIn(DRAWING_HEIGHT, DRAWING_MAX_HEIGHT)
-}
-
-/**
- * Wysokość kartki obcięta do tego, co na niej stoi: dolna krawędź kresek plus
- * [DRAWING_TRIM_MARGIN]. Nigdy nie dokłada miejsca - najwyżej oddaje to, które
- * zostało puste.
- */
-private fun trimmedHeight(strokes: List<InkStroke>, pageHeight: Float): Float {
-    val bottom = Strokes.bounds(strokes)?.bottom ?: return pageHeight
-    return (bottom + DRAWING_TRIM_MARGIN)
-        .coerceIn(DRAWING_MIN_HEIGHT, pageHeight)
 }
 
 /**

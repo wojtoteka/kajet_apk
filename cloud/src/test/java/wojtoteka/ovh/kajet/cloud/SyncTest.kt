@@ -327,7 +327,7 @@ class SyncTest {
 
     @Test
     fun `nieudana wysylka zalacznika zostawia wpis w kolejce`() {
-        library.notes[path] = document()
+        library.notes[path] = document(body = "![rys](assets/rys.png)")
         library.attachments[path to "rys.png"] = byteArrayOf(1)
         queue.add(path, noteId)
         transport.failSendAttachment = true
@@ -344,6 +344,24 @@ class SyncTest {
         sync()
         assertThat(queue.size()).isEqualTo(0)
         assertThat(transport.sentAttachments).contains(noteId to "rys.png")
+    }
+
+    @Test
+    fun `plik usuniety z tresci notatki tekstowej nie jedzie na serwer`() {
+        // Rysunek usunięty z notatki: plik leży jeszcze na dysku (zniknie przy
+        // zamknięciu notatki), ale treść już na niego nie wskazuje.
+        library.notes[path] = document(body = "![kot](assets/kot.png)")
+        library.attachments[path to "kot.png"] = byteArrayOf(1)
+        library.attachments[path to "rysunek-1.png"] = byteArrayOf(2)
+        library.attachments[path to "rysunek-1.strokes.json"] = byteArrayOf(3)
+        queue.add(path, noteId)
+
+        sync()
+
+        assertThat(queue.size()).isEqualTo(0)
+        assertThat(transport.sentAttachments).contains(noteId to "kot.png")
+        assertThat(transport.sentAttachments).doesNotContain(noteId to "rysunek-1.png")
+        assertThat(transport.sentAttachments).doesNotContain(noteId to "rysunek-1.strokes.json")
     }
 
     // --- Wyjątek w zaplanowanej synchronizacji ---

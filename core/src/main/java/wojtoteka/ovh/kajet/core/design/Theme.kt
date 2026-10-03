@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.core.design
 
 import android.provider.Settings
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -38,8 +39,11 @@ fun KajetTheme(
             typography = typography.toMaterial(),
             shapes = KajetShapes,
         ) {
-            ProvideTextStyle(typography.body) {
-                content()
+            // Każdy przycisk bez własnej fali dostaje tę bez najechania (PressRipple).
+            CompositionLocalProvider(LocalIndication provides pressRipple()) {
+                ProvideTextStyle(typography.body) {
+                    content()
+                }
             }
         }
     }

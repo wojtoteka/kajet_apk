@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.editor.text
 
 import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 
 /**
@@ -313,9 +314,15 @@ object RichTextCodec {
                 sink.verbatim(markdown, at, lineEnd, NONE)
             } else {
                 // Budowa wiersza zostaje; formaty czytamy tylko z jego treści.
-                val prefix = blockPrefix.find(line)?.value?.length ?: 0
+                // Znacznik ułożenia akapitu obejmuje cały wiersz - jego
+                // otwarcie i domknięcie to też budowa, nie treść.
+                val open = ParagraphAlign.openingLength(line)
+                val prefix = open + (blockPrefix.find(line.substring(open))?.value?.length ?: 0)
+                val close = ParagraphAlign.closingLength(line, open)
+                    .takeIf { line.length - it >= prefix } ?: 0
                 sink.verbatim(markdown, at, at + prefix, NONE)
-                scan(markdown, at + prefix, lineEnd, NONE, sink, IntArray(1))
+                scan(markdown, at + prefix, lineEnd - close, NONE, sink, IntArray(1))
+                sink.verbatim(markdown, lineEnd - close, lineEnd, NONE)
             }
 
             if (lineEnd >= markdown.length) {

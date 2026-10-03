@@ -320,6 +320,17 @@ class LibraryStore(
         return runCatching { DiskFiles.readBytes(resolver, file) }.getOrNull()
     }
 
+    /**
+     * Kasuje załącznik notatki. Brak pliku to nie błąd - i tak go nie ma.
+     * Zwraca, czy coś faktycznie zniknęło z dysku.
+     */
+    fun deleteAttachment(notePath: String, name: String): Boolean {
+        val folder = entry(notePath)?.takeIf { it.isDirectory } ?: return false
+        val assets = folder.findFile(NoteDocument.ASSETS_DIRECTORY) ?: return false
+        val file = assets.findFile(name)?.takeIf { it.isFile } ?: return false
+        return runCatching { file.delete() }.getOrDefault(false)
+    }
+
     fun writeInlineDrawing(notePath: String, name: String, drawing: DrawingSource) {
         val folder = entry(notePath)?.takeIf { it.isDirectory }
             ?: throw IOException(words.noteGone(notePath))
