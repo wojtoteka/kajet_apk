@@ -269,15 +269,15 @@ class InlineStyleTest {
         assertThat(shown("***grube i pochyle***")).isEqualTo("grube i pochyle")
     }
 
+    /*
+      Blok kodu i wzoru jest w notatce osobnym blokiem (Block.Code) bez płotów.
+      Płot wpisany ręcznie w akapit zostaje widoczny: schowany dawał się
+      rozbić Backspace'em i cały kod znikał z ekranu.
+    */
     @Test
-    fun `blok kodu chowa swoje ogrodzenie razem z pustym wierszem`() {
-        assertThat(shown("przed\n```\nkod\n```\npo")).isEqualTo("przed\nkod\npo")
-        assertThat(shown("```python\nprint(1)\n```")).isEqualTo("print(1)")
-    }
-
-    @Test
-    fun `blok wzoru chowa swoje ogrodzenie`() {
-        assertThat(shown("przed\n$$\nx^2\n$$\npo")).isEqualTo("przed\nx^2\npo")
+    fun `plot wpisany w akapit zostaje widoczny`() {
+        assertThat(shown("przed\n```\nkod\n```\npo")).isEqualTo("przed\n```\nkod\n```\npo")
+        assertThat(shown("przed\n$$\nx^2\n$$\npo")).isEqualTo("przed\n$$\nx^2\n$$\npo")
     }
 
     @Test
@@ -289,8 +289,8 @@ class InlineStyleTest {
 
     @Test
     fun `znaczniki w bloku kodu i wzoru zostaja tresci`() {
-        assertThat(shown("```\n**nie pogrubiaj**\n```")).isEqualTo("**nie pogrubiaj**")
-        assertThat(shown("$$\na * b * c\n$$")).isEqualTo("a * b * c")
+        assertThat(shown("```\n**nie pogrubiaj**\n```")).isEqualTo("```\n**nie pogrubiaj**\n```")
+        assertThat(shown("$$\na * b * c\n$$")).isEqualTo("$$\na * b * c\n$$")
     }
 
     @Test

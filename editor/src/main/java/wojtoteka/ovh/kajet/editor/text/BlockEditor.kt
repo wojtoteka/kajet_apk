@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -129,7 +131,7 @@ fun BlockEditor(
      * zapamiętany na pasku narzędzi obejmuje właśnie to, co człowiek napisał.
      * Null znaczy „zostaw tak, jak przyszło z klawiatury".
      */
-    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
+    onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
     appearance: TextContent,
     modifier: Modifier = Modifier,
 ) {
@@ -211,6 +213,23 @@ fun BlockEditor(
                     },
                     onSelection = onSelection,
                     onTyped = onTyped,
+                )
+
+                is Block.Code -> CodeBlock(
+                    block = block,
+                    focused = keyToFocus == block.key,
+                    onFocusTaken = onFocusTaken,
+                    onContent = { onBlocksChange(Blocks.setCode(blocks, block.key, it)) },
+                    onFocused = {
+                        onSelectPhoto(null)
+                        // Pasek formatowania nie ma czego robić w kodzie, ale
+                        // wstawiane rzeczy mają trafić za ten blok.
+                        onBlockFocused(block.key) { }
+                    },
+                    onDelete = {
+                        val left = Blocks.remove(blocks, block.key)
+                        onBlocksChange(left)
+                    },
                 )
 
                 is Block.Table -> TableBlock(
@@ -315,7 +334,7 @@ private fun TextBlock(
     onContent: (String) -> Unit,
     onBlockFocused: (String, (TextFieldValue) -> Unit) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
-    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
+    onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
     modifier: Modifier = Modifier,
 ) {
     val focus = remember { FocusRequester() }
@@ -356,7 +375,7 @@ private fun TextBlock(
                 // Zapamiętany format nakłada się TU, na dopiero co wpisany
                 // kawałek. Pole zostaje to samo - nie ma mowy o ustawianiu
                 // treści od nowa, bo wtedy kursor skakałby na początek.
-                val next = onTyped(field.text, typed) ?: typed
+                val next = onTyped(field, typed) ?: typed
                 if (next.text != field.text || next.selection != field.selection) followCursor = true
                 field = next
                 onSelection(next)
@@ -425,7 +444,7 @@ private fun TaskBlock(
     onContent: (String) -> Unit,
     onBlockFocused: (String, (TextFieldValue) -> Unit) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
-    onTyped: (previous: String, typed: TextFieldValue) -> TextFieldValue?,
+    onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
 ) {
     val words = LocalStrings.current
     Row(
@@ -498,6 +517,109 @@ private fun TaskBlock(
             onTyped = onTyped,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+}
+
+/**
+ * Blok kodu albo wzoru: osobne pole z czcionką maszynową, bez płotów.
+ *
+ * W pliku to nadal zwykły markdown (```kod```), ale na ekranie płotów nie ma
+ * wcale - nie da się ich więc rozbić ani zobaczyć. Pisze się tu jak w edytorze
+ * kodu: Enter to nowy wiersz kodu, a dalszy tekst notatki pisze się pod
+ * blokiem.
+ */
+@Composable
+private fun CodeBlock(
+    block: Block.Code,
+    focused: Boolean,
+    onFocusTaken: () -> Unit,
+    onContent: (String) -> Unit,
+    onFocused: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val words = LocalStrings.current
+    val colors = Kajet.colors
+    val focus = remember { FocusRequester() }
+    var field by remember(block.key) {
+        mutableStateOf(TextFieldValue(block.content, TextRange(block.content.length)))
+    }
+    if (field.text != block.content) {
+        field = field.copy(
+            text = block.content,
+            selection = TextRange(field.selection.start.coerceAtMost(block.content.length)),
+        )
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .widthIn(max = Kajet.dimens.readingWidth)
+            .padding(vertical = 6.dp)
+            .background(colors.desk, RoundedCornerShape(Kajet.dimens.corner))
+            .border(1.dp, colors.line, RoundedCornerShape(Kajet.dimens.corner)),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = when {
+                    block.isFormula -> words.formula
+                    block.language.isNotEmpty() -> "${words.codeBlock} · ${block.language}"
+                    else -> words.codeBlock
+                },
+                style = Kajet.type.meta,
+                color = colors.muted,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            IconAction(
+                icon = KajetIcons.Bin,
+                description = if (block.isFormula) words.formulaRemove else words.codeBlockRemove,
+                onClick = onDelete,
+                iconSize = 16.dp,
+                touchTarget = 40.dp,
+            )
+        }
+        Box(Modifier.fillMaxWidth()) {
+            BasicTextField(
+                value = field,
+                onValueChange = { next ->
+                    field = next
+                    if (next.text != block.content) onContent(next.text)
+                },
+                textStyle = Kajet.type.code.copy(color = colors.text),
+                cursorBrush = SolidColor(colors.accent),
+                // Kod to nie zdanie: bez poprawiania słów i wielkich liter.
+                keyboardOptions = KeyboardOptions(
+                    autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.None,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 40.dp)
+                    .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 12.dp)
+                    .focusRequester(focus)
+                    .onFocusChanged { if (it.isFocused) onFocused() },
+            )
+            if (block.content.isEmpty()) {
+                Text(
+                    text = if (block.isFormula) words.formulaHint else words.codeBlockHint,
+                    style = Kajet.type.code,
+                    color = colors.muted,
+                    modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+                )
+            }
+        }
+    }
+
+    if (focused) {
+        LaunchedEffect(block.key) {
+            runCatching { focus.requestFocus() }
+            onFocusTaken()
+        }
     }
 }
 

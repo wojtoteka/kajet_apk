@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.editor.text
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -9,10 +10,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 
 /**
  * Wygląd notatki tekstowej w polu do pisania.
@@ -28,8 +31,11 @@ import androidx.compose.ui.unit.sp
  * Robota dzieli się na dwa przejścia:
  *   1. [RichTextCodec.read] zdejmuje formaty fragmentu (gwiazdki, znaczniki
  *      barwy i wielkości) i oddaje czysty tekst z ich zakresami,
- *   2. [blockPass] zdejmuje z tego, co zostało, znaczniki budowy wiersza
- *      (kratki nagłówka, grawisy, adres odnośnika).
+ *   2. [TextLayout] zdejmuje z tego, co zostało, znaczniki budowy wiersza
+ *      (kratki nagłówka, znacznik ułożenia akapitu, adres odnośnika).
+ *
+ * [TextLayout] liczy też pisanie ([TextEdit]), więc to, czego nie widać,
+ * nie da się też rozbić klawiaturą.
  *
  * Uwaga na [OffsetMapping]: Compose sprawdza je przy każdym naciśnięciu
  * i niespójne mapowanie wywraca całe pole. Dlatego oba przeliczenia składają
@@ -53,9 +59,10 @@ class InlineStyle(
      * pilnują, żeby ozdabianie nie ruszało treści.
      */
     fun style(source: String): AnnotatedString {
-        val parsed = RichTextCodec.read(source)
+        val layout = TextLayout.of(source)
+        val parsed = layout.parsed
         val builder = AnnotatedString.Builder(source)
-        for (span in stylesOf(parsed)) {
+        for (span in stylesOf(layout)) {
             val from = parsed.sourceOffset(span.from)
             val to = parsed.sourceEnd(span.to)
             if (to > from) builder.addStyle(span.style, from, to)
@@ -67,22 +74,6 @@ class InlineStyle(
 
     private data class Span(val from: Int, val to: Int, val style: SpanStyle)
 
-    /** Wynik czytania wiersza: co pokolorować i które kawałki są samą składnią. */
-    private class Marked {
-        val spans = mutableListOf<Span>()
-
-        /** Zakresy będące wyłącznie znacznikiem - da się je schować. */
-        val markers = mutableListOf<IntRange>()
-
-        fun style(from: Int, to: Int, style: SpanStyle) {
-            if (to > from) spans += Span(from, to, style)
-        }
-
-        fun marker(from: Int, to: Int) {
-            if (to > from) markers += from until to
-        }
-    }
-
     private class Plan(val shown: AnnotatedString, val mapping: OffsetMapping)
 
     /**
@@ -90,60 +81,74 @@ class InlineStyle(
      * wiersza, potem formaty fragmentu - żeby wybrana barwa wygrywała
      * z barwą nagłówka, a nie odwrotnie.
      */
-    private fun stylesOf(parsed: RichTextCodec.Parsed): List<Span> {
-        val plain = parsed.rich.text
-        return blockPass(plain).spans + attrSpans(plain, parsed.attrs)
-    }
+    private fun stylesOf(layout: TextLayout): List<Span> =
+        lineSpans(layout) + attrSpans(layout.plain, layout.parsed.attrs)
 
     private fun plan(source: String): Plan {
-        val parsed = RichTextCodec.read(source)
-        val plain = parsed.rich.text
-        val block = blockPass(plain)
-        val spans = block.spans + attrSpans(plain, parsed.attrs)
+        val layout = TextLayout.of(source)
+        val spans = stylesOf(layout)
 
-        val length = plain.length
-        val keep = BooleanArray(length) { true }
-        for (range in block.markers) {
-            for (i in range) if (i in 0 until length) keep[i] = false
-        }
-
-        /*
-          Jedna para tablic na oba kierunki. `toShown[i]` mówi, gdzie
-          w widocznym tekście wypada i-ty znak czystego tekstu; `toPlain[j]`
-          odwrotnie. Znak ukryty wskazuje na początek tego, co go zastąpiło,
-          więc kursor postawiony w środku znacznika ląduje tuż przed nim.
-        */
-        val toShown = IntArray(length + 1)
-        val toPlain = ArrayList<Int>(length + 1)
-        val visible = StringBuilder(length)
-
-        for (i in 0 until length) {
-            toShown[i] = visible.length
-            if (keep[i]) {
-                toPlain += i
-                visible.append(plain[i])
-            }
-        }
-        toShown[length] = visible.length
-        toPlain += length
-
-        val builder = AnnotatedString.Builder(visible.toString())
+        val builder = AnnotatedString.Builder(shownText(layout))
         for (span in spans) {
-            val from = toShown[span.from.coerceIn(0, length)]
-            val to = toShown[span.to.coerceIn(0, length)]
+            val from = layout.visibleOfPlain(span.from)
+            val to = layout.visibleOfPlain(span.to)
             if (to > from) builder.addStyle(span.style, from, to)
         }
 
-        val shownLength = visible.length
+        /*
+          Ułożenie akapitu. Każdy wiersz ze znacznikiem dostaje własny
+          ParagraphStyle - razem ze swoim znakiem końca wiersza, żeby kursor
+          w pustym akapicie też stał tam, gdzie będzie tekst.
+        */
+        val shownLength = layout.visible.length
+        for ((index, line) in layout.lines.withIndex()) {
+            val align = line.align ?: continue
+            val from = layout.lineVisibleStart(index)
+            val lineEnd = layout.lineVisibleEnd(index)
+            val to = if (index < layout.lines.lastIndex) lineEnd + 1 else lineEnd
+            if (to > from && to <= shownLength) {
+                builder.addStyle(ParagraphStyle(textAlign = textAlignOf(align)), from, to)
+            }
+        }
+
+        /*
+          Uwaga: Compose sprawdza mapowanie przy każdym naciśnięciu i wartość
+          spoza tekstu wywraca pole. Obie strony liczy [TextLayout], ten sam,
+          którym pisanie przelicza każdą zmianę - nie mają jak się rozjechać.
+        */
         val mapping = object : OffsetMapping {
             override fun originalToTransformed(offset: Int): Int =
-                toShown[parsed.plainOffset(offset).coerceIn(0, length)]
+                layout.visibleOfSource(offset.coerceIn(0, source.length)).coerceIn(0, shownLength)
 
             override fun transformedToOriginal(offset: Int): Int =
-                parsed.sourceOffset(toPlain[offset.coerceIn(0, shownLength)])
+                layout.sourceCursor(offset.coerceIn(0, shownLength)).coerceIn(0, source.length)
         }
 
         return Plan(builder.toAnnotatedString(), mapping)
+    }
+
+    /** Widoczny tekst; znak punktu listy pokazuje się jako kropka, jak w edytorach tekstu. */
+    private fun shownText(layout: TextLayout): String {
+        val shown = StringBuilder(layout.visible)
+        for ((index, line) in layout.lines.withIndex()) {
+            if (line.kind != LineKind.BULLET) continue
+            val at = layout.visibleOfPlain(line.start + line.open)
+            // Wcięcie podlisty zostaje, kropka staje w miejscu znaku.
+            var marker = at
+            while (marker < shown.length && shown[marker] == ' ') marker++
+            if (marker < shown.length && shown[marker] in "-*+" &&
+                marker < layout.lineVisibleEnd(index)
+            ) {
+                shown.setCharAt(marker, '\u2022')
+            }
+        }
+        return shown.toString()
+    }
+
+    private fun textAlignOf(align: NoteAlign): TextAlign = when (align) {
+        NoteAlign.LEFT -> TextAlign.Left
+        NoteAlign.CENTER -> TextAlign.Center
+        NoteAlign.RIGHT -> TextAlign.Right
     }
 
     // --- Formaty fragmentu ---
@@ -184,119 +189,46 @@ class InlineStyle(
     // --- Budowa wiersza ---
 
     /**
-     * Znaczniki, które nie są formatem fragmentu, tylko układem notatki:
-     * nagłówki, listy, cytaty, bloki kodu, kod w zdaniu, odnośniki i zdjęcia.
-     * Formatów fragmentu już tu nie ma - zdjął je [RichTextCodec.read].
+     * Wygląd wynikający z budowy wiersza: nagłówki, cytaty, listy, linie,
+     * odnośniki. Co z tego jest ukryte, mówi [TextLayout].
      */
-    private fun blockPass(plain: String): Marked {
-        val marked = Marked()
+    private fun lineSpans(layout: TextLayout): List<Span> {
+        val spans = mutableListOf<Span>()
+        val plain = layout.plain
+        fun style(from: Int, to: Int, style: SpanStyle) {
+            if (to > from) spans += Span(from, to, style)
+        }
 
-        val lines = plain.split('\n')
-        var lineStart = 0
-        var fence: String? = null
-
-        for ((index, line) in lines.withIndex()) {
-            val lineEnd = lineStart + line.length
-            val trimmed = line.trimStart()
-            val indent = line.length - trimmed.length
-
-            /*
-              Wiersz znacznika chowa się RAZEM ze swoim znakiem końca linii -
-              inaczej po schowanym „```" zostawałby pusty wiersz i blok kodu
-              rozpychałby notatkę. Znacznik otwierający zabiera koniec wiersza
-              stojący ZA nim, domykający ten PRZED nim.
-            */
-            val withNewlineAfter = if (index < lines.lastIndex) lineEnd + 1 else lineEnd
-            val withNewlineBefore = (lineStart - 1).coerceAtLeast(0)
-
-            when {
-                fence == null && RichTextCodec.opensFence(trimmed) != null -> {
-                    fence = RichTextCodec.opensFence(trimmed)
-                    marked.style(lineStart, lineEnd, markerStyle)
-                    marked.marker(lineStart, withNewlineAfter)
+        for (line in layout.lines) {
+            val prefixStart = line.start + line.open
+            when (line.kind) {
+                LineKind.HEADING -> style(line.contentStart, line.contentEnd, headingStyle(line.level))
+                LineKind.QUOTE -> style(line.contentStart, line.contentEnd, quoteStyle)
+                LineKind.TASK -> {
+                    style(prefixStart, line.contentStart, bulletStyle)
+                    val done = plain.substring(prefixStart, line.contentStart).contains('x', ignoreCase = true)
+                    if (done) style(line.contentStart, line.contentEnd, doneStyle)
                 }
 
-                fence != null && RichTextCodec.closesFence(trimmed, fence) -> {
-                    marked.style(lineStart, lineEnd, markerStyle)
-                    marked.marker(withNewlineBefore, lineEnd)
-                    fence = null
-                }
-
+                LineKind.BULLET, LineKind.NUMBER -> style(prefixStart, line.contentStart, bulletStyle)
+                LineKind.RULE, LineKind.FENCE -> style(line.contentStart, line.contentEnd, markerStyle)
                 // Kod idzie swoją czcionką i barwą, wzór samą czcionką -
                 // to nie kod, tylko zapis matematyczny.
-                fence == "```" -> marked.style(lineStart, lineEnd, codeStyle)
-                fence == "$$" -> marked.style(lineStart, lineEnd, formulaStyle)
-
-                else -> styleLine(marked, trimmed, lineStart + indent, lineEnd)
+                LineKind.CODE -> style(line.start, line.end, codeStyle)
+                LineKind.FORMULA -> style(line.start, line.end, formulaStyle)
+                LineKind.PARAGRAPH -> Unit
             }
 
-            lineStart = lineEnd + 1
-        }
-        return marked
-    }
-
-    private fun styleLine(marked: Marked, trimmed: String, from: Int, to: Int) {
-        val prefix = RichTextCodec.headingPrefixLength(trimmed)
-        if (prefix > 0) {
-            val level = trimmed.takeWhile { it == '#' }.length.coerceIn(1, 6)
-            marked.style(from, from + prefix, markerStyle)
-            marked.marker(from, from + prefix)
-            marked.style(from + prefix, to, headingStyle(level))
-            inlineParts(marked, trimmed.drop(prefix), from + prefix)
-            return
-        }
-
-        if (trimmed.startsWith("> ")) {
-            marked.style(from, from + 2, markerStyle)
-            marked.marker(from, from + 2)
-            marked.style(from + 2, to, quoteStyle)
-            inlineParts(marked, trimmed.drop(2), from + 2)
-            return
-        }
-
-        val task = taskPattern.find(trimmed)
-        if (task != null) {
-            val length = task.value.length
-            marked.style(from, from + length, bulletStyle)
-            if (task.groupValues[1].lowercase() == "x") {
-                marked.style(from + length, to, doneStyle)
+            if (line.kind == LineKind.CODE || line.kind == LineKind.FORMULA || line.kind == LineKind.FENCE) continue
+            // Zdjęcia i odnośniki: opis zostaje czytelny, adres się chowa.
+            val content = plain.substring(line.contentStart, line.contentEnd)
+            for (match in linkPattern.findAll(content)) {
+                val alt = match.groups[1] ?: continue
+                val from = line.contentStart + alt.range.first
+                style(from, from + alt.value.length, linkStyle)
             }
-            // Kwadracik zadania zostaje widoczny: to nie ozdoba, tylko
-            // informacja, czy rzecz jest zrobiona.
-            inlineParts(marked, trimmed.drop(length), from + length)
-            return
         }
-
-        val bullet = bulletPattern.find(trimmed) ?: numberPattern.find(trimmed)
-        if (bullet != null) {
-            marked.style(from, from + bullet.value.length, bulletStyle)
-            inlineParts(marked, trimmed.drop(bullet.value.length), from + bullet.value.length)
-            return
-        }
-
-        if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
-            marked.style(from, to, markerStyle)
-            return
-        }
-
-        inlineParts(marked, trimmed, from)
-    }
-
-    /**
-     * Odnośniki i zdjęcia - jedyne znaczniki, jakie tu zostały. Kod w zdaniu
-     * jest formatem fragmentu i zdjął go już [RichTextCodec.read].
-     */
-    private fun inlineParts(marked: Marked, text: String, from: Int) {
-        // Zdjęcia i odnośniki: opis zostaje czytelny, adres się chowa.
-        for (match in linkPattern.findAll(text)) {
-            val alt = match.groups[1] ?: continue
-            marked.style(from + alt.range.first, from + alt.range.last + 1, linkStyle)
-            val url = match.groups[2] ?: continue
-            marked.style(from + url.range.first - 1, from + url.range.last + 2, markerStyle)
-            // Z odnośnika zostaje sam opis; adres i nawiasy chowają się.
-            marked.marker(from + match.range.first, from + alt.range.first)
-            marked.marker(from + alt.range.last + 1, from + match.range.last + 1)
-        }
+        return spans
     }
 
     private fun headingStyle(level: Int) = SpanStyle(
@@ -333,9 +265,6 @@ class InlineStyle(
     )
 
     private companion object {
-        val taskPattern = Regex("""^[-*+] \[([ xX])] """)
-        val bulletPattern = Regex("""^[-*+] """)
-        val numberPattern = Regex("""^\d+[.)] """)
         val linkPattern = Regex("""!?\[([^\]\n]*)]\(([^)\s]+)\)""")
     }
 }

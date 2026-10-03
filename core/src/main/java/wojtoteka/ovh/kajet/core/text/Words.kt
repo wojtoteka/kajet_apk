@@ -347,6 +347,12 @@ interface Strings {
     val codeBlock: String
     val table: String
     val formula: String
+    /** Kosz przy bloku kodu albo wzoru w notatce tekstowej. */
+    val codeBlockRemove: String
+    val formulaRemove: String
+    /** Napis w pustym bloku kodu i wzoru. */
+    val codeBlockHint: String
+    val formulaHint: String
     val link: String
     val dividerLine: String
     val showRawMarkdown: String
@@ -1758,6 +1764,10 @@ object PolishStrings : Strings {
     override val codeBlock = "Blok kodu"
     override val table = "Tabela"
     override val formula = "Wzór matematyczny"
+    override val codeBlockRemove = "Usuń blok kodu"
+    override val formulaRemove = "Usuń wzór"
+    override val codeBlockHint = "Wpisz kod"
+    override val formulaHint = "Wpisz wzór, na przykład x^2 + y^2 = r^2"
     override val link = "Odnośnik"
     override val dividerLine = "Linia oddzielająca"
     override val showRawMarkdown = "Pokaż surowy zapis Markdown"
@@ -2503,6 +2513,10 @@ object EnglishStrings : Strings {
     override val codeBlock = "Code block"
     override val table = "Table"
     override val formula = "Maths formula"
+    override val codeBlockRemove = "Remove the code block"
+    override val formulaRemove = "Remove the formula"
+    override val codeBlockHint = "Type code"
+    override val formulaHint = "Type a formula, for example x^2 + y^2 = r^2"
     override val link = "Link"
     override val dividerLine = "Dividing line"
     override val showRawMarkdown = "Show the raw Markdown"

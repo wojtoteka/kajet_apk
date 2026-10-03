@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.storage.index
 
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import wojtoteka.ovh.kajet.core.text.handwritingSummary
 import wojtoteka.ovh.kajet.core.text.nodesCount
@@ -39,7 +40,8 @@ object IndexText {
     fun preview(document: NoteDocument): String {
         val raw = content(document)
             .lineSequence()
-            .map { it.trim() }
+            // Znacznik ułożenia akapitu to nie treść - schodzi przed resztą.
+            .map { ParagraphAlign.unwrap(it.trim()).trim() }
             .filter { it.isNotEmpty() && !it.startsWith("![") }
             // Linia pozioma i płot bloku kodu to sama składnia - w spisie
             // wyglądały jak `---` i ```` ```python ```` wpisane w treść.

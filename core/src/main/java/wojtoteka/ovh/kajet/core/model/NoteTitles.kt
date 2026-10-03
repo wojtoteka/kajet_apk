@@ -99,7 +99,8 @@ object NoteTitles {
         val lines = markdown.split("\n")
 
         for ((index, raw) in lines.withIndex()) {
-            val line = raw.trim()
+            // Znacznik ułożenia akapitu (<p style="text-align:...">) to nie treść.
+            val line = ParagraphAlign.unwrap(raw.trim()).trim()
 
             // Płot bloku kodu i wzoru. Treść w środku bywa techniczna i na
             // tytuł się nie nadaje, więc przechodzimy nad nią.

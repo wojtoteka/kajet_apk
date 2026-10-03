@@ -4,7 +4,9 @@ import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.text.docxImageHere
 import wojtoteka.ovh.kajet.core.text.words
+import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.NoteDocument
+import wojtoteka.ovh.kajet.core.model.ParagraphAlign
 import wojtoteka.ovh.kajet.core.model.TextMarkers
 import java.io.OutputStream
 import java.util.zip.ZipEntry
@@ -12,7 +14,9 @@ import java.util.zip.ZipOutputStream
 
 object DocxExport {
 
+    @Synchronized
     fun write(document: NoteDocument, output: OutputStream) {
+        align = null
         val body = buildString {
             append(paragraph(document.title, style = "Title"))
             when {
@@ -34,7 +38,10 @@ object DocxExport {
 
     private fun fromMarkdown(markdown: String): String = buildString {
         for (line in markdown.split('\n')) {
-            val trimmed = line.trim()
+            // Ułożenie akapitu siedzi w znaczniku obejmującym wiersz - w pliku
+            // Worda to ułożenie akapitu (w:jc), a nie tekst.
+            align = ParagraphAlign.alignOf(line.trim())
+            val trimmed = ParagraphAlign.unwrap(line.trim()).trim()
             if (trimmed.isEmpty()) continue
 
             val level = trimmed.takeWhile { it == '#' }.length
@@ -160,7 +167,7 @@ object DocxExport {
         if (position < text.length) {
             runs.append(textRun(TextMarkers.plain(text.substring(position))))
         }
-        return "<w:p>$runs</w:p>"
+        return "<w:p>${paragraphProperties(null)}$runs</w:p>"
     }
 
     private val decorationPattern = Regex(
@@ -180,8 +187,23 @@ object DocxExport {
         italic: Boolean = false,
         monospace: Boolean = false,
     ): String {
-        val properties = if (style != null) "<w:pPr><w:pStyle w:val=\"$style\"/></w:pPr>" else ""
+        val properties = paragraphProperties(style)
         return "<w:p>$properties${textRun(text, bold, italic, monospace)}</w:p>"
+    }
+
+    /** Ułożenie akapitu, który jest właśnie składany - null to zwykłe, do lewej. */
+    private var align: NoteAlign? = null
+
+    private fun paragraphProperties(style: String?): String {
+        val inner = buildString {
+            if (style != null) append("<w:pStyle w:val=\"$style\"/>")
+            when (align) {
+                NoteAlign.CENTER -> append("<w:jc w:val=\"center\"/>")
+                NoteAlign.RIGHT -> append("<w:jc w:val=\"right\"/>")
+                else -> Unit
+            }
+        }
+        return if (inner.isEmpty()) "" else "<w:pPr>$inner</w:pPr>"
     }
 
     private fun textRun(
