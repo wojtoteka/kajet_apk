@@ -50,5 +50,8 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // Pusta aktywność, w której testy Robolectric rysują edytor. Tylko dla
+    // testów - w debug i w release, inaczej `test` wywracał testy pola
+    // w wariancie release („Unable to resolve activity").
+    testImplementation(libs.androidx.compose.ui.test.manifest)
 }

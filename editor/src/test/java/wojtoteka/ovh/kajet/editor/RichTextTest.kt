@@ -2,10 +2,10 @@ package wojtoteka.ovh.kajet.editor
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
-import wojtoteka.ovh.kajet.editor.text.FormatSpan
-import wojtoteka.ovh.kajet.editor.text.RichText
-import wojtoteka.ovh.kajet.editor.text.RichTextCodec
-import wojtoteka.ovh.kajet.editor.text.SpanType
+import wojtoteka.ovh.kajet.core.model.RichText
+import wojtoteka.ovh.kajet.core.model.FormatSpan
+import wojtoteka.ovh.kajet.core.model.SpanType
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 
 /*
   Jeden format źródłowy treści i przekład na zapis notatki w obie strony.
@@ -148,6 +148,7 @@ class RichTextTest {
                     value = when (type) {
                         SpanType.COLOR -> red
                         SpanType.SIZE -> "18"
+                        SpanType.HEADING -> "2"
                         else -> ""
                     },
                 )
@@ -161,6 +162,33 @@ class RichTextTest {
     }
 
     @Test
+    fun `naglowek na kawalku zdania to format znaku`() {
+        val parsed = RichTextCodec.read("""Ala <span class="h1">ma</span> kota""")
+
+        assertThat(parsed.rich.text).isEqualTo("Ala ma kota")
+        assertThat(parsed.rich.spans).containsExactly(FormatSpan(4, 6, SpanType.HEADING, "1"))
+    }
+
+    @Test
+    fun `tresc wiersza z kratkami ma wyglad naglowka znak po znaku`() {
+        val parsed = RichTextCodec.read("## Tytuł")
+
+        assertThat(parsed.attrs.drop(3).map { it.heading }.distinct()).containsExactly(2)
+        // Kratki to budowa wiersza - same nie są nagłówkiem.
+        assertThat(parsed.attrs.take(3).map { it.heading }.distinct()).containsExactly(null)
+        // I wraca dokładnie tak, jak było - bez znacznika na treści.
+        assertThat(RichTextCodec.write(parsed.rich.text, parsed.attrs).markdown).isEqualTo("## Tytuł")
+    }
+
+    @Test
+    fun `naglowek z kratek przepisany na znacznik dla zadania`() {
+        assertThat(RichTextCodec.headingAsSpan("# Zakupy")).isEqualTo("""<span class="h1">Zakupy</span>""")
+        assertThat(RichTextCodec.headingAsSpan("## **Pilne** sprawy"))
+            .isEqualTo("""<span class="h2">**Pilne** sprawy</span>""")
+        assertThat(RichTextCodec.headingAsSpan("zwykły tekst")).isEqualTo("zwykły tekst")
+    }
+
+    @Test
     fun `zapis notatki wraca znak w znak`() {
         val notes = listOf(
             "zwykły tekst",
@@ -171,6 +199,10 @@ class RichTextTest {
             """**<span style="color:#1f6b3a">gruby zielony</span>**""",
             """<u>pod <span style="color:#665222">kolor</span></u>""",
             "# Nagłówek z **pogrubieniem**",
+            """Ala <span class="h1">ma</span> kota""",
+            """# Tytuł z <span class="h2">dopiskiem</span>""",
+            """<span class="h2">**gruby nagłówek**</span> i reszta""",
+            """- <span class="h1">punkt</span>""",
             "- [ ] zadanie z <u>podkreśleniem</u>",
             "> cytat z **mocnym**",
             "raz\ndwa\n\ntrzy",

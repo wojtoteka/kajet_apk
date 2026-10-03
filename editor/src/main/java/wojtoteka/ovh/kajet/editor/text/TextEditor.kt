@@ -57,9 +57,11 @@ import wojtoteka.ovh.kajet.core.design.component.ColourPickerDialog
 import wojtoteka.ovh.kajet.core.design.component.SegmentedChoice
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
-import wojtoteka.ovh.kajet.core.model.NoteFont
-import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.model.NoteFont
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
+import wojtoteka.ovh.kajet.core.model.SpanType
+import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.editor.SaveState
@@ -89,6 +91,8 @@ fun TextEditor(
     val error by model.error.collectAsStateWithLifecycle()
     val appearance by model.appearance.collectAsStateWithLifecycle()
     val recentColors by model.recentColors.collectAsStateWithLifecycle()
+    val canUndo by model.canUndo.collectAsStateWithLifecycle()
+    val canRedo by model.canRedo.collectAsStateWithLifecycle()
 
     val colors = Kajet.colors
     val narrow = LocalConfiguration.current.screenWidthDp < 600
@@ -168,7 +172,7 @@ fun TextEditor(
     LaunchedEffect(document?.id) {
         if (document == null) return@LaunchedEffect
         val repaired = RichTextCodec.flatten(model.markdown)
-        if (repaired != model.markdown) model.setContent(repaired)
+        if (repaired != model.markdown) model.repairContent(repaired)
 
         /*
           Ułożenie jest teraz cechą akapitu, a nie całej notatki. Notatka, której
@@ -194,7 +198,8 @@ fun TextEditor(
     // Miejsce, w które ma trafić wstawiana treść: za blokiem z kursorem,
     // a nie na końcu całej notatki.
     fun insertPosition(): Int = if (blockMode) {
-        focusedKey?.let { Blocks.endPosition(blocks, it) } ?: model.markdown.length
+        // Z komórki tabelki wstawiane rzeczy idą za całą tabelką.
+        focusedKey?.let { Blocks.endPosition(blocks, Blocks.cellOf(it)?.first ?: it) } ?: model.markdown.length
     } else {
         field.selection.start
     }
@@ -236,13 +241,34 @@ fun TextEditor(
             // Pasek formatowania pisze znaczniki markdownu - w bloku kodu
             // byłyby zwykłymi gwiazdkami w środku kodu.
             val focused = blocks.firstOrNull { it.key == key }
-            if (focused !is Block.Text && focused !is Block.Task) return false
+            val cell = Blocks.cellOf(key)
+            if (focused !is Block.Text && focused !is Block.Task && cell == null) return false
+            /*
+              Treść bloku mogła zmienić się spoza pola (cofnięcie, wstawione
+              zdjęcie), zanim pole zdążyło zgłosić nowy stan. Polecenie ma
+              działać na tym, co jest w notatce teraz - inaczej przywróciłoby
+              treść sprzed cofnięcia.
+            */
+            val current = when (focused) {
+                is Block.Text -> focused.content
+                is Block.Task -> focused.content
+                else -> cell?.let { (table, row, column) ->
+                    (blocks.firstOrNull { it.key == table } as? Block.Table)?.cell(row, column)
+                }
+            }
+            if (current != null && current != focusedField.text) {
+                focusedField = TextFieldValue(current, TextRange(focusedField.selection.start.coerceAtMost(current.length)))
+            }
             val next = transform(focusedField) ?: return false
 
             focusedField = next
             set(next)
 
-            val changed = Blocks.setText(blocks, key, next.text)
+            val changed = if (cell != null) {
+                Blocks.setCell(blocks, cell.first, cell.second, cell.third, next.text)
+            } else {
+                Blocks.setText(blocks, key, next.text)
+            }
             blocks = changed
             model.setContent(Blocks.join(changed))
             return true
@@ -290,6 +316,9 @@ fun TextEditor(
         keyToFocus = split.focusKey
     }
 
+    /** Czy kursor stoi w komórce tabelki - tam nie ma akapitów ani list. */
+    fun inTableCell(): Boolean = blockMode && focusedKey?.let { Blocks.cellOf(it) } != null
+
     /** Czy kursor stoi w zadaniu - wtedy budowa wiersza rządzi się inaczej. */
     fun taskUnderCursor(): Block.Task? {
         if (!blockMode) return null
@@ -308,23 +337,94 @@ fun TextEditor(
         keyToFocus = next.focusKey
     }
 
-    // Formaty pod kursorem albo w zaznaczeniu. Pasek zapala po nich przyciski.
-    val atCursor = remember(cursorField) { TextFormat.formatsIn(cursorField) }
+    // Wielkość pisma CAŁEJ notatki. Od niej liczy się wielkość fragmentu
+    // i nagłówka, ale to dwie osobne rzeczy i osobne przyciski.
+    val noteSize = if (appearance.fontSize > 0f) appearance.fontSize else TextContent.DEFAULT_SIZE
 
-    fun isActive(type: SpanType): Boolean =
-        pending.willHave(type, atCursor.any { it.type == type })
+    // Formaty pod kursorem albo w zaznaczeniu. Pasek zapala po nich przyciski.
+    val formats = remember(cursorField, pending, noteSize) {
+        TextCommands.formats(cursorField, pending, noteSize)
+    }
+
+    fun isActive(type: SpanType): Boolean = formats.has(type)
 
     /**
-     * Nadaje format zaznaczeniu. Bez zaznaczenia format czeka na pisanie -
-     * i tak samo się wtedy przełącza, żeby drugie naciśnięcie go zdejmowało.
+     * Polecenie paska na polu z kursorem: nowa treść pola albo format
+     * czekający na pisanie. Polecenie liczy się WEWNĄTRZ format(), na treści,
+     * która jest w notatce teraz - po cofnięciu pole mogło nie zdążyć zgłosić
+     * nowego stanu. Bez pola do pisania (kursor w bloku kodu) zostaje tylko
+     * format czekający na pisanie.
+     */
+    fun command(run: (TextFieldValue) -> TextCommands.Result) {
+        var outcome: TextCommands.Result? = null
+        format { field -> run(field).also { outcome = it }.field }
+        pending = (outcome ?: run(cursorField)).pending
+    }
+
+    /**
+     * Format znaku - pogrubienie, nagłówek i reszta. Działa jak w Wordzie:
+     * na zaznaczenie, bez zaznaczenia na słowo pod kursorem, a między słowami
+     * czeka na pisanie (TextCommands).
      */
     fun toggleFormat(type: SpanType, value: String = "") {
-        val active = isActive(type)
-        val changed = format { TextFormat.toggle(it, type, value) }
-        if (!changed) {
-            pending = if (active) pending.without(type) else pending.with(type, value)
-        }
+        // Zadanie zawsze zaczyna się kwadracikiem, a komórka tabelki nie ma
+        // akapitów - tam pusty wiersz nie staje się nagłówkiem, tylko nagłówek
+        // czeka na pisanie.
+        val lineHeading = taskUnderCursor() == null && !inTableCell()
+        command { field -> TextCommands.toggle(field, type, value, pending, lineHeading) }
     }
+
+    /**
+     * Punkt, numer, zadanie, cytat - budowa całego akapitu, dla każdego
+     * akapitu w zaznaczeniu.
+     */
+    fun toggleParagraphs(kind: LineKind) {
+        // Komórka tabelki to jeden wiersz tekstu - punkt ani cytat nie mają
+        // w niej sensu, a w zapisie tabelki byłyby zwykłym myślnikiem.
+        if (inTableCell()) return
+        val task = taskUnderCursor()
+        if (task != null) {
+            /*
+              Kursor stoi w zadaniu. Punkt, numer i cytat to budowa wiersza,
+              tak samo jak kwadracik - wiersz może być albo zadaniem, albo
+              cytatem, więc zadanie ustępuje miejsca. Ten sam przycisk zadania
+              po prostu je zdejmuje.
+            */
+            val marker = when (kind) {
+                LineKind.BULLET -> "- "
+                LineKind.NUMBER -> "1. "
+                LineKind.QUOTE -> "> "
+                else -> ""
+            }
+            Blocks.taskToLine(blocks, task.key, marker)?.let { applySplit(it) }
+            return
+        }
+        val changed = format { field -> TextCommands.paragraphs(field, kind) }
+        // Zadanie zmienia budowę notatki, więc bloki idą od nowa.
+        if (changed && blockMode && kind == LineKind.TASK) rebuildBlocks(lineAtCursor(focusedField))
+    }
+
+    /** Skróty z klawiatury tabletu - te same, co w Wordzie. */
+    fun onShortcut(shortcut: Shortcut): Boolean {
+        when (shortcut) {
+            Shortcut.BOLD -> toggleFormat(SpanType.BOLD)
+            Shortcut.ITALIC -> toggleFormat(SpanType.ITALIC)
+            Shortcut.UNDERLINE -> toggleFormat(SpanType.UNDERLINE)
+            Shortcut.UNDO -> {
+                pending = PendingFormat()
+                model.undo()
+            }
+
+            Shortcut.REDO -> {
+                pending = PendingFormat()
+                model.redo()
+            }
+        }
+        return true
+    }
+
+    /** Budowa akapitu z kursorem - świeci po niej przycisk listy albo cytatu. */
+    val lineKind = if (taskUnderCursor() != null) LineKind.TASK else TextCommands.paragraphKind(cursorField)
 
     /**
      * Nadaje zapamiętany format tekstowi dopiero co wpisanemu. Oddaje nowe
@@ -365,7 +465,7 @@ fun TextEditor(
             format { TextFormat.insert(it, "\n$fence\n\n$fence\n", fence.length + 2) }
             return
         }
-        val key = focusedKey
+        val key = focusedKey?.let { Blocks.cellOf(it)?.first ?: it }
         val cursor = if (key != null && blocks.firstOrNull { it.key == key } is Block.Text) {
             focusedField.selection.start
         } else {
@@ -383,7 +483,7 @@ fun TextEditor(
      * nie dostaje.
      */
     fun alignParagraphs(align: NoteAlign) {
-        if (taskUnderCursor() != null) return
+        if (taskUnderCursor() != null || inTableCell()) return
         format { TextFormat.alignLines(it, align, appearance.align) }
     }
 
@@ -404,6 +504,12 @@ fun TextEditor(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             IconAction(KajetIcons.BackArrow, words.backToLibrary, { model.saveNow(); onBack() })
+            HorizontalRule(Modifier.padding(horizontal = 12.dp))
+
+            // Cofnij i ponów - jak w Wordzie. Pisanie bez przerwy cofa się
+            // kawałkiem, każde polecenie paska osobno.
+            IconAction(KajetIcons.Undo, words.undo, { pending = PendingFormat(); model.undo() }, enabled = canUndo)
+            IconAction(KajetIcons.Redo, words.redo, { pending = PendingFormat(); model.redo() }, enabled = canRedo)
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
             IconAction(KajetIcons.PhotoFrame, words.insertPhotoFromGallery, {
@@ -460,14 +566,6 @@ fun TextEditor(
                 HorizontalRule()
             }
 
-            // Wielkość pisma CAŁEJ notatki. Od niej liczy się wielkość
-            // fragmentu, ale to dwie osobne rzeczy i osobne przyciski.
-            val noteSize = if (appearance.fontSize > 0f) {
-                appearance.fontSize
-            } else {
-                TextContent.DEFAULT_SIZE
-            }
-
             FormatBar(
                 appearance = appearance,
                 blockMode = blockMode,
@@ -475,8 +573,7 @@ fun TextEditor(
                 isActive = { type -> isActive(type) },
                 // Wielkość fragmentu pod kursorem; zapamiętana wygrywa,
                 // bo to ona trafi na tekst pisany za chwilę.
-                fragmentSize = pending.on[SpanType.SIZE]?.toFloatOrNull()
-                    ?: TextFormat.sizeIn(cursorField, noteSize),
+                fragmentSize = formats.sizePx,
                 noteSize = noteSize,
                 onBlockMode = {
                     // Surowy markdown nie ma zdjęć do wybierania.
@@ -494,46 +591,17 @@ fun TextEditor(
                     // gdzie pisać, a licznik i tak rósł przy każdym naciśnięciu
                     // i pokazywał wielkość, której nic nie dostawało.
                     val somewhereToType = !blockMode || focusedKey != null
-                    if (!format { TextFormat.resize(it, delta, noteSize) } && somewhereToType) {
-                        val current = pending.on[SpanType.SIZE]?.toFloatOrNull()
-                            ?: TextFormat.sizeIn(cursorField, noteSize)
-                        val next = (current + delta).coerceIn(
-                            TextFormat.SMALLEST_FRAGMENT,
-                            TextFormat.LARGEST_FRAGMENT,
-                        )
-                        pending = if (next == noteSize) {
-                            pending.without(SpanType.SIZE)
-                        } else {
-                            pending.with(SpanType.SIZE, RichTextCodec.sizeText(next))
-                        }
-                    }
+                    if (somewhereToType) command { field -> TextCommands.resize(field, delta, noteSize, pending) }
                 },
                 onTextColor = model::setTextColor,
                 onRememberColor = model::rememberColor,
                 lineAlign = lineAlign,
                 onAlign = { alignParagraphs(it) },
                 onToggle = { type -> toggleFormat(type) },
-                onBeforeLine = { marker ->
-                    val task = taskUnderCursor()
-                    if (task != null) {
-                        /*
-                          Kursor stoi w zadaniu. Nagłówek, cytat i punkt to
-                          budowa wiersza, tak samo jak kwadracik - doklejone do
-                          treści zadania dawały „- [ ] > cytat", czyli znacznik
-                          na wierzchu w środku listy. Wiersz może być albo
-                          zadaniem, albo cytatem, więc zadanie ustępuje miejsca.
-                          Ten sam przycisk zadania po prostu je zdejmuje.
-                        */
-                        val line = if (marker == Blocks.TASK_MARKER) "" else marker
-                        Blocks.taskToLine(blocks, task.key, line)?.let { applySplit(it) }
-                    } else {
-                        val changed = format { TextFormat.beforeLine(it, marker) }
-                        // Zadanie zmienia budowę notatki, więc bloki idą od nowa.
-                        if (changed && blockMode && marker == Blocks.TASK_MARKER) {
-                            rebuildBlocks(lineAtCursor(focusedField))
-                        }
-                    }
-                },
+                headingLevel = formats.heading,
+                onHeading = { level -> toggleFormat(SpanType.HEADING, level.toString()) },
+                lineKind = lineKind,
+                onParagraph = { kind -> toggleParagraphs(kind) },
                 onInsert = { fragment, stepBack -> format { TextFormat.insert(it, fragment, stepBack) } },
                 onInsertCode = { fence -> insertCode(fence) },
                 // Okno koloru to osobne okno - pole traci skupienie i zaznaczenie
@@ -541,15 +609,11 @@ fun TextEditor(
                 // zrzut pola PRZED otwarciem okna i to jemu nadaje kolor.
                 currentField = { cursorField },
                 onApplyColour = { snapshot, argb ->
-                    val changed = format { current ->
-                        // Treść nie mogła się zmienić przy otwartym oknie; gdyby
-                        // jednak, bieżące pole wygrywa ze zrzutem.
-                        val base = if (current.text == snapshot.text) snapshot else current
-                        TextFormat.applyColor(base, argb)
-                    }
-                    // Nic nie było zaznaczone: barwa czeka na pisanie.
-                    if (!changed) {
-                        pending = pending.with(SpanType.COLOR, RichTextCodec.colorHex(argb))
+                    // Treść nie mogła się zmienić przy otwartym oknie; gdyby
+                    // jednak, bieżące pole wygrywa ze zrzutem. Bez zaznaczenia
+                    // i poza słowem barwa czeka na pisanie.
+                    command { current ->
+                        TextCommands.color(if (current.text == snapshot.text) snapshot else current, argb, pending)
                     }
                     // Po zamknięciu okna kursor ma wrócić do pisania.
                     if (blockMode) keyToFocus = focusedKey
@@ -575,7 +639,7 @@ fun TextEditor(
                         onEditDrawing = model::editDrawing,
                         onBlocksChange = { next ->
                             blocks = next
-                            model.setContent(Blocks.join(next))
+                            model.setContent(Blocks.join(next), typing = true)
                         },
                         onTapBelow = { focusPageBottom() },
                         selectedPhoto = selectedPhoto,
@@ -589,6 +653,7 @@ fun TextEditor(
                         onFocusBlock = { key -> keyToFocus = key },
                         onSelection = { focusedField = it },
                         onTyped = { previous, typed -> onTyped(previous, typed) },
+                        onShortcut = { shortcut -> onShortcut(shortcut) },
                         appearance = appearance,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -598,7 +663,7 @@ fun TextEditor(
                         onValueChange = { typed ->
                             val next = onTyped(field, typed) ?: typed
                             field = next
-                            model.setContent(next.text)
+                            model.setContent(next.text, typing = true)
                         },
                         textStyle = Kajet.type.code.copy(color = colors.text),
                         cursorBrush = SolidColor(colors.accent),
@@ -705,7 +770,13 @@ private fun FormatBar(
     lineAlign: NoteAlign,
     onAlign: (NoteAlign) -> Unit,
     onToggle: (SpanType) -> Unit,
-    onBeforeLine: (String) -> Unit,
+    /** Poziom nagłówka pod kursorem albo w zaznaczeniu - świeci jego przycisk. */
+    headingLevel: Int?,
+    /** H1-H3: format znaku, jak pogrubienie - na zaznaczenie albo słowo. */
+    onHeading: (Int) -> Unit,
+    /** Budowa akapitu z kursorem: punkt, numer, zadanie, cytat. */
+    lineKind: LineKind,
+    onParagraph: (LineKind) -> Unit,
     onInsert: (fragment: String, stepBack: Int) -> Unit,
     /** Blok kodu (```) albo wzoru ($$) jako osobny blok notatki. */
     onInsertCode: (fence: String) -> Unit,
@@ -931,34 +1002,38 @@ private fun FormatBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            FormatGlyph("H1", words.heading1, { onBeforeLine("# ") }, bold = true)
-            FormatGlyph("H2", words.heading2, { onBeforeLine("## ") }, bold = true)
-            FormatGlyph("H3", words.heading3, { onBeforeLine("### ") }, bold = true)
+            FormatGlyph("H1", words.heading1, { onHeading(1) }, bold = true, selected = headingLevel == 1)
+            FormatGlyph("H2", words.heading2, { onHeading(2) }, bold = true, selected = headingLevel == 2)
+            FormatGlyph("H3", words.heading3, { onHeading(3) }, bold = true, selected = headingLevel == 3)
 
             Divider()
 
             IconAction(
                 icon = KajetIcons.BulletList,
                 description = words.bulletList,
-                onClick = { onBeforeLine("- ") },
+                onClick = { onParagraph(LineKind.BULLET) },
+                selected = lineKind == LineKind.BULLET,
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.NumberedList,
                 description = words.numberedList,
-                onClick = { onBeforeLine("1. ") },
+                onClick = { onParagraph(LineKind.NUMBER) },
+                selected = lineKind == LineKind.NUMBER,
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.TaskList,
                 description = words.taskList,
-                onClick = { onBeforeLine(Blocks.TASK_MARKER) },
+                onClick = { onParagraph(LineKind.TASK) },
+                selected = lineKind == LineKind.TASK,
                 iconSize = 18.dp,
             )
             IconAction(
                 icon = KajetIcons.Quote,
                 description = words.quote,
-                onClick = { onBeforeLine("> ") },
+                onClick = { onParagraph(LineKind.QUOTE) },
+                selected = lineKind == LineKind.QUOTE,
                 iconSize = 18.dp,
             )
 
@@ -1017,7 +1092,7 @@ private fun FormatBar(
         // zaczynało od zera, a zero znaczyło „nic nie wybrano" i przy zamykaniu
         // nie działo się NIC - także wtedy, gdy barwa była wybrana, a potem
         // trafiona jeszcze raz ta sama.
-        val startColour = TextFormat.colorIn(selectionSnapshot)
+        val startColour = TextCommands.formats(selectionSnapshot, PendingFormat(), 0f).color
             ?: appearance.textColor.takeIf { it != 0 }
             ?: Kajet.colors.text.toArgb()
         var picked by remember { mutableStateOf(startColour) }

@@ -3,6 +3,7 @@ package wojtoteka.ovh.kajet.editor.text
 import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.NotePhoto
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 
 sealed interface Block {
     val key: String
@@ -254,7 +255,10 @@ object Blocks {
     private fun render(block: Block): String = when (block) {
         is Block.Text -> block.content
         is Block.Image -> ImageLines.write(photoOf(block))
-        is Block.Task -> "- [${if (block.done) "x" else " "}] ${block.content}"
+        // Zadanie, którego cała treść jest nagłówkiem, ma w polu „# Tytuł" -
+        // w pliku nagłówek idzie znacznikiem, bo „- [ ] # Tytuł" to dla
+        // markdownu kratka w treści zadania.
+        is Block.Task -> "- [${if (block.done) "x" else " "}] ${RichTextCodec.headingAsSpan(block.content)}"
         is Block.Table -> renderTable(block)
         is Block.Code -> if (block.content.isEmpty()) {
             "${block.open}\n${block.close}"
@@ -269,8 +273,12 @@ object Blocks {
     /** Tabelka z powrotem na markdown: nagłówek, kreski, reszta wierszy. */
     private fun renderTable(table: Block.Table): String {
         val columns = table.columns.coerceAtLeast(1)
+        // Komórka, której cała treść jest nagłówkiem, ma w polu „# Tytuł";
+        // w tabelce markdownu kratki byłyby zwykłym tekstem.
         fun line(cells: List<String>): String =
-            (0 until columns).joinToString(" | ", "| ", " |") { cells.getOrNull(it).orEmpty() }
+            (0 until columns).joinToString(" | ", "| ", " |") {
+                RichTextCodec.headingAsSpan(cells.getOrNull(it).orEmpty())
+            }
 
         val out = mutableListOf(line(table.rows.firstOrNull().orEmpty()))
         out += (0 until columns).joinToString(" | ", "| ", " |") { "---" }
@@ -378,6 +386,21 @@ object Blocks {
     private fun squared(rows: List<List<String>>): List<List<String>> {
         val columns = (rows.maxOfOrNull { it.size } ?: 1).coerceAtLeast(1)
         return rows.map { row -> List(columns) { row.getOrNull(it).orEmpty() } }
+    }
+
+    /**
+     * Klucz komórki tabelki, w której stoi kursor - pasek formatowania
+     * rozpoznaje po nim, że pisze do komórki, a nie do akapitu.
+     */
+    fun cellKey(table: String, row: Int, column: Int): String = "$table#$row#$column"
+
+    /** Tabelka, wiersz i kolumna z klucza komórki; null, gdy to nie komórka. */
+    fun cellOf(key: String): Triple<String, Int, Int>? {
+        val parts = key.split('#')
+        if (parts.size != 3) return null
+        val row = parts[1].toIntOrNull() ?: return null
+        val column = parts[2].toIntOrNull() ?: return null
+        return Triple(parts[0], row, column)
     }
 
     fun setCell(

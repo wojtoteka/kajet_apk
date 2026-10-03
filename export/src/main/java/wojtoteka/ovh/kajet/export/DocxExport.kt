@@ -7,10 +7,12 @@ import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.ParagraphAlign
-import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
+import wojtoteka.ovh.kajet.core.model.TextContent
 import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.math.roundToInt
 
 object DocxExport {
 
@@ -44,25 +46,42 @@ object DocxExport {
             val trimmed = ParagraphAlign.unwrap(line.trim()).trim()
             if (trimmed.isEmpty()) continue
 
-            val level = trimmed.takeWhile { it == '#' }.length
+            /*
+              Treść każdego wiersza - także nagłówka, punktu, zadania i cytatu
+              - idzie przez przebiegi formatu. Wcześniej tylko zwykły akapit:
+              pogrubienie w nagłówku albo w liście trafiało do Worda jako
+              gołe „**".
+            */
+            val level = RichTextCodec.headingLevelOfLine(trimmed)
+            val task = taskLine.find(trimmed)
             when {
-                level in 1..3 && trimmed.length > level ->
-                    append(paragraph(trimmed.drop(level + 1), style = "Heading$level"))
-
-                Regex("^[-*+] \\[[ xX]] ").containsMatchIn(trimmed) -> {
-                    val done = trimmed.contains("[x]", ignoreCase = true)
-                    val content = trimmed.replace(Regex("^[-*+] \\[[ xX]] "), "")
-                    append(paragraph((if (done) "[x]  " else "[ ]  ") + content, style = "ListParagraph"))
+                level > 0 -> {
+                    val content = trimmed.substring(RichTextCodec.headingPrefixLength(trimmed))
+                    // Word zna trzy style nagłówków, jak notatka na stronie.
+                    append(formattedParagraph(content, style = "Heading${level.coerceAtMost(3)}"))
                 }
 
-                trimmed.startsWith("- ") || trimmed.startsWith("* ") ->
-                    append(paragraph("•  " + trimmed.drop(2), style = "ListParagraph"))
+                task != null -> {
+                    val done = task.groupValues[1].equals("x", ignoreCase = true)
+                    append(
+                        formattedParagraph(
+                            trimmed.substring(task.value.length),
+                            style = "ListParagraph",
+                            lead = if (done) "[x]  " else "[ ]  ",
+                        ),
+                    )
+                }
 
-                Regex("^\\d+[.)] ").containsMatchIn(trimmed) ->
-                    append(paragraph(trimmed, style = "ListParagraph"))
+                trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ") ->
+                    append(formattedParagraph(trimmed.drop(2), style = "ListParagraph", lead = "•  "))
+
+                numbered.find(trimmed) != null -> {
+                    val number = numbered.find(trimmed)!!.value
+                    append(formattedParagraph(trimmed.substring(number.length), style = "ListParagraph", lead = number))
+                }
 
                 trimmed.startsWith("> ") ->
-                    append(paragraph(trimmed.drop(2), style = "Quote", italic = true))
+                    append(formattedParagraph(trimmed.drop(2), style = "Quote"))
 
                 trimmed.startsWith("![") -> {
                     // Kilka zdjęć obok siebie to kilka zdjęć - każde ma w pliku
@@ -127,58 +146,47 @@ object DocxExport {
         return ImageLines.plainAlt(alt).ifBlank { words.noDescription }
     }
 
-    private fun formattedParagraph(text: String): String {
+    private val taskLine = Regex("""^[-*+] \[([ xX])] """)
+    private val numbered = Regex("""^\d+[.)] """)
+
+    /**
+     * Akapit z formatami fragmentów - przebiegi czyta ten sam [RichTextCodec]
+     * co notatka (przez [PdfMarkdown.runs]), więc formaty jeden w drugim
+     * i nagłówek na kawałku zdania przechodzą do Worda tak, jak wyglądają.
+     * [lead] to znak listy albo kwadracik przed treścią.
+     */
+    private fun formattedParagraph(text: String, style: String? = null, lead: String = ""): String {
         val runs = StringBuilder()
-        var position = 0
-        for (match in decorationPattern.findAll(text)) {
-            if (match.range.first > position) {
-                runs.append(textRun(TextMarkers.plain(text.substring(position, match.range.first))))
-            }
-            val piece = match.value
+        if (lead.isNotEmpty()) runs.append(textRun(lead))
+        for (run in PdfMarkdown.runs(text)) {
             runs.append(
-                when {
-                    piece.startsWith("**") ->
-                        textRun(piece.removeSurrounding("**"), bold = true)
-
-                    piece.startsWith("~~") ->
-                        textRun(piece.removeSurrounding("~~"), strikethrough = true)
-
-                    piece.startsWith("==") ->
-                        textRun(piece.removeSurrounding("=="), highlight = true)
-
-                    piece.startsWith("`") ->
-                        textRun(piece.trim('`'), monospace = true)
-
-                    piece.startsWith("<u>") ->
-                        textRun(piece.removeSurrounding("<u>", "</u>"), underline = true)
-
-                    piece.startsWith("<span") -> {
-                        val inner = TextMarkers.colorPattern.find(piece)
-                        val color = Regex("""color:\s*#?([0-9a-fA-F]{6})""").find(piece)
-                            ?.groupValues?.get(1)
-                        textRun(inner?.groupValues?.get(1).orEmpty(), color = color)
-                    }
-
-                    else -> textRun(piece.trim('*'), italic = true)
-                },
+                textRun(
+                    text = run.text,
+                    bold = run.bold || run.heading != null,
+                    italic = run.italic,
+                    monospace = run.code,
+                    underline = run.underline,
+                    strikethrough = run.strike,
+                    highlight = run.highlight,
+                    color = run.color?.let { "%06X".format(it and 0xFFFFFF) },
+                    halfPoints = run.sizePx?.let { (it / TextContent.DEFAULT_SIZE * BODY_HALF_POINTS).roundToInt() }
+                        ?: run.heading?.let { headingHalfPoints(it) },
+                ),
             )
-            position = match.range.last + 1
         }
-        if (position < text.length) {
-            runs.append(textRun(TextMarkers.plain(text.substring(position))))
-        }
-        return "<w:p>${paragraphProperties(null)}$runs</w:p>"
+        return "<w:p>${paragraphProperties(style)}$runs</w:p>"
     }
 
-    private val decorationPattern = Regex(
-        """<span style="color:[^"]*">[^<]*</span>""" +
-            """|<u>[^<]*</u>""" +
-            """|\*\*[^*]+\*\*""" +
-            """|~~[^~]+~~""" +
-            """|==[^=]+==""" +
-            """|`[^`]+`""" +
-            """|\*[^*]+\*""",
-    )
+    /** Pismo dokumentu: 11 pt, czyli 22 półpunkty (tak jak w [STYLES]). */
+    private const val BODY_HALF_POINTS = 22
+
+    /** Nagłówek na kawałku zdania - wielkość jak w stylach nagłówków niżej. */
+    private fun headingHalfPoints(level: Int): Int = when (level) {
+        1 -> 34
+        2 -> 28
+        3 -> 24
+        else -> BODY_HALF_POINTS
+    }
 
     private fun paragraph(
         text: String,
@@ -215,6 +223,8 @@ object DocxExport {
         strikethrough: Boolean = false,
         highlight: Boolean = false,
         color: String? = null,
+        /** Wielkość pisma w półpunktach; null - wielkość ze stylu akapitu. */
+        halfPoints: Int? = null,
     ): String {
         val decorations = buildString {
             if (bold) append("<w:b/>")
@@ -224,6 +234,7 @@ object DocxExport {
             if (highlight) append("<w:highlight w:val=\"yellow\"/>")
             if (color != null) append("<w:color w:val=\"$color\"/>")
             if (monospace) append("<w:rFonts w:ascii=\"Consolas\" w:hAnsi=\"Consolas\"/>")
+            if (halfPoints != null) append("<w:sz w:val=\"$halfPoints\"/>")
         }
         val properties = if (decorations.isEmpty()) "" else "<w:rPr>$decorations</w:rPr>"
         return "<w:r>$properties<w:t xml:space=\"preserve\">${escape(text)}</w:t></w:r>"

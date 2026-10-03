@@ -34,7 +34,7 @@ object TextMarkers {
       znaczniki zagnieżdżone jeden w drugim albo osierocone domknięcia, a para
       regexowa zostawiała je wtedy w treści - goły HTML w spisie i w indeksie.
     */
-    private val spanOpening = Regex("""<span style="(?:color|font-size):[^"]*">""")
+    private val spanOpening = Regex("""<span (?:style="(?:color|font-size):[^"]*"|class="h[1-6]")>""")
     private val spanClosing = Regex("""</span>""")
 
     private val bold = Regex("""\*\*([^*]+)\*\*""")

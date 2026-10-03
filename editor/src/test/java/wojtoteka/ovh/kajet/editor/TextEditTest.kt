@@ -4,9 +4,11 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import wojtoteka.ovh.kajet.core.model.SpanType
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.editor.text.PendingFormat
-import wojtoteka.ovh.kajet.editor.text.SpanType
+import wojtoteka.ovh.kajet.editor.text.LineKind
+import wojtoteka.ovh.kajet.editor.text.TextCommands
 import wojtoteka.ovh.kajet.editor.text.TextEdit
 import wojtoteka.ovh.kajet.editor.text.TextFormat
 import wojtoteka.ovh.kajet.editor.text.TextLayout
@@ -70,22 +72,21 @@ class TextEditTest {
             apply(TextFieldValue(value.text.removeRange(s.start - 1, s.start), TextRange(s.start - 1)))
         }
 
-        fun press(type: SpanType) {
-            val active = pending.willHave(type, TextFormat.has(value, type))
-            val changed = TextFormat.toggle(value, type)
-            if (changed != null) {
-                value = changed
-            } else {
-                pending = if (active) pending.without(type) else pending.with(type)
-            }
+        fun press(type: SpanType, level: String = "") {
+            val result = TextCommands.toggle(value, type, level, pending)
+            pending = result.pending
+            result.field?.let { value = it }
         }
 
         fun align(align: NoteAlign) {
             value = TextFormat.alignLines(value, align, NoteAlign.LEFT)
         }
 
-        fun line(marker: String) {
-            value = TextFormat.beforeLine(value, marker)
+        /** H1-H3 z paska: format znaku, jak pogrubienie. */
+        fun heading(level: Int) = press(SpanType.HEADING, level.toString())
+
+        fun paragraphs(kind: LineKind) {
+            TextCommands.paragraphs(value, kind)?.let { value = it }
         }
     }
 
@@ -243,8 +244,8 @@ class TextEditTest {
     fun `naglowek na srodku i jego zmiana na H2`() {
         val field = Field("Tytul", visibleCursor = 2)
         field.align(NoteAlign.CENTER)
-        field.line("# ")
-        field.line("## ")
+        field.heading(1)
+        field.heading(2)
 
         assertThat(field.text).isEqualTo("${centre}## Tytul</p>")
         assertThat(field.shown).isEqualTo("Tytul")
@@ -365,5 +366,119 @@ class TextEditTest {
         val typed = TextFieldValue(text.substring(0, cursor) + "x" + text.substring(cursor), TextRange(cursor + 1))
 
         assertThat(TextEdit.typed(before, typed, PendingFormat()).field).isNull()
+    }
+
+    // --- Nagłówek jako format znaku ---
+
+    @Test
+    fun `H1 przed pisaniem robi naglowek tylko z tego, co sie napisze`() {
+        val field = Field("Ala ma kota")
+        field.heading(1)
+        field.type(" Tytul")
+
+        assertThat(field.text).isEqualTo("""Ala ma kota<span class="h1"> Tytul</span>""")
+        assertThat(field.shown).isEqualTo("Ala ma kota Tytul")
+    }
+
+    @Test
+    fun `H1 w pustym wierszu i pisanie daje zwykly naglowek markdownu`() {
+        val field = Field("Ala\n", visibleCursor = 4)
+        field.heading(1)
+        field.type("Tytul")
+
+        assertThat(field.text).isEqualTo("Ala\n# Tytul")
+        assertThat(field.shown).isEqualTo("Ala\nTytul")
+    }
+
+    @Test
+    fun `enter na koncu naglowka zaczyna zwykly tekst`() {
+        val field = Field("Ala <span class=\"h1\">Tytul</span>")
+        field.enter()
+        field.type("tekst")
+
+        assertThat(field.text).isEqualTo("Ala <span class=\"h1\">Tytul</span>\ntekst")
+    }
+
+    @Test
+    fun `enter w srodku naglowka zostawia obie polowy naglowkiem`() {
+        val field = Field("# Tytul", visibleCursor = 2)
+        field.enter()
+
+        assertThat(field.text).isEqualTo("# Ty\n# tul")
+        assertThat(field.shown).isEqualTo("Ty\ntul")
+    }
+
+    @Test
+    fun `naglowek zlaczony z akapitem pod spodem obejmuje calosc, jak w Wordzie`() {
+        val field = Field("# Tytul\nAla", visibleCursor = 6)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("# TytulAla")
+    }
+
+    @Test
+    fun `akapit zlaczony z naglowkiem pod spodem zostaje zwykly`() {
+        val field = Field("Ala\n# Tytul", visibleCursor = 4)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("AlaTytul")
+    }
+
+    @Test
+    fun `naglowek fragmentu zostaje przy zlaczeniu akapitow`() {
+        val field = Field("Ala\npies <span class=\"h2\">Burek</span>", visibleCursor = 4)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("Alapies <span class=\"h2\">Burek</span>")
+    }
+
+    @Test
+    fun `pisanie w srodku naglowka zostaje naglowkiem`() {
+        val field = Field("Ala <span class=\"h1\">kot</span>", visibleCursor = 6)
+        field.type("o")
+
+        assertThat(field.text).isEqualTo("Ala <span class=\"h1\">koot</span>")
+    }
+
+    @Test
+    fun `kratka i spacja wpisane recznie nadal robia naglowek`() {
+        val field = Field("Ala\n", visibleCursor = 4)
+        field.type("#")
+        field.type(" ")
+        field.type("T")
+
+        assertThat(field.text).isEqualTo("Ala\n# T")
+        assertThat(field.shown).isEqualTo("Ala\nT")
+    }
+
+    @Test
+    fun `backspace na poczatku calego naglowka zdejmuje naglowek`() {
+        val field = Field("# Tytul", visibleCursor = 0)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("Tytul")
+    }
+
+    // --- Lista numerowana liczy się sama ---
+
+    @Test
+    fun `skasowanie pozycji ze srodka przelicza numery`() {
+        val field = Field("1. raz\n2. dwa\n3. trzy")
+        field.select(6, 13)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("1. raz\n2. trzy")
+    }
+
+    @Test
+    fun `numery na kilku akapitach i enter ciagnie dalej`() {
+        val field = Field("raz\ndwa")
+        field.select(0, 7)
+        field.paragraphs(LineKind.NUMBER)
+        field.tap(TextLayout.of(field.text).visible.length)
+        field.enter()
+        field.type("trzy")
+
+        assertThat(field.text).isEqualTo("1. raz\n2. dwa\n3. trzy")
     }
 }

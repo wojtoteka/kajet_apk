@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import wojtoteka.ovh.kajet.core.model.NoteAlign
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 
 /**
  * Wygląd notatki tekstowej w polu do pisania.
@@ -172,8 +173,13 @@ class InlineStyle(
             if (attrs.underline) add(TextDecoration.Underline)
             if (attrs.strikethrough) add(TextDecoration.LineThrough)
         }
+        val heading = attrs.heading
         return SpanStyle(
-            fontWeight = if (attrs.bold) FontWeight.Bold else null,
+            fontWeight = when {
+                attrs.bold -> FontWeight.Bold
+                heading != null -> FontWeight.SemiBold
+                else -> null
+            },
             fontStyle = if (attrs.italic) FontStyle.Italic else null,
             textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
             background = if (attrs.highlight) highlightColor else Color.Unspecified,
@@ -182,7 +188,11 @@ class InlineStyle(
             color = attrs.color?.let { Color(it) }
                 ?: if (attrs.code) codeColor else Color.Unspecified,
             fontFamily = if (attrs.code) monoFont else null,
-            fontSize = attrs.sizePx?.sp ?: TextUnit.Unspecified,
+            // Wielkość nadana fragmentowi wygrywa z wielkością nagłówka -
+            // jak bezpośrednie formatowanie ze stylem w Wordzie.
+            fontSize = attrs.sizePx?.sp
+                ?: heading?.let { RichTextCodec.headingScale(it).em }
+                ?: TextUnit.Unspecified,
         )
     }
 
@@ -202,7 +212,9 @@ class InlineStyle(
         for (line in layout.lines) {
             val prefixStart = line.start + line.open
             when (line.kind) {
-                LineKind.HEADING -> style(line.contentStart, line.contentEnd, headingStyle(line.level))
+                // Nagłówek to format znaku (RichTextCodec.Attrs.heading) -
+                // treść wiersza „# Tytuł" dostaje go przy czytaniu.
+                LineKind.HEADING -> Unit
                 LineKind.QUOTE -> style(line.contentStart, line.contentEnd, quoteStyle)
                 LineKind.TASK -> {
                     style(prefixStart, line.contentStart, bulletStyle)
@@ -230,17 +242,6 @@ class InlineStyle(
         }
         return spans
     }
-
-    private fun headingStyle(level: Int) = SpanStyle(
-        fontWeight = FontWeight.SemiBold,
-        fontSize = when (level) {
-            1 -> 1.7f.em
-            2 -> 1.4f.em
-            3 -> 1.2f.em
-            else -> 1.05f.em
-        },
-        color = textColor,
-    )
 
     private val markerStyle = SpanStyle(color = markerColor)
     private val bulletStyle = SpanStyle(color = markerColor, fontWeight = FontWeight.Medium)

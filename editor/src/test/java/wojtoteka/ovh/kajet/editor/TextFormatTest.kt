@@ -4,167 +4,17 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import wojtoteka.ovh.kajet.core.model.RichText
+import wojtoteka.ovh.kajet.core.model.SpanType
 import wojtoteka.ovh.kajet.editor.text.PendingFormat
-import wojtoteka.ovh.kajet.editor.text.RichText
-import wojtoteka.ovh.kajet.editor.text.SpanType
+import wojtoteka.ovh.kajet.editor.text.TextCommands
 import wojtoteka.ovh.kajet.editor.text.TextFormat
 
 /*
-  Formatowanie fragmentu notatki.
-
-  Dwie rzeczy, których te testy pilnują przede wszystkim: format obejmuje
-  WYŁĄCZNIE zaznaczenie, a bez zaznaczenia nie rusza niczego wstecz - czeka
-  na tekst, który człowiek zaraz napisze.
+  Format czekający na pisanie w surowym markdownie oraz stara droga nowej
+  linii i kasowania przez model. Polecenia paska (pogrubienie, barwa,
+  nagłówek...) testuje TextCommandsTest.
 */
-class TextFormatColorTest {
-
-    private val red = 0xFFC81E1E.toInt()
-    private val green = 0xFF1F6B3A.toInt()
-
-    private fun selected(field: TextFieldValue): String =
-        field.text.substring(field.selection.min, field.selection.max)
-
-    @Test
-    fun `kolor otacza zaznaczenie i zostawia je zaznaczone`() {
-        val field = TextFieldValue("Ala ma kota", TextRange(4, 6))
-        val after = TextFormat.applyColor(field, red)!!
-
-        assertThat(after.text).isEqualTo("""Ala <span style="color:#c81e1e">ma</span> kota""")
-        assertThat(selected(after)).isEqualTo("ma")
-    }
-
-    @Test
-    fun `kolejny kolor podmienia poprzedni zamiast zagniezdzac`() {
-        val first = TextFormat.applyColor(TextFieldValue("Ala ma kota", TextRange(4, 6)), red)!!
-        val second = TextFormat.applyColor(first, green)!!
-
-        assertThat(second.text).isEqualTo("""Ala <span style="color:#1f6b3a">ma</span> kota""")
-        assertThat(selected(second)).isEqualTo("ma")
-    }
-
-    @Test
-    fun `kolor czesci pokolorowanego fragmentu rozcina znacznik`() {
-        val source = """<span style="color:#c81e1e">Ala ma</span>"""
-        val at = source.indexOf("ma")
-        val after = TextFormat.applyColor(TextFieldValue(source, TextRange(at, at + 2)), green)!!
-
-        assertThat(after.text).isEqualTo(
-            """<span style="color:#c81e1e">Ala </span><span style="color:#1f6b3a">ma</span>""",
-        )
-        assertThat(selected(after)).isEqualTo("ma")
-    }
-
-    @Test
-    fun `zdjecie koloru zostawia rozmiar na miejscu`() {
-        val source = """<span style="font-size:21px"><span style="color:#c81e1e">ma</span></span>"""
-        val at = source.indexOf("ma")
-        val after = TextFormat.applyColor(TextFieldValue(source, TextRange(at, at + 2)), null)!!
-
-        assertThat(after.text).isEqualTo("""<span style="font-size:21px">ma</span>""")
-    }
-
-    @Test
-    fun `kolor i rozmiar skladaja sie zawsze w tym samym porzadku`() {
-        // Rozmiar na zewnątrz, barwa przy treści - tak samo pisze serwer.
-        val sized = TextFormat.resize(TextFieldValue("Ala ma kota", TextRange(4, 6)), 4f, 17f)!!
-        val coloured = TextFormat.applyColor(sized, red)!!
-
-        assertThat(coloured.text).isEqualTo(
-            """Ala <span style="font-size:21px"><span style="color:#c81e1e">ma</span></span> kota""",
-        )
-        assertThat(selected(coloured)).isEqualTo("ma")
-    }
-
-    @Test
-    fun `bez zaznaczenia kolor nie rusza tresci`() {
-        // Kursor w słowie: dawniej kolorowało całe słowo, teraz barwa czeka
-        // na pisanie. Nic wstecz nie ma prawa się zmienić.
-        assertThat(TextFormat.applyColor(TextFieldValue("Ala ma kota", TextRange(5)), red))
-            .isNull()
-    }
-
-    @Test
-    fun `rozmiar czyta biezaca wielkosc takze przy zagniezdzonym kolorze`() {
-        val source = """<span style="font-size:21px"><span style="color:#c81e1e">ma</span></span>"""
-        val at = source.indexOf("ma")
-        val after = TextFormat.resize(TextFieldValue(source, TextRange(at, at + 2)), 1f, 17f)!!
-
-        assertThat(after.text).isEqualTo(
-            """<span style="font-size:22px"><span style="color:#c81e1e">ma</span></span>""",
-        )
-    }
-
-    @Test
-    fun `powrot do wielkosci notatki zdejmuje znacznik`() {
-        val bigger = TextFormat.resize(TextFieldValue("Ala ma kota", TextRange(4, 6)), 1f, 17f)!!
-        val back = TextFormat.resize(bigger, -1f, 17f)!!
-
-        assertThat(back.text).isEqualTo("Ala ma kota")
-    }
-
-    @Test
-    fun `bez zaznaczenia wielkosc fragmentu oddaje null`() {
-        assertThat(TextFormat.resize(TextFieldValue("Ala", TextRange(1)), 1f, 17f)).isNull()
-    }
-
-    @Test
-    fun `zaznaczenie przez granice wiersza koloruje oba kawalki osobno`() {
-        val field = TextFieldValue("raz\ndwa", TextRange(0, 7))
-        val after = TextFormat.applyColor(field, red)!!
-
-        assertThat(after.text).isEqualTo(
-            """<span style="color:#c81e1e">raz</span>""" + "\n" +
-                """<span style="color:#c81e1e">dwa</span>""",
-        )
-    }
-}
-
-class TextFormatToggleTest {
-
-    @Test
-    fun `pogrubienie obejmuje sam zaznaczony fragment`() {
-        val field = TextFieldValue("Ala ma kota", TextRange(4, 6))
-        val after = TextFormat.toggle(field, SpanType.BOLD)!!
-
-        assertThat(after.text).isEqualTo("Ala **ma** kota")
-        assertThat(after.text.substring(after.selection.min, after.selection.max)).isEqualTo("ma")
-    }
-
-    @Test
-    fun `powtorne nacisniecie zdejmuje format`() {
-        val once = TextFormat.toggle(TextFieldValue("Ala ma kota", TextRange(4, 6)), SpanType.BOLD)!!
-        val twice = TextFormat.toggle(once, SpanType.BOLD)!!
-
-        assertThat(twice.text).isEqualTo("Ala ma kota")
-    }
-
-    @Test
-    fun `podkreslenie i przekreslenie skladaja sie z pogrubieniem`() {
-        var field: TextFieldValue = TextFieldValue("Ala ma kota", TextRange(4, 6))
-        field = TextFormat.toggle(field, SpanType.BOLD)!!
-        field = TextFormat.toggle(field, SpanType.UNDERLINE)!!
-
-        assertThat(field.text).isEqualTo("Ala **<u>ma</u>** kota")
-        assertThat(TextFormat.has(field, SpanType.BOLD)).isTrue()
-        assertThat(TextFormat.has(field, SpanType.UNDERLINE)).isTrue()
-    }
-
-    @Test
-    fun `bez zaznaczenia format nie rusza tresci`() {
-        assertThat(TextFormat.toggle(TextFieldValue("Ala ma kota", TextRange(5)), SpanType.BOLD))
-            .isNull()
-    }
-
-    @Test
-    fun `pasek widzi format tylko wtedy, gdy obejmuje cale zaznaczenie`() {
-        val field = TextFieldValue("**raz** dwa", TextRange(2, 5))
-        assertThat(TextFormat.has(field, SpanType.BOLD)).isTrue()
-
-        val across = TextFieldValue("**raz** dwa", TextRange(2, 11))
-        assertThat(TextFormat.has(across, SpanType.BOLD)).isFalse()
-    }
-}
-
 class PendingFormatTest {
 
     @Test
@@ -230,7 +80,7 @@ class PendingFormatTest {
     }
 
     private fun RichTextParsed(markdown: String): String =
-        wojtoteka.ovh.kajet.editor.text.RichText.parse(markdown).text
+        RichText.parse(markdown).text
 }
 
 /*
@@ -373,13 +223,9 @@ class TypingTest {
     }
 
     private fun press(type: SpanType) {
-        val active = pending.willHave(type, TextFormat.has(field, type))
-        val changed = TextFormat.toggle(field, type)
-        if (changed != null) {
-            field = changed
-        } else {
-            pending = if (active) pending.without(type) else pending.with(type)
-        }
+        val result = TextCommands.toggle(field, type, pending = pending)
+        pending = result.pending
+        result.field?.let { field = it }
     }
 
     /** Co widać w polu - bez znaczników, tak jak w notatce. */

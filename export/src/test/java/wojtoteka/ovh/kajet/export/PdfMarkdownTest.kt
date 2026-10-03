@@ -41,6 +41,36 @@ class PdfMarkdownTest {
     }
 
     @Test
+    fun `formaty jeden w drugim nie wychodza na kartke jako HTML`() {
+        val runs = PdfMarkdown.runs("""**<span style="font-size:21px">duze grube</span>** i ***oba***""")
+
+        assertThat(runs.joinToString("") { it.text }).isEqualTo("duze grube i oba")
+        val big = runs.single { it.text == "duze grube" }
+        assertThat(big.bold).isTrue()
+        assertThat(big.sizePx).isEqualTo(21f)
+        val both = runs.single { it.text == "oba" }
+        assertThat(both.bold && both.italic).isTrue()
+        assertThat(runs.any { "<" in it.text || "*" in it.text }).isFalse()
+    }
+
+    @Test
+    fun `naglowek na kawalku zdania idzie jako przebieg z poziomem`() {
+        val runs = PdfMarkdown.runs("""Ala <span class="h2">ma</span> kota""")
+
+        assertThat(runs.joinToString("") { it.text }).isEqualTo("Ala ma kota")
+        assertThat(runs.single { it.text == "ma" }.heading).isEqualTo(2)
+        assertThat(runs.first().heading).isNull()
+    }
+
+    @Test
+    fun `z odnosnika zostaje sam opis`() {
+        val runs = PdfMarkdown.runs("Zobacz [**strone**](https://a.pl) teraz")
+
+        assertThat(runs.joinToString("") { it.text }).isEqualTo("Zobacz strone teraz")
+        assertThat(runs.single { it.text == "strone" }.bold).isTrue()
+    }
+
+    @Test
     fun `blok kodu otwiera sie na grawisach i wzorze`() {
         assertThat(PdfMarkdown.opensFence("```kotlin")).isEqualTo("```")
         assertThat(PdfMarkdown.opensFence("$$")).isEqualTo("$$")

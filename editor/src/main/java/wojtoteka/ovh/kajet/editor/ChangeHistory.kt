@@ -7,6 +7,7 @@ import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.ShapeElement
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
+import wojtoteka.ovh.kajet.core.model.TextContent
 
 sealed interface Change {
     fun applyTo(document: NoteDocument): NoteDocument
@@ -89,6 +90,27 @@ data class PageChange(
     override fun revert(document: NoteDocument) = document.withPages(before)
 }
 
+/**
+ * Zmiana treści notatki tekstowej: zapis przed i po.
+ *
+ * Pisanie bez przerwy składa się w jeden krok (patrz [ChangeHistory.record]),
+ * więc „Cofnij" zabiera ostatnio napisany kawałek, a nie pojedynczą literę -
+ * tak samo jak Ctrl+Z w Wordzie.
+ */
+data class TextChange(
+    val before: String,
+    val after: String,
+) : Change {
+    override fun applyTo(document: NoteDocument) = document.withMarkdown(after)
+    override fun revert(document: NoteDocument) = document.withMarkdown(before)
+
+    fun mergedWith(next: Change): TextChange? =
+        if (next is TextChange && next.before == after) TextChange(before, next.after) else null
+}
+
+private fun NoteDocument.withMarkdown(markdown: String): NoteDocument =
+    copy(text = (text ?: TextContent()).copy(markdown = markdown))
+
 data class MapChange(
     val before: MindMapContent,
     val after: MindMapContent,
@@ -106,15 +128,23 @@ class ChangeHistory(private val maxSteps: Int = 120) {
     val canRedo: Boolean get() = forward.isNotEmpty()
 
     private var lastRecordAt = 0L
+    private var lastMergeable = false
 
-    fun record(change: Change) {
+    /**
+     * [mergeable] - zmiana z pisania. Pisanie bez dłuższej przerwy dokłada się
+     * do poprzedniego kroku pisania; polecenie z paska (pogrubienie, lista)
+     * zostaje zawsze osobnym krokiem.
+     */
+    fun record(change: Change, mergeable: Boolean = false) {
         val now = System.currentTimeMillis()
-        val merged = if (now - lastRecordAt <= MERGE_WINDOW_MS) {
-            (back.lastOrNull() as? ShapeChange)?.mergedWith(change)
-        } else {
-            null
+        val recent = now - lastRecordAt <= MERGE_WINDOW_MS
+        val merged = when (val last = back.lastOrNull()) {
+            is ShapeChange -> if (recent) last.mergedWith(change) else null
+            is TextChange -> if (recent && mergeable && lastMergeable) last.mergedWith(change) else null
+            else -> null
         }
         lastRecordAt = now
+        lastMergeable = mergeable
 
         if (merged != null) {
             back.removeLast()

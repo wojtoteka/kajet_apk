@@ -45,6 +45,9 @@ object NoteTitles {
     private val leadingSyntax = TextMarkers.leadingSyntax
 
     private val spanOpening = Regex("""<span style="[^"]*">""", RegexOption.IGNORE_CASE)
+
+    /** Nagłówek na kawałku zdania - to samo co w note-title.ts na serwerze. */
+    private val headingOpening = Regex("""<span class="h[1-6]">""", RegexOption.IGNORE_CASE)
     private val spanClosing = Regex("""</span>""", RegexOption.IGNORE_CASE)
     private val underlineTag = Regex("""</?u>""", RegexOption.IGNORE_CASE)
     private val linkOrImage = Regex("""!?\[([^\]]*)]\([^)]*\)""")
@@ -77,6 +80,7 @@ object NoteTitles {
         // Barwę, rozmiar i podkreślenie zapisujemy znacznikami HTML - otwarcia
         // i domknięcia zdejmowane osobno, żeby przeżyć też zapis zagnieżdżony.
         .replace(spanOpening, "")
+        .replace(headingOpening, "")
         .replace(spanClosing, "")
         .replace(underlineTag, "")
         // Odnośnik i zdjęcie: zostaje sam opis.
