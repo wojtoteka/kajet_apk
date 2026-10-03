@@ -8,15 +8,17 @@ import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.core.model.NodeShape
 import wojtoteka.ovh.kajet.core.model.NoteAlign
-import wojtoteka.ovh.kajet.core.model.TextMarkers
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 import kotlin.math.min
 
 /**
  * To, czego PDF nie powinien zgadywać sam: przebiegi formatu, zdjęcia
  * z `assets/` i które węzły mapy widać. [PdfExport] tylko maluje wynik.
  *
- * Format fragmentu idzie tą samą drogą co [DocxExport.formattedParagraph]:
- * znaczniki z [RichText] (`**`, `*`, `==`, `` ` ``, `<u>`, barwa, rozmiar).
+ * Format fragmentu czyta [RichTextCodec] - ten sam, którym pisze edytor - więc
+ * wydruk i plik Worda widzą dokładnie to, co notatka (także formaty jeden
+ * w drugim i nagłówek nadany kawałkowi zdania). [DocxExport] bierze stąd te
+ * same przebiegi.
  */
 internal object PdfMarkdown {
 
@@ -36,6 +38,8 @@ internal object PdfMarkdown {
         val code: Boolean = false,
         val color: Int? = null,
         val sizePx: Float? = null,
+        /** Poziom nagłówka nadanego kawałkowi zdania; null - zwykły tekst. */
+        val heading: Int? = null,
     )
 
     data class ImageRef(
@@ -44,20 +48,8 @@ internal object PdfMarkdown {
         val align: NoteAlign = NoteAlign.LEFT,
     )
 
-    /**
-     * Ten sam porządek co w [DocxExport.formattedParagraph], plus rozmiar
-     * pisma, którego Word jeszcze nie maluje.
-     */
-    private val decorationPattern = Regex(
-        """<span style="color:[^"]*">[^<]*</span>""" +
-            """|<span style="font-size:[^"]*px">[^<]*</span>""" +
-            """|<u>[^<]*</u>""" +
-            """|\*\*[^*]+\*\*""" +
-            """|~~[^~]+~~""" +
-            """|==[^=]+==""" +
-            """|`[^`]+`""" +
-            """|\*[^*]+\*""",
-    )
+    /** Zapis odnośnika i zdjęcia w zdaniu - na kartce zostaje sam opis. */
+    private val linkPattern = Regex("""!?\[([^\]\n]*)]\(([^)\s]+)\)""")
 
     /**
      * Zdjęcia z wiersza - kilka, gdy w notatce stoją obok siebie.
@@ -82,45 +74,57 @@ internal object PdfMarkdown {
         }
     }
 
+    /**
+     * Treść wiersza (już bez budowy: kratek, znaku listy) na kawałki o jednym
+     * wyglądzie. Wcześniej czytały to wyrażenia regularne, które nie znały
+     * formatów jeden w drugim: pogrubione słowo w innym rozmiarze wychodziło
+     * na wydruku jako goły `<span style=...>`.
+     */
     fun runs(markdown: String): List<Run> {
         if (markdown.isEmpty()) return emptyList()
+        val parsed = RichTextCodec.read(markdown)
+        val plain = parsed.rich.text
+        val attrs = parsed.attrs
+
+        val hidden = BooleanArray(plain.length)
+        for (link in linkPattern.findAll(plain)) {
+            val label = link.groups[1] ?: continue
+            for (i in link.range.first until label.range.first) hidden[i] = true
+            for (i in label.range.first + label.value.length..link.range.last) hidden[i] = true
+        }
+
         val result = ArrayList<Run>()
-        var position = 0
-        for (match in decorationPattern.findAll(markdown)) {
-            if (match.range.first > position) {
-                val plain = TextMarkers.plain(markdown.substring(position, match.range.first))
-                if (plain.isNotEmpty()) result += Run(plain)
+        val text = StringBuilder()
+        var current = RichTextCodec.NONE
+        fun flush() {
+            if (text.isNotEmpty()) result += runOf(text.toString(), current)
+            text.clear()
+        }
+        for (i in plain.indices) {
+            if (hidden[i]) continue
+            val here = attrs.getOrElse(i) { RichTextCodec.NONE }
+            if (here != current) {
+                flush()
+                current = here
             }
-            result += runOf(match.value)
-            position = match.range.last + 1
+            text.append(plain[i])
         }
-        if (position < markdown.length) {
-            val plain = TextMarkers.plain(markdown.substring(position))
-            if (plain.isNotEmpty()) result += Run(plain)
-        }
+        flush()
         return result
     }
 
-    private fun runOf(piece: String): Run = when {
-        piece.startsWith("**") -> Run(piece.removeSurrounding("**"), bold = true)
-        piece.startsWith("~~") -> Run(piece.removeSurrounding("~~"), strike = true)
-        piece.startsWith("==") -> Run(piece.removeSurrounding("=="), highlight = true)
-        piece.startsWith("`") -> Run(piece.trim('`'), code = true)
-        piece.startsWith("<u>") -> Run(piece.removeSurrounding("<u>", "</u>"), underline = true)
-        piece.startsWith("<span") && "font-size:" in piece -> {
-            val inner = TextMarkers.sizePattern.find(piece)
-            Run(
-                text = inner?.groupValues?.get(2).orEmpty(),
-                sizePx = inner?.groupValues?.get(1)?.toFloatOrNull(),
-            )
-        }
-        piece.startsWith("<span") -> {
-            val inner = TextMarkers.colorPattern.find(piece)
-            val hex = Regex("""color:\s*(#[0-9a-fA-F]{6,8})""").find(piece)?.groupValues?.get(1)
-            Run(inner?.groupValues?.get(1).orEmpty(), color = hex?.let { TextMarkers.colorFromHex(it) })
-        }
-        else -> Run(piece.trim('*'), italic = true)
-    }
+    private fun runOf(text: String, attrs: RichTextCodec.Attrs) = Run(
+        text = text,
+        bold = attrs.bold,
+        italic = attrs.italic,
+        underline = attrs.underline,
+        strike = attrs.strikethrough,
+        highlight = attrs.highlight,
+        code = attrs.code,
+        color = attrs.color,
+        sizePx = attrs.sizePx,
+        heading = attrs.heading,
+    )
 
     fun opensFence(trimmed: String): String? = when {
         trimmed.startsWith("```") -> "```"

@@ -2,6 +2,10 @@ package wojtoteka.ovh.kajet.editor.text
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import wojtoteka.ovh.kajet.core.model.RichText
+import wojtoteka.ovh.kajet.core.model.FormatSpan
+import wojtoteka.ovh.kajet.core.model.SpanType
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 import wojtoteka.ovh.kajet.core.model.ImageLines
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.ParagraphAlign
@@ -44,15 +48,12 @@ internal fun PendingFormat.appliedTo(attrs: RichTextCodec.Attrs): RichTextCodec.
 }
 
 /**
- * Formatowanie fragmentu notatki.
+ * Zapis notatki w widoku surowego markdownu i ułożenie akapitów.
  *
- * Wszystko idzie przez [RichText]: zapis schodzi do czystego tekstu z listą
- * zakresów, zmienia się zakres, zapis składa się z powrotem. Znaczniki nie są
- * tu nigdy doklejane do ciągu znaków, więc nie mają jak się zagnieździć,
- * osierocić ani wyjść poza zaznaczenie.
- *
- * Każda z tych funkcji rusza WYŁĄCZNIE zaznaczenie. Bez zaznaczenia oddaje
- * null - wtedy format idzie do [PendingFormat] i czeka na pisanie.
+ * Formaty znaku i budowa akapitu z paska narzędzi idą przez [TextCommands],
+ * pisanie w widoku notatki - przez [TextEdit]. Tutaj zostaje to, co działa
+ * wprost na zapisie: format czekający na pisanie w surowym markdownie,
+ * ułożenie akapitów i wstawianie gotowych kawałków.
  */
 object TextFormat {
 
@@ -60,96 +61,6 @@ object TextFormat {
      *  pojedyncze słowo może być i drobnym przypisem, i wielkim tytułem. */
     const val SMALLEST_FRAGMENT = 8f
     const val LARGEST_FRAGMENT = 72f
-
-    /** Formaty obejmujące całe zaznaczenie; bez zaznaczenia - te pod kursorem. */
-    fun formatsIn(field: TextFieldValue): Set<FormatSpan> {
-        val parsed = RichTextCodec.read(field.text)
-        val from = parsed.plainOffset(field.selection.min)
-        val to = parsed.plainOffset(field.selection.max)
-        return parsed.rich.formatsIn(from, to)
-    }
-
-    /** Czy zaznaczenie (albo miejsce pod kursorem) ma już ten format. */
-    fun has(field: TextFieldValue, type: SpanType): Boolean =
-        formatsIn(field).any { it.type == type }
-
-    /**
-     * Nadaje albo zdejmuje format zaznaczenia. Fragment, który format już ma
-     * w całości, traci go - drugie naciśnięcie przycisku zdejmuje pogrubienie.
-     */
-    fun toggle(field: TextFieldValue, type: SpanType, value: String = ""): TextFieldValue? =
-        edit(field, trimEdges = true) { parsed, from, to ->
-            val whole = (from until to).all { i ->
-                parsed.rich.text[i] == '\n' || parsed.attrs[i].has(type)
-            }
-            if (whole) {
-                RichTextCodec.remove(parsed.rich.text, parsed.attrs, from, to, type)
-            } else {
-                RichTextCodec.apply(parsed.rich.text, parsed.attrs, from, to, type, value)
-            }
-        }
-
-    /**
-     * Nadaje zaznaczeniu barwę pisma ([argb]; null zdejmuje barwę). Barwa już
-     * obecna jest PODMIENIANA, nie obudowywana drugim znacznikiem.
-     */
-    fun applyColor(field: TextFieldValue, argb: Int?): TextFieldValue? = edit(field) { parsed, from, to ->
-        if (argb == null) {
-            RichTextCodec.remove(parsed.rich.text, parsed.attrs, from, to, SpanType.COLOR)
-        } else {
-            RichTextCodec.apply(
-                parsed.rich.text,
-                parsed.attrs,
-                from,
-                to,
-                SpanType.COLOR,
-                RichTextCodec.colorHex(argb),
-            )
-        }
-    }
-
-    /**
-     * Zmienia wielkość pisma zaznaczonego fragmentu o [delta] punktów. Kolejne
-     * naciśnięcia przestawiają liczbę zamiast zagnieżdżać znaczniki, a powrót
-     * do wielkości notatki ([base]) zdejmuje znacznik całkiem.
-     */
-    fun resize(field: TextFieldValue, delta: Float, base: Float): TextFieldValue? =
-        edit(field) { parsed, from, to ->
-            val current = parsed.attrs.getOrNull(from)?.sizePx ?: base
-            val resized = (current + delta).coerceIn(SMALLEST_FRAGMENT, LARGEST_FRAGMENT)
-            if (resized == base) {
-                RichTextCodec.remove(parsed.rich.text, parsed.attrs, from, to, SpanType.SIZE)
-            } else {
-                RichTextCodec.apply(
-                    parsed.rich.text,
-                    parsed.attrs,
-                    from,
-                    to,
-                    SpanType.SIZE,
-                    RichTextCodec.sizeText(resized),
-                )
-            }
-        }
-
-    /**
-     * Barwa pisma zaznaczenia albo tego, co pod kursorem; null, gdy fragment
-     * nie ma własnej barwy. Po tym okno z tęczą otwiera się na barwie, którą
-     * fragment już ma, zamiast na czymkolwiek.
-     */
-    fun colorIn(field: TextFieldValue): Int? {
-        val parsed = RichTextCodec.read(field.text)
-        val at = parsed.plainOffset(field.selection.min)
-        val character = if (field.selection.collapsed && at > 0) at - 1 else at
-        return parsed.attrs.getOrNull(character)?.color
-    }
-
-    /** Wielkość pisma pod kursorem albo w zaznaczeniu; [base], gdy fragment jej nie ma. */
-    fun sizeIn(field: TextFieldValue, base: Float): Float {
-        val parsed = RichTextCodec.read(field.text)
-        val at = parsed.plainOffset(field.selection.min)
-        val character = if (field.selection.collapsed && at > 0) at - 1 else at
-        return parsed.attrs.getOrNull(character)?.sizePx ?: base
-    }
 
     /**
      * Nadaje zapamiętane formaty tekstowi dopiero co wpisanemu.
@@ -410,116 +321,6 @@ object TextFormat {
         )
     }
 
-    /**
-     * Przestawia formaty zaznaczenia i składa zapis z powrotem. Zwraca pole
-     * z zaznaczonym tym samym fragmentem - można poprawiać do skutku.
-     */
-    private fun edit(
-        field: TextFieldValue,
-        /**
-         * Czy obciąć z zaznaczenia spacje na brzegach. Znaczniki parzyste
-         * ich nie znoszą - „* ma*" przestaje być kursywą i gwiazdki wychodzą
-         * na wierzch. Nikt zresztą nie chce pogrubionej spacji.
-         */
-        trimEdges: Boolean = false,
-        change: (
-            RichTextCodec.Parsed,
-            Int,
-            Int,
-        ) -> Pair<RichText, List<RichTextCodec.Attrs>>,
-    ): TextFieldValue? {
-        val parsed = RichTextCodec.read(field.text)
-        var from = parsed.plainOffset(field.selection.min)
-        var to = parsed.plainOffset(field.selection.max)
-
-        if (trimEdges) {
-            val plain = parsed.rich.text
-            while (from < to && plain[from].isWhitespace()) from++
-            while (to > from && plain[to - 1].isWhitespace()) to--
-        }
-        if (from >= to) return null
-
-        val (rich, attrs) = change(parsed, from, to)
-        val rendered = RichTextCodec.write(rich.text, attrs)
-        return TextFieldValue(
-            rendered.markdown,
-            TextRange(rendered.sourceOffsetOf(from), rendered.sourceEndOf(to)),
-        )
-    }
-
-    // --- Budowa wiersza: to nie format fragmentu, tylko układ notatki ---
-
-    fun beforeLine(field: TextFieldValue, marker: String): TextFieldValue {
-        val content = field.text
-        val cursor = field.selection.start.coerceIn(0, content.length)
-
-        val lineStart = content.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0))
-            .let { if (it < 0 || cursor == 0) 0 else it + 1 }
-        val lineEnd = content.indexOf('\n', lineStart).let { if (it < 0) content.length else it }
-        val line = content.substring(lineStart, lineEnd)
-
-        // Znacznik ułożenia akapitu obejmuje cały wiersz - budowa wiersza
-        // (kratki, punkt, cytat) siedzi w jego środku.
-        val open = ParagraphAlign.openingLength(line)
-        val close = ParagraphAlign.closingLength(line, open)
-        val inner = line.substring(open, line.length - close)
-        val indentLen = inner.indexOfFirst { it != ' ' && it != '\t' }.let { if (it < 0) inner.length else it }
-        val body = inner.substring(indentLen)
-
-        /*
-          Nagłówek to JEDEN znacznik wiersza. Doklejanie „## " do „# Tytuł"
-          dawało „## # Tytuł": parser chował tylko zewnętrzne kratki, a
-          wewnętrzne `#` / `###` wychodziły na wierzch. Dlatego kratki - także
-          poskładane z poprzednich przełączeń - schodzą najpierw, a nowy
-          znacznik wchodzi na ich miejsce. To samo naciśnięcie zdejmuje.
-        */
-        val headingLen = RichTextCodec.headingPrefixLength(body)
-        val afterHeading = body.substring(headingLen)
-        val (prefixLen, rest) = if (RichTextCodec.isHeadingMarker(marker)) {
-            val other = otherLinePrefix.find(afterHeading)?.value.orEmpty()
-            headingLen + other.length to afterHeading.substring(other.length)
-        } else {
-            headingLen to afterHeading
-        }
-        val existing = body.substring(0, prefixLen)
-
-        val nextBody = when {
-            RichTextCodec.isHeadingMarker(marker) && existing == marker -> rest
-            RichTextCodec.isHeadingMarker(marker) -> marker + rest
-            rest.startsWith(marker) -> rest.substring(marker.length)
-            else -> marker + rest
-        }
-
-        // Zadanie stoi zawsze przy lewej krawędzi, obok kwadracika - i tylko
-        // bez znacznika ułożenia zostaje zadaniem po ponownym otwarciu notatki.
-        val keepWrapper = !(marker == Blocks.TASK_MARKER && !rest.startsWith(marker))
-        val openText = if (keepWrapper) line.substring(0, open) else ""
-        val closeText = if (keepWrapper) line.substring(line.length - close) else ""
-
-        val next = content.substring(0, lineStart) +
-            openText +
-            inner.substring(0, indentLen) +
-            nextBody +
-            closeText +
-            content.substring(lineEnd)
-
-        val bodyAt = lineStart + open + indentLen
-        val newBodyAt = lineStart + openText.length + indentLen
-        val newPrefixLen = when {
-            RichTextCodec.isHeadingMarker(marker) && existing == marker -> 0
-            RichTextCodec.isHeadingMarker(marker) -> marker.length
-            rest.startsWith(marker) -> 0
-            else -> marker.length
-        }
-        val newBodyEnd = newBodyAt + nextBody.length
-        val cursorAfter = when {
-            cursor < bodyAt -> if (keepWrapper) cursor else newBodyAt
-            cursor < bodyAt + prefixLen -> newBodyAt + newPrefixLen
-            else -> (cursor - (bodyAt + prefixLen) + newBodyAt + newPrefixLen).coerceAtMost(newBodyEnd)
-        }
-        return TextFieldValue(next, TextRange(cursorAfter.coerceIn(0, next.length)))
-    }
-
     // --- Ułożenie akapitu ---
 
     /** Ułożenie zapisane w wierszu pod kursorem; null, gdy wiersz nie ma własnego. */
@@ -654,9 +455,6 @@ object TextFormat {
             TextRange(moved(field.selection.start), moved(field.selection.end)),
         )
     }
-
-    /** Lista, zadanie, cytat - wszystko, co nie jest kratkami nagłówka. */
-    private val otherLinePrefix = Regex("""^(?:> |[-*+] \[[ xX]] |[-*+] |\d+[.)] )""")
 
     fun insert(field: TextFieldValue, fragment: String, stepBack: Int = 0): TextFieldValue {
         val content = field.text

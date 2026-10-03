@@ -168,10 +168,10 @@ open class NoteViewModel(
         }
     }
 
-    fun perform(change: Change) {
+    fun perform(change: Change, mergeable: Boolean = false) {
         val current = _document.value ?: return
         _document.value = change.applyTo(current)
-        history.record(change)
+        history.record(change, mergeable)
         refreshButtons()
         markChanged()
     }

@@ -18,6 +18,13 @@ na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmi
 **Notatki tekstowe.** Pisze się jak w Wordzie: znaczników (`**`, `#`, `<span>`, płotów
 ```` ``` ````) nie widać nigdy, także pod kursorem, a Backspace i Enter nie potrafią ich
 rozbić - każda zmiana z klawiatury przelicza się na to, co widać (`TextLayout`, `TextEdit`).
+Przyciski paska nie doklejają znaczników, tylko zmieniają model notatki - akapity z budową
+i znaki z formatami (`TextDocument`, `TextCommands`) - a zapis składa się z niego od nowa.
+Formaty znaku, łącznie z nagłówkami H1-H3, działają na zaznaczenie, bez zaznaczenia na słowo
+pod kursorem, a za tekstem czekają na pisanie; nagłówek kawałka zdania to
+`<span class="h1">…</span>`, a cały wiersz w jednym poziomie zapisuje się jako `# Tytuł`.
+Punkt, numer, zadanie i cytat dostają wszystkie zaznaczone akapity, numeracja liczy się
+sama, jest Cofnij/Ponów oraz Ctrl+B/I/U/Z/Y z klawiatury.
 Ułożenie (lewo, środek, prawo) ma każdy akapit osobno: `<p style="text-align:center">…</p>`
 wokół wiersza, ten sam zapis po stronie serwera. Blok kodu i wzór to osobne pola z czcionką
 maszynową, bez widocznych płotów. Pod spodem nadal Markdown z tabelami, listami, obrazkami

@@ -43,6 +43,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.AnnotatedString
@@ -91,6 +99,29 @@ import wojtoteka.ovh.kajet.core.text.photoNotFound
 /** Zapas pod kursorem, który ma być widać przy pisaniu - mniej więcej linia. */
 private val CURSOR_MARGIN = 56.dp
 
+/** Skróty klawiatury w polu notatki - jak w Wordzie. */
+enum class Shortcut { BOLD, ITALIC, UNDERLINE, UNDO, REDO }
+
+/**
+ * Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Z i Ctrl+Y (albo Ctrl+Shift+Z) z klawiatury
+ * podpiętej do tabletu. Bez tego Ctrl+Z nie robił nic, a Ctrl+B wstawiał
+ * w notatkę literę „b".
+ */
+private fun Modifier.shortcuts(onShortcut: (Shortcut) -> Boolean): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown || !(event.isCtrlPressed || event.isMetaPressed)) {
+        return@onPreviewKeyEvent false
+    }
+    val shortcut = when (event.key) {
+        Key.B -> Shortcut.BOLD
+        Key.I -> Shortcut.ITALIC
+        Key.U -> Shortcut.UNDERLINE
+        Key.Z -> if (event.isShiftPressed) Shortcut.REDO else Shortcut.UNDO
+        Key.Y -> Shortcut.REDO
+        else -> null
+    }
+    shortcut != null && onShortcut(shortcut)
+}
+
 @Composable
 fun BlockEditor(
     blocks: List<Block>,
@@ -134,6 +165,8 @@ fun BlockEditor(
     onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
     appearance: TextContent,
     modifier: Modifier = Modifier,
+    /** Skróty klawiatury (Ctrl+B, Ctrl+Z...); false - klawisz idzie dalej. */
+    onShortcut: (Shortcut) -> Boolean = { false },
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
@@ -185,6 +218,7 @@ fun BlockEditor(
                     },
                     onSelection = onSelection,
                     onTyped = onTyped,
+                    onShortcut = onShortcut,
                 )
 
                 is Block.Task -> TaskBlock(
@@ -213,6 +247,7 @@ fun BlockEditor(
                     },
                     onSelection = onSelection,
                     onTyped = onTyped,
+                    onShortcut = onShortcut,
                 )
 
                 is Block.Code -> CodeBlock(
@@ -248,6 +283,12 @@ fun BlockEditor(
                         onBlocksChange(Blocks.removeColumn(blocks, block.key, column))
                     },
                     onDelete = { onBlocksChange(Blocks.remove(blocks, block.key)) },
+                    onCellFocused = { key, set ->
+                        onSelectPhoto(null)
+                        onBlockFocused(key, set)
+                    },
+                    onSelection = onSelection,
+                    onTyped = onTyped,
                 )
 
                 is Block.Image -> ImageRowBlock(
@@ -336,6 +377,7 @@ private fun TextBlock(
     onSelection: (TextFieldValue) -> Unit,
     onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
     modifier: Modifier = Modifier,
+    onShortcut: (Shortcut) -> Boolean = { false },
 ) {
     val focus = remember { FocusRequester() }
 
@@ -407,6 +449,7 @@ private fun TextBlock(
                 .widthIn(max = Kajet.dimens.readingWidth)
                 .heightIn(min = 32.dp)
                 .bringIntoViewRequester(bringIntoView)
+                .shortcuts(onShortcut)
                 .focusRequester(focus)
                 .onFocusChanged { state ->
                     hasFocus = state.isFocused
@@ -445,6 +488,7 @@ private fun TaskBlock(
     onBlockFocused: (String, (TextFieldValue) -> Unit) -> Unit,
     onSelection: (TextFieldValue) -> Unit,
     onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
+    onShortcut: (Shortcut) -> Boolean,
 ) {
     val words = LocalStrings.current
     Row(
@@ -515,6 +559,7 @@ private fun TaskBlock(
             onBlockFocused = onBlockFocused,
             onSelection = onSelection,
             onTyped = onTyped,
+            onShortcut = onShortcut,
             modifier = Modifier.padding(top = 6.dp),
         )
     }
@@ -644,6 +689,10 @@ private fun TableBlock(
     onRemoveRow: (Int) -> Unit,
     onRemoveColumn: (Int) -> Unit,
     onDelete: () -> Unit,
+    /** Komórka z kursorem - pasek formatowania działa wtedy na niej. */
+    onCellFocused: (key: String, setField: (TextFieldValue) -> Unit) -> Unit,
+    onSelection: (TextFieldValue) -> Unit,
+    onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
 ) {
     val words = LocalStrings.current
     val colors = Kajet.colors
@@ -676,6 +725,7 @@ private fun TableBlock(
                             )
                         }
                         TableCell(
+                            key = Blocks.cellKey(block.key, row, column),
                             text = block.cell(row, column),
                             style = if (row == 0) {
                                 style.copy(fontWeight = FontWeight.SemiBold)
@@ -688,6 +738,9 @@ private fun TableBlock(
                                 chosenRow = row
                                 chosenColumn = column
                             },
+                            onCellFocused = onCellFocused,
+                            onSelection = onSelection,
+                            onTyped = onTyped,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -742,11 +795,15 @@ private fun TableBlock(
 
 @Composable
 private fun TableCell(
+    key: String,
     text: String,
     style: TextStyle,
     inlineStyle: InlineStyle,
     onText: (String) -> Unit,
     onFocused: () -> Unit,
+    onCellFocused: (key: String, setField: (TextFieldValue) -> Unit) -> Unit,
+    onSelection: (TextFieldValue) -> Unit,
+    onTyped: (previous: TextFieldValue, typed: TextFieldValue) -> TextFieldValue?,
     modifier: Modifier = Modifier,
 ) {
     var field by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
@@ -759,8 +816,16 @@ private fun TableCell(
 
     BasicTextField(
         value = field,
-        onValueChange = { next ->
+        onValueChange = { typed ->
+            /*
+              Komórka pisze się tak samo jak akapit - przez model tego, co
+              widać (TextEdit). Wcześniej szła wprost do zapisu, więc kasowanie
+              przy ukrytych znacznikach pogrubienia albo barwy potrafiło je
+              rozbić i gwiazdki wychodziły na wierzch w tabelce.
+            */
+            val next = onTyped(field, typed) ?: typed
             field = next
+            onSelection(next)
             if (next.text != text) onText(next.text)
         },
         textStyle = style,
@@ -769,7 +834,13 @@ private fun TableCell(
         modifier = modifier
             .heightIn(min = 44.dp)
             .padding(horizontal = 10.dp, vertical = 12.dp)
-            .onFocusChanged { if (it.isFocused) onFocused() },
+            .onFocusChanged { state ->
+                if (state.isFocused) {
+                    onFocused()
+                    onCellFocused(key) { next -> field = next }
+                    onSelection(field)
+                }
+            },
     )
 }
 

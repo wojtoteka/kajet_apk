@@ -1,7 +1,9 @@
 package wojtoteka.ovh.kajet.editor.text
 
+import androidx.compose.ui.text.TextRange
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.core.model.ParagraphAlign
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 
 /** Czym jest wiersz pola tekstowego. */
 enum class LineKind {
@@ -131,6 +133,18 @@ class TextLayout private constructor(
     }
 
     fun sourceCursor(visibleIndex: Int): Int = sourceOfPlainCursor(plainCursor(visibleIndex))
+
+    /**
+     * Zaznaczenie widocznych znaków od [from] do [to] w miarach zapisu: od
+     * pierwszego zaznaczonego znaku do tuż za ostatnim, bez znaczników
+     * dookoła. Puste - zwykły kursor ([sourceCursor]).
+     */
+    fun sourceSelection(from: Int, to: Int): TextRange {
+        val a = from.coerceIn(0, visible.length)
+        val b = to.coerceIn(a, visible.length)
+        if (a == b) return TextRange(sourceCursor(a))
+        return TextRange(parsed.sourceOffset(toPlain[a]), parsed.sourceEnd(toPlain[b - 1] + 1))
+    }
 
     companion object {
         private val taskPattern = Regex("""^[-*+] \[([ xX])] """)

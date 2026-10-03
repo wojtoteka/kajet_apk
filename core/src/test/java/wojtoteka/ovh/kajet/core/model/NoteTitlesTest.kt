@@ -35,6 +35,15 @@ class NoteTitlesTest {
     }
 
     @Test
+    fun `z naglowka na kawalku zdania zdejmuje znacznik`() {
+        // Ten sam wynik co note-title.ts na serwerze - inaczej notatki
+        // przetytułowywałyby się nawzajem przy synchronizacji.
+        assertThat(NoteTitles.fromMarkdown("<span class=\"h1\">Zakupy</span> na sobotę\nmleko"))
+            .isEqualTo("Zakupy na sobotę")
+        assertThat(TextMarkers.plain("<span class=\"h2\">Ala</span> ma kota")).isEqualTo("Ala ma kota")
+    }
+
+    @Test
     fun `z naglowka zdejmuje kratki`() {
         assertThat(NoteTitles.fromMarkdown("## Zebranie w piątek\n\ntreść"))
             .isEqualTo("Zebranie w piątek")

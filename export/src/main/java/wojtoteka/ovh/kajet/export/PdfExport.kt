@@ -15,9 +15,9 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.text.style.AbsoluteSizeSpan
 import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
@@ -35,7 +35,9 @@ import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteFont
 import wojtoteka.ovh.kajet.core.model.NotePage
 import wojtoteka.ovh.kajet.core.model.PageBackground
+import wojtoteka.ovh.kajet.core.model.RichTextCodec
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
+import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.ink.ShapeGeometry
 import wojtoteka.ovh.kajet.ink.ShapePainter
@@ -44,7 +46,6 @@ import wojtoteka.ovh.kajet.ink.Strokes
 import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 object PdfExport {
 
@@ -310,6 +311,8 @@ object PdfExport {
         y += 40f
 
         val noteAlign = document.text?.align ?: NoteAlign.LEFT
+        // Wielkość pisma notatki - od niej liczy się powiększenie fragmentu.
+        val noteSize = document.text?.fontSize?.takeIf { it > 0f } ?: TextContent.DEFAULT_SIZE
         for (line in content.split('\n')) {
             if (fence != null) {
                 val trimmed = line.trim()
@@ -352,9 +355,15 @@ object PdfExport {
                 continue
             }
 
-            val level = trimmed.takeWhile { it == '#' }.length
+            // Kratki nagłówka liczy ten sam czytnik co notatka: „#hashtag"
+            // bez spacji to zwykły tekst, a nie nagłówek „ashtag".
+            val level = RichTextCodec.headingLevelOfLine(trimmed)
             val look = when {
-                level in 1..6 -> LineLook(trimmed.drop(level + 1), 20f - level * 1.5f, extraBold = true)
+                level > 0 -> LineLook(
+                    trimmed.substring(RichTextCodec.headingPrefixLength(trimmed)),
+                    20f - level * 1.5f,
+                    extraBold = true,
+                )
                 Regex("^[-*+] \\[[xX]] ").containsMatchIn(trimmed) -> LineLook(
                     trimmed.replace(Regex("^[-*+] \\[[xX]] "), "☑  "),
                     11f,
@@ -371,6 +380,7 @@ object PdfExport {
             }
             val block = styled(
                 markdown = look.raw,
+                noteSize = noteSize,
                 extraBold = look.extraBold,
                 extraItalic = look.extraItalic,
                 extraStrike = look.extraStrike,
@@ -498,6 +508,8 @@ object PdfExport {
 
     private fun styled(
         markdown: String,
+        /** Wielkość pisma notatki w aplikacji - fragment „21px" rośnie względem niej. */
+        noteSize: Float,
         extraBold: Boolean = false,
         extraItalic: Boolean = false,
         extraStrike: Boolean = false,
@@ -512,7 +524,7 @@ object PdfExport {
             builder.append(run.text)
             val to = builder.length
             if (from == to) continue
-            val bold = extraBold || run.bold
+            val bold = extraBold || run.bold || run.heading != null
             val italic = extraItalic || run.italic
             val style = when {
                 bold && italic -> Typeface.BOLD_ITALIC
@@ -533,9 +545,14 @@ object PdfExport {
             }
             val color = run.color?.let { PaperInk.ink(it) } ?: PaperInk.INK
             builder.setSpan(ForegroundColorSpan(color), from, to, flags)
-            run.sizePx?.let { px ->
-                builder.setSpan(AbsoluteSizeSpan(px.roundToInt(), false), from, to, flags)
-            }
+            /*
+              Wielkość fragmentu i nagłówek nadany kawałkowi zdania - względem
+              pisma wiersza, tak samo jak w notatce. Dawniej „21px" szło na
+              kartkę jako 21 punktów przy 11-punktowym tekście, czyli prawie
+              dwa razy za duże.
+            */
+            val scale = run.sizePx?.let { it / noteSize } ?: RichTextCodec.headingScale(run.heading)
+            if (scale != 1f) builder.setSpan(RelativeSizeSpan(scale), from, to, flags)
         }
         return builder
     }

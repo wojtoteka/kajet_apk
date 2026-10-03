@@ -1,7 +1,5 @@
 package wojtoteka.ovh.kajet.editor.text
 
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -21,6 +19,7 @@ import wojtoteka.ovh.kajet.core.model.TextAttachments
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.editor.NoteViewModel
+import wojtoteka.ovh.kajet.editor.TextChange
 import wojtoteka.ovh.kajet.ink.DrawingToImage
 import wojtoteka.ovh.kajet.ink.PaperStrokes
 import wojtoteka.ovh.kajet.storage.SettingsStore
@@ -166,7 +165,22 @@ class TextNoteViewModel(
         }
     }
 
-    fun setContent(markdown: String) {
+    /**
+     * Nowa treść notatki - krok, który da się cofnąć. [typing]: zmiana
+     * z pisania; pisanie bez przerwy składa się w jeden krok cofania.
+     */
+    fun setContent(markdown: String, typing: Boolean = false) {
+        val current = document.value ?: return
+        val before = current.text?.markdown.orEmpty()
+        if (before == markdown && current.text != null) return
+        perform(TextChange(before, markdown), mergeable = typing)
+    }
+
+    /**
+     * Naprawa zapisu przy otwarciu notatki (stare znaczniki). Treść wygląda
+     * tak samo, więc to nie jest krok do cofania.
+     */
+    fun repairContent(markdown: String) {
         editWithoutHistory { document ->
             val text = document.text ?: TextContent()
             document.copy(text = text.copy(markdown = markdown))
@@ -189,15 +203,6 @@ class TextNoteViewModel(
         val next = content.substring(0, from) + marker + middle + marker + content.substring(to)
         setContent(next)
         return (from + marker.length)..(from + marker.length + middle.length)
-    }
-
-    fun beforeLine(marker: String, position: Int): Int {
-        val after = TextFormat.beforeLine(
-            TextFieldValue(markdown, TextRange(position.coerceIn(0, markdown.length))),
-            marker,
-        )
-        setContent(after.text)
-        return after.selection.start
     }
 
     // Zdjęcia i rysunki

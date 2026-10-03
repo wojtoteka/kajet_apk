@@ -1,8 +1,6 @@
-package wojtoteka.ovh.kajet.editor.text
+package wojtoteka.ovh.kajet.core.model
 
 import kotlin.math.roundToInt
-import wojtoteka.ovh.kajet.core.model.ParagraphAlign
-import wojtoteka.ovh.kajet.core.model.TextMarkers
 
 /**
  * Jeden format źródłowy treści z formatowaniem.
@@ -14,6 +12,7 @@ import wojtoteka.ovh.kajet.core.model.TextMarkers
  *   <u>podkreślone</u>
  *   <span style="color:#RRGGBB">barwne</span>
  *   <span style="font-size:21px">większe</span>
+ *   <span class="h1">jak nagłówek</span>
  *
  * Dokładnie ten zapis czyta i pisze serwer (`src/lib/rich-text.ts`), więc
  * format pliku zostaje bez zmian. Zmienia się to, co dzieje się w pamięci:
@@ -22,10 +21,14 @@ import wojtoteka.ovh.kajet.core.model.TextMarkers
  * zapis z powrotem. Dzięki temu znaczniki nie mają jak się zagnieździć,
  * osierocić ani wyjść poza zaznaczenie.
  *
- * Czego ten model NIE obejmuje: nagłówków, list, zadań, cytatów, tabel,
- * odnośników, zdjęć, wzorów i bloków kodu. To budowa notatki, nie format
- * fragmentu - zostaje w treści znak w znak i zajmują się nią [Blocks]
- * oraz [InlineStyle].
+ * Nagłówek jest tu formatem ZNAKU, jak w Wordzie: H1 nadane kawałkowi
+ * zdania obejmuje tylko ten kawałek. Wiersz, w którym cały tekst ma ten sam
+ * poziom, zapisuje się po markdownowemu - „# Tytuł" - i tak czyta go każdy
+ * czytnik markdownu; nagłówek w środku zdania to `<span class="h1">`.
+ *
+ * Czego ten model NIE obejmuje: list, zadań, cytatów, tabel, odnośników,
+ * zdjęć, wzorów i bloków kodu. To budowa notatki, nie format fragmentu -
+ * zostaje w treści znak w znak i zajmują się nią edytor i eksport.
  */
 enum class SpanType {
     BOLD,
@@ -41,18 +44,26 @@ enum class SpanType {
      * takiego kawałka zostaje znak w znak.
      */
     CODE,
+
+    /**
+     * Wygląd nagłówka (H1-H3) na kawałku tekstu. Wartość to poziom: „1".
+     * Cały wiersz w jednym poziomie zapisuje się jako „# ", kawałek - jako
+     * `<span class="h1">`.
+     */
+    HEADING,
     ;
 
-    /** Czy rodzaj niesie wartość (barwa, liczba pikseli), czy sam siebie. */
-    val carriesValue: Boolean get() = this == COLOR || this == SIZE
+    /** Czy rodzaj niesie wartość (barwa, liczba pikseli, poziom), czy sam siebie. */
+    val carriesValue: Boolean get() = this == COLOR || this == SIZE || this == HEADING
 }
 
 /**
  * Zakres jednego formatu: od [start] włącznie do [end] bez.
  *
- * [value] ma znaczenie wyłącznie dla dwóch rodzajów:
- *   [SpanType.COLOR] - barwa jako „#RRGGBB",
- *   [SpanType.SIZE]  - wielkość pisma w pikselach, na przykład „21".
+ * [value] ma znaczenie wyłącznie dla trzech rodzajów:
+ *   [SpanType.COLOR]   - barwa jako „#RRGGBB",
+ *   [SpanType.SIZE]    - wielkość pisma w pikselach, na przykład „21",
+ *   [SpanType.HEADING] - poziom nagłówka, na przykład „1".
  * Dla pozostałych zostaje pusty.
  */
 data class FormatSpan(
@@ -122,6 +133,8 @@ object RichTextCodec {
         val code: Boolean = false,
         val color: Int? = null,
         val sizePx: Float? = null,
+        /** Poziom nagłówka, 1-6; null - zwykły tekst. */
+        val heading: Int? = null,
     ) {
         fun with(type: SpanType, value: String): Attrs = when (type) {
             SpanType.BOLD -> copy(bold = true)
@@ -132,6 +145,7 @@ object RichTextCodec {
             SpanType.CODE -> copy(code = true)
             SpanType.COLOR -> copy(color = TextMarkers.colorFromHex(value) ?: color)
             SpanType.SIZE -> copy(sizePx = value.toFloatOrNull() ?: sizePx)
+            SpanType.HEADING -> copy(heading = value.toIntOrNull()?.takeIf { it in 1..6 } ?: heading)
         }
 
         fun without(type: SpanType): Attrs = when (type) {
@@ -143,6 +157,7 @@ object RichTextCodec {
             SpanType.CODE -> copy(code = false)
             SpanType.COLOR -> copy(color = null)
             SpanType.SIZE -> copy(sizePx = null)
+            SpanType.HEADING -> copy(heading = null)
         }
 
         fun has(type: SpanType): Boolean = when (type) {
@@ -154,11 +169,13 @@ object RichTextCodec {
             SpanType.CODE -> code
             SpanType.COLOR -> color != null
             SpanType.SIZE -> sizePx != null
+            SpanType.HEADING -> heading != null
         }
 
         fun valueOf(type: SpanType): String = when (type) {
             SpanType.COLOR -> color?.let { colorHex(it) }.orEmpty()
             SpanType.SIZE -> sizePx?.let { sizeText(it) }.orEmpty()
+            SpanType.HEADING -> heading?.toString().orEmpty()
             else -> ""
         }
     }
@@ -205,6 +222,7 @@ object RichTextCodec {
     private const val LONGEST_TAG = 48
 
     private val colorOpening = Regex("""^<span style="color:(#[0-9a-fA-F]{6,8})">""")
+    private val headingOpening = Regex("""^<span class="h([1-6])">""")
     private val sizeOpening = Regex("""^<span style="font-size:(\d+(?:\.\d+)?)px">""")
 
     /**
@@ -254,6 +272,43 @@ object RichTextCodec {
             break
         }
         return consumed
+    }
+
+    /**
+     * Poziom nagłówka z budowy wiersza (kratki, ewentualnie poskładane
+     * „## # "); 0, gdy budowa nie jest nagłówkiem. Poziom bierze się z pierwszej
+     * grupy kratek - tak samo liczy go [TextLayout] i serwer.
+     */
+    fun headingLevelOf(structure: String): Int {
+        val trimmed = structure.trimStart()
+        if (!trimmed.startsWith("#")) return 0
+        return trimmed.takeWhile { it == '#' }.length.coerceIn(1, 6)
+    }
+
+    /** Poziom nagłówka zapisany kratkami na początku wiersza [line]; 0 - brak. */
+    fun headingLevelOfLine(line: String): Int {
+        val open = ParagraphAlign.openingLength(line)
+        return headingLevelOf(blockPrefix.find(line.substring(open))?.value.orEmpty())
+    }
+
+    /**
+     * Wiersz z kratkami nagłówka przepisany na nagłówek-znacznik:
+     * „# Tytuł" -> `<span class="h1">Tytuł</span>`. Potrzebne tam, gdzie
+     * wiersz siedzi w środku innej budowy - w zadaniu „- [ ] # Tytuł" kratki
+     * byłyby dla markdownu zwykłym tekstem. Wiersz bez kratek wraca bez zmian.
+     */
+    fun headingAsSpan(line: String): String {
+        val open = ParagraphAlign.openingLength(line)
+        val structure = blockPrefix.find(line.substring(open))?.value.orEmpty()
+        if (headingLevelOf(structure) == 0) return line
+        val parsed = read(line)
+        val plain = parsed.rich.text
+        val from = open
+        val to = (open + structure.length).coerceAtMost(plain.length)
+        return write(
+            plain.removeRange(from, to),
+            parsed.attrs.subList(0, from) + parsed.attrs.subList(to, plain.length),
+        ).markdown
     }
 
     /** Znacznik otwierający blok kodu albo wzoru; null, gdy wiersz nim nie jest. */
@@ -317,11 +372,16 @@ object RichTextCodec {
                 // Znacznik ułożenia akapitu obejmuje cały wiersz - jego
                 // otwarcie i domknięcie to też budowa, nie treść.
                 val open = ParagraphAlign.openingLength(line)
-                val prefix = open + (blockPrefix.find(line.substring(open))?.value?.length ?: 0)
+                val structure = blockPrefix.find(line.substring(open))?.value.orEmpty()
+                val prefix = open + structure.length
                 val close = ParagraphAlign.closingLength(line, open)
                     .takeIf { line.length - it >= prefix } ?: 0
+                // Treść wiersza „# Tytuł" ma wygląd nagłówka znak po znaku -
+                // tak samo, jak nagłówek nadany kawałkowi zdania.
+                val level = headingLevelOf(structure)
+                val base = if (level > 0) NONE.copy(heading = level) else NONE
                 sink.verbatim(markdown, at, at + prefix, NONE)
-                scan(markdown, at + prefix, lineEnd - close, NONE, sink, IntArray(1))
+                scan(markdown, at + prefix, lineEnd - close, base, sink, IntArray(1))
                 sink.verbatim(markdown, lineEnd - close, lineEnd, NONE)
             }
 
@@ -446,6 +506,21 @@ object RichTextCodec {
         }
 
         val rest = text.substring(at, minOf(to, at + LONGEST_TAG))
+
+        // Nagłówek na kawałku tekstu. Poziom wewnętrzny wygrywa z poziomem
+        // wiersza - „# Tytuł z <span class="h2">dopiskiem</span>".
+        val heading = headingOpening.find(rest)
+        if (heading != null) {
+            val innerFrom = at + heading.value.length
+            val close = closingSpanAt(text, innerFrom, to)
+            sink.mark(at, innerFrom)
+            val innerTo = close ?: to
+            scan(text, innerFrom, innerTo, base.copy(heading = heading.groupValues[1].toInt()), sink, unknown)
+            val after = if (close != null) close + CLOSING.length else to
+            sink.mark(innerTo, after)
+            return after - at
+        }
+
         val colour = colorOpening.find(rest)
         val size = if (colour == null) sizeOpening.find(rest) else null
         if (colour == null && size == null) {
@@ -593,6 +668,9 @@ object RichTextCodec {
      * stoi na zewnątrz barwy, dokładnie tak jak pisze serwer.
      */
     private val layers = listOf(
+        // Nagłówek na samym zewnątrz: to wygląd całego kawałka, w którego
+        // środku mogą być pogrubienia i barwy.
+        SpanType.HEADING,
         SpanType.BOLD,
         SpanType.ITALIC,
         SpanType.STRIKETHROUGH,
@@ -606,12 +684,20 @@ object RichTextCodec {
 
     fun write(rich: RichText): Rendered = write(rich.text, attrsOf(rich))
 
-    /** Składa formaty znaków z powrotem w zapis notatki. */
+    /**
+     * Składa formaty znaków z powrotem w zapis notatki.
+     *
+     * Kratki nagłówka stojące w [plain] na początku wiersza zostają i niosą
+     * poziom całego wiersza: znak w takim wierszu nie dostaje osobnego
+     * znacznika nagłówka, chyba że ma INNY poziom niż wiersz. Zamianę wiersza
+     * na „# " (i z powrotem) robi model akapitów edytora, nie ta funkcja.
+     */
     fun write(plain: String, attrs: List<Attrs>): Rendered {
         val out = StringBuilder(plain.length + 16)
         val fromPlain = IntArray(plain.length + 1)
         // Co jest teraz otwarte, od zewnątrz: rodzaj i jego wartość.
         val open = ArrayList<Pair<SpanType, String>>(layers.size)
+        var lineLevel = 0
 
         fun close(downTo: Int) {
             while (open.size > downTo) {
@@ -621,12 +707,17 @@ object RichTextCodec {
 
         for (i in plain.indices) {
             val ch = plain[i]
+            if (i == 0 || plain[i - 1] == '\n') {
+                val end = plain.indexOf('\n', i).let { if (it < 0) plain.length else it }
+                lineLevel = headingLevelOfLine(plain.substring(i, end))
+            }
             if (ch == '\n') {
                 // Nowy wiersz zamyka wszystko: format nie przechodzi na
                 // kolejny akapit, tak samo czyta go strona.
                 close(0)
             } else {
-                val wanted = attrs.getOrElse(i) { NONE }
+                val own = attrs.getOrElse(i) { NONE }
+                val wanted = if (lineLevel > 0 && own.heading == lineLevel) own.copy(heading = null) else own
                 val target = layers
                     .filter { wanted.has(it) }
                     .map { it to wanted.valueOf(it) }
@@ -651,6 +742,7 @@ object RichTextCodec {
     }
 
     private fun openingOf(type: SpanType, value: String): String = when (type) {
+        SpanType.HEADING -> "<span class=\"h$value\">"
         SpanType.BOLD -> "**"
         SpanType.ITALIC -> "*"
         SpanType.STRIKETHROUGH -> "~~"
@@ -668,7 +760,7 @@ object RichTextCodec {
         SpanType.HIGHLIGHT -> "=="
         SpanType.UNDERLINE -> UNDERLINE_CLOSING
         SpanType.CODE -> "`"
-        SpanType.SIZE, SpanType.COLOR -> CLOSING
+        SpanType.SIZE, SpanType.COLOR, SpanType.HEADING -> CLOSING
     }
 
     // --- Model listy zakresów <-> formaty znaków ---
@@ -767,6 +859,18 @@ object RichTextCodec {
 
     private fun needsRepair(text: String): Boolean =
         "<span " in text || CLOSING in text || UNDERLINE_OPENING in text
+
+    /**
+     * Ile razy pismo nagłówka jest większe od pisma notatki. Jedna tabelka dla
+     * pola do pisania, licznika wielkości na pasku i wydruku.
+     */
+    fun headingScale(level: Int?): Float = when (level) {
+        null -> 1f
+        1 -> 1.7f
+        2 -> 1.4f
+        3 -> 1.2f
+        else -> 1.05f
+    }
 
     /** Liczba pikseli bez zbędnego „,0" na końcu. */
     fun sizeText(px: Float): String =
