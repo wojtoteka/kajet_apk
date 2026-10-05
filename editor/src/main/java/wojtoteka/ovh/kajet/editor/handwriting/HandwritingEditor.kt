@@ -993,7 +993,7 @@ private fun TitleField(
  * w osobnym rzędzie na telefonie.
  */
 @Composable
-private fun PenStrip(
+internal fun PenStrip(
     tool: EditorTool,
     pens: PenSettings,
     shapes: ShapeSettings,
@@ -1105,7 +1105,7 @@ private fun SizeDot(
 }
 
 @Composable
-private fun SelectionPanel(
+internal fun SelectionPanel(
     count: Int,
     modifier: Modifier,
     onDelete: () -> Unit,
@@ -1153,7 +1153,7 @@ private fun SelectionPanel(
 }
 
 @Composable
-private fun PenPanel(
+internal fun PenPanel(
     tool: EditorTool,
     pens: PenSettings,
     recentColors: List<Int>,

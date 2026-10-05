@@ -739,6 +739,8 @@ fun MindMapEditor(
             DrawingDialog(
                 onClose = model::closeInkLabel,
                 onDone = { strokes, _, _ -> model.setInkLabel(id, strokes) },
+                recentColors = recentColors,
+                onRememberColor = model::rememberColor,
             )
         }
     }

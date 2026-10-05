@@ -714,6 +714,8 @@ fun TextEditor(
                 }
             },
             initial = open.source,
+            recentColors = recentColors,
+            onRememberColor = model::rememberColor,
         )
     }
 }
