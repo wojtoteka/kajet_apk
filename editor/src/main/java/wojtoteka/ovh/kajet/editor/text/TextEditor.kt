@@ -219,7 +219,17 @@ fun TextEditor(
             null
         }
         return if (chosen == null) {
-            TextNoteViewModel.PhotoSpot(insertPosition())
+            /*
+              Nowe zdjęcie i rysunek nie wchodzą na całą szerokość. Na
+              tablecie i telefonie trzymanym poziomo 100% to obrazek na pół
+              ekranu, który i tak zawsze trzeba było zmniejszać. Na wąskim
+              ekranie w pionie 35% byłoby już za drobne, więc tam połowa.
+              Powiększyć można suwakiem jak dotąd.
+            */
+            TextNoteViewModel.PhotoSpot(
+                at = insertPosition(),
+                width = if (narrow) NARROW_INSERT_WIDTH else WIDE_INSERT_WIDTH,
+            )
         } else {
             TextNoteViewModel.PhotoSpot(
                 at = Blocks.endPosition(blocks, chosen.key),
@@ -704,6 +714,8 @@ fun TextEditor(
                 }
             },
             initial = open.source,
+            recentColors = recentColors,
+            onRememberColor = model::rememberColor,
         )
     }
 }
@@ -1195,3 +1207,9 @@ private fun FormatGlyph(
         )
     }
 }
+
+/** Szerokość nowego zdjęcia albo rysunku na wąskim ekranie (telefon w pionie). */
+private const val NARROW_INSERT_WIDTH = 0.5f
+
+/** Szerokość nowego zdjęcia albo rysunku na tablecie i telefonie w poziomie. */
+private const val WIDE_INSERT_WIDTH = 0.35f

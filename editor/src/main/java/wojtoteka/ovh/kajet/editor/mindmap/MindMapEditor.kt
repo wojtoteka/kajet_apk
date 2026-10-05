@@ -58,10 +58,14 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -177,6 +181,44 @@ fun MindMapEditor(
         460.dp
     }
 
+    val density = LocalDensity.current
+
+    /*
+      Prawdziwy pomiar hasła w węźle - tym samym pismem, którym węzeł je
+      rysuje, przy 100%. Serwer rozmiar tylko szacuje; tutaj po odpowiedzi
+      KajetAI każdy dodany albo poprawiony węzeł dostaje najmniejszy rozmiar,
+      w którym całe hasło się mieści, bez ręcznego rozciągania.
+    */
+    val measurer = rememberTextMeasurer()
+    val bodyStyle = Kajet.type.body
+    val measureNode: (MindNode) -> Pair<Float, Float>? = measure@{ node ->
+        if (node.text.isBlank()) return@measure null
+        val style = nodeTextStyle(bodyStyle, node, zoom = 1f, density = density, color = colors.text)
+        val natural = measurer.measure(node.text, style, softWrap = false).size.width.toFloat()
+        MindMapSizes.measured(
+            natural = natural,
+            paragraphs = node.text.split("\n").size,
+        ) { usable ->
+            val laid = measurer.measure(
+                text = node.text,
+                style = style,
+                constraints = Constraints(maxWidth = usable.toInt().coerceAtLeast(1)),
+            )
+            laid.lineCount to laid.size.height.toFloat()
+        }
+    }
+
+    val fitAfterAi by model.fitAfterAi.collectAsStateWithLifecycle()
+    LaunchedEffect(fitAfterAi, map != null) {
+        val fit = fitAfterAi ?: return@LaunchedEffect
+        val nodes = map?.nodes ?: return@LaunchedEffect
+        val sizes = nodes
+            .filter { it.id in fit.ids }
+            .mapNotNull { node -> measureNode(node)?.let { node.id to it } }
+            .toMap()
+        model.fitMeasured(fit, sizes)
+    }
+
     /*
       Zaznaczony węzeł ma zostać widoczny.
 
@@ -186,7 +228,6 @@ fun MindMapEditor(
       z niej zostało. Gdy widać go w całości, nic się nie dzieje: przesuwanie
       mapy przy każdym dotknięciu byłoby gorsze od zasłoniętego węzła.
     */
-    val density = LocalDensity.current
     LaunchedEffect(selected, narrow, boardSize) {
         if (!narrow) return@LaunchedEffect
         val id = selected ?: return@LaunchedEffect
@@ -275,7 +316,7 @@ fun MindMapEditor(
 
             HorizontalRule(Modifier.padding(horizontal = 12.dp))
 
-            IconAction(KajetIcons.MindMapIcon, words.arrangeBranches, model::arrangeBranches)
+            IconAction(KajetIcons.MindMapIcon, words.arrangeBranches, { model.arrangeBranches(measureNode) })
             IconAction(
                 icon = KajetIcons.FitToView,
                 description = words.fitWholeMap,
@@ -454,7 +495,6 @@ fun MindMapEditor(
                             } else {
                                 0
                             },
-                            narrow = narrow,
                             onSelect = { model.select(node.id) },
                             onEdit = { model.edit(node.id) },
                             onText = { model.setText(node.id, it) },
@@ -699,6 +739,8 @@ fun MindMapEditor(
             DrawingDialog(
                 onClose = model::closeInkLabel,
                 onDone = { strokes, _, _ -> model.setInkLabel(id, strokes) },
+                recentColors = recentColors,
+                onRememberColor = model::rememberColor,
             )
         }
     }
@@ -747,7 +789,6 @@ private fun NodeOnBoard(
     connectTarget: Boolean,
     hasChildren: Boolean,
     hiddenCount: Int,
-    narrow: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onText: (String) -> Unit,
@@ -815,73 +856,26 @@ private fun NodeOnBoard(
                         onDrag(drag.x, drag.y)
                     }
                 }
-                .then(
-                    // Zaznaczenie: akcentowy pierścień tuż pod obwódką barwy.
-                    if (selected && !connectTarget) {
-                        Modifier
-                            .padding(3.dp)
-                            .border(
-                                width = 2.dp,
-                                color = colors.accent,
-                                shape = shape,
-                            )
-                    } else {
-                        Modifier
-                    },
-                )
                 /*
-                  Wyściółka w jednostkach mapy, nie w dp.
+                  Wyściółka w jednostkach mapy, nie w dp - na każdym ekranie.
 
-                  Rozmiar węzła liczy MindMapSizes.fit, zakładając PAD_X = 20
-                  jednostek mapy - a jednostka mapy to piksel urządzenia. Sztywne
-                  10.dp na telefonie o gęstości 2,6 to 52 piksele zamiast 20,
-                  czyli o 32 piksele mniej miejsca na hasło, niż przewidział
-                  rachunek. Wiersz, który miał się zmieścić, schodził wtedy do
-                  następnego i znikał pod dolną krawędzią węzła.
-
-                  Na szerokim ekranie zostaje 10.dp przy 100%: tablet wygląda
-                  jak dotąd. Przy oddalaniu wyściółka musi maleć razem z węzłem,
-                  inaczej zjada hasło.
+                  Rozmiar węzła liczy MindMapSizes (i serwer, i strona),
+                  zakładając PAD_X = 20 jednostek mapy - a jednostka mapy to
+                  piksel urządzenia. Sztywne 10.dp na tablecie o gęstości 2,5
+                  to 25 pikseli z każdej strony zamiast 10, czyli o 30 pikseli
+                  mniej miejsca na hasło, niż przewidział rachunek. Wiersz,
+                  który miał się zmieścić, schodził do następnego i znikał pod
+                  krawędzią węzła - to dlatego bloczki od KajetAI trzeba było
+                  na tablecie rozciągać ręcznie. Przy oddalaniu wyściółka maleje
+                  razem z węzłem, inaczej zjada hasło.
                 */
                 .padding(
-                    horizontal = if (narrow) {
-                        with(density) { (MindMapSizes.PAD_X / 2f * zoom).toDp() }
-                    } else {
-                        10.dp * zoom
-                    },
-                    vertical = if (narrow) {
-                        with(density) { (MindMapSizes.PAD_Y / 2f * zoom).toDp() }
-                    } else {
-                        6.dp * zoom
-                    },
+                    horizontal = with(density) { (MindMapSizes.PAD_X / 2f * zoom).toDp() },
+                    vertical = with(density) { (MindMapSizes.PAD_Y / 2f * zoom).toDp() },
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            val fontPx = node.fontSize * zoom
-            val style = Kajet.type.body.copy(
-                fontFamily = fontFamilyFor(node.font),
-                fontSize = with(density) { fontPx.toSp() },
-                /*
-                  Wysokość wiersza w em, nie w stałych sp z kroju body.
-
-                  `Kajet.type.body` ma lineHeight = 24.sp. copy() zostawia tę
-                  wartość, a fontSize maleje z zoomem. Compose układa glify
-                  w ramce 24.sp od góry, a węzeł przycina resztę - przy 77%
-                  hasło siedzi już przy dolnej krawędzi, przy dalszym
-                  oddalaniu znika. em trzyma 1.3× fontSize na każdym zoomie.
-                */
-                lineHeight = MindMapSizes.LINE_RATIO.em,
-                fontWeight = if (node.bold) FontWeight.SemiBold else FontWeight.Normal,
-                fontStyle = if (node.italic) FontStyle.Italic else FontStyle.Normal,
-                // Zero text colour means "pick one", so the theme colour keeps the
-                // node readable in both light and dark.
-                color = if (node.textColor != 0) Color(node.textColor) else colors.text,
-                textAlign = when (node.align) {
-                    NoteAlign.LEFT -> TextAlign.Start
-                    NoteAlign.CENTER -> TextAlign.Center
-                    NoteAlign.RIGHT -> TextAlign.End
-                },
-            )
+            val style = nodeTextStyle(Kajet.type.body, node, zoom, density, colors.text)
             if (edited) {
                 BasicTextField(
                     value = node.text,
@@ -900,6 +894,18 @@ private fun NodeOnBoard(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+        }
+
+        // Zaznaczenie: akcentowy pierścień tuż pod obwódką barwy. Leży NAD
+        // węzłem, a nie w nim - jako wcięcie zabierał hasłu po 3 dp z każdej
+        // strony i zaznaczony węzeł potrafił uciąć ostatnie słowo.
+        if (selected && !connectTarget) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .padding(3.dp)
+                    .border(width = 2.dp, color = colors.accent, shape = shape),
+            )
         }
 
         /*
@@ -1276,3 +1282,38 @@ private fun BarTextAction(
         )
     }
 }
+
+/**
+ * Pismo hasła w węźle przy danym przybliżeniu. Jedno miejsce i dla rysowania,
+ * i dla pomiaru - inaczej zmierzony rozmiar nie zgadzałby się z tym, co widać.
+ */
+private fun nodeTextStyle(
+    base: TextStyle,
+    node: MindNode,
+    zoom: Float,
+    density: Density,
+    color: Color,
+): TextStyle = base.copy(
+    fontFamily = fontFamilyFor(node.font),
+    fontSize = with(density) { (node.fontSize * zoom).toSp() },
+    /*
+      Wysokość wiersza w em, nie w stałych sp z kroju body.
+
+      `Kajet.type.body` ma lineHeight = 24.sp. copy() zostawia tę
+      wartość, a fontSize maleje z zoomem. Compose układa glify
+      w ramce 24.sp od góry, a węzeł przycina resztę - przy 77%
+      hasło siedzi już przy dolnej krawędzi, przy dalszym
+      oddalaniu znika. em trzyma 1.3× fontSize na każdym zoomie.
+    */
+    lineHeight = MindMapSizes.LINE_RATIO.em,
+    fontWeight = if (node.bold) FontWeight.SemiBold else FontWeight.Normal,
+    fontStyle = if (node.italic) FontStyle.Italic else FontStyle.Normal,
+    // Zero text colour means "pick one", so the theme colour keeps the
+    // node readable in both light and dark.
+    color = if (node.textColor != 0) Color(node.textColor) else color,
+    textAlign = when (node.align) {
+        NoteAlign.LEFT -> TextAlign.Start
+        NoteAlign.CENTER -> TextAlign.Center
+        NoteAlign.RIGHT -> TextAlign.End
+    },
+)

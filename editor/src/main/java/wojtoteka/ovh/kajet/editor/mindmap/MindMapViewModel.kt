@@ -17,6 +17,7 @@ import wojtoteka.ovh.kajet.editor.MapChange
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import java.util.UUID
+import kotlin.math.max
 
 class MindMapViewModel(
     repo: LibraryRepository,
@@ -471,9 +472,76 @@ class MindMapViewModel(
         changeWithoutHistory { it.copy(viewX = x, viewY = y, zoom = zoom) }
     }
 
-    fun arrangeBranches() {
-        val arranged = MindMapLayout.arrange(map)
+    /**
+     * „Rozłóż gałęzie". [measure] to pomiar prawdziwego pisma z ekranu: przy
+     * okazji każdy węzeł, w którym hasło się nie mieściło, ROŚNIE - tak samo
+     * jak „Rozłóż" na stronie. To naturalny moment na naprawienie pudełek
+     * ze starych map.
+     */
+    fun arrangeBranches(measure: ((MindNode) -> Pair<Float, Float>?)? = null) {
+        val grown = if (measure == null) {
+            map
+        } else {
+            map.copy(
+                nodes = map.nodes.map { node ->
+                    val (width, height) = measure(node) ?: return@map node
+                    node.copy(width = max(node.width, width), height = max(node.height, height))
+                },
+            )
+        }
+        val arranged = MindMapLayout.arrange(grown)
         if (arranged != map) change(arranged)
+    }
+
+    // Po KajetAI
+
+    /*
+      Węzły, którym po odpowiedzi KajetAI trzeba dobrać rozmiar.
+
+      Serwer zna hasło, ale nie zna pisma: rozmiar węzła tylko OSZACOWUJE.
+      Ekran mapy ma prawdziwe miary, więc tu każdy węzeł, który KajetAI dodał
+      albo któremu zmienił napis, jest mierzony jeszcze raz - i dostaje
+      najmniejszy rozmiar, w którym całe hasło się mieści. Bez tego zdarzało
+      się, że ostatnie słowa znikały pod krawędzią i węzeł trzeba było
+      rozciągać ręcznie.
+    */
+    private val _fitAfterAi = MutableStateFlow<AiFit?>(null)
+    val fitAfterAi: StateFlow<AiFit?> = _fitAfterAi.asStateFlow()
+
+    override suspend fun reloadAfterAi() {
+        val before = map
+        super.reloadAfterAi()
+        _fitAfterAi.value = AiFit.between(before, map)
+    }
+
+    /**
+     * Rozmiary zmierzone na ekranie dla węzłów z [fitAfterAi].
+     *
+     * Węzeł dodany przez KajetAI dostaje dokładnie zmierzony rozmiar - serwer
+     * dał mu tylko oszacowanie. Węzeł, któremu KajetAI zmienił napis, tylko
+     * ROŚNIE: mógł być rozciągnięty ręcznie i tego nie cofamy. Gdy KajetAI
+     * zmienił budowę mapy, układ liczy się od nowa z nowymi rozmiarami - tym
+     * samym rachunkiem co na serwerze, więc mapa nie przeskakuje.
+     */
+    fun fitMeasured(fit: AiFit, sizes: Map<String, Pair<Float, Float>>) {
+        if (_fitAfterAi.value != fit) return
+        _fitAfterAi.value = null
+
+        val resized = map.copy(
+            nodes = map.nodes.map { node ->
+                val (width, height) = sizes[node.id] ?: return@map node
+                when (node.id) {
+                    in fit.added -> node.copy(width = width, height = height)
+                    in fit.retexted -> node.copy(
+                        width = max(node.width, width),
+                        height = max(node.height, height),
+                    )
+                    else -> node
+                }
+            },
+        )
+        val next = if (fit.rearrange) MindMapLayout.arrange(resized) else resized
+        if (next != map) changeWithoutHistory { next }
     }
 
     private fun change(next: MindMapContent) {
@@ -516,3 +584,33 @@ data class DraggedLine(
     val y: Float,
     val targetId: String?,
 )
+
+/**
+ * Co KajetAI zmienił w mapie: węzły nowe, węzły z nowym napisem i czy ruszył
+ * budowę (wtedy serwer rozłożył mapę od nowa).
+ */
+data class AiFit(
+    val added: Set<String>,
+    val retexted: Set<String>,
+    val rearrange: Boolean,
+) {
+    val ids: Set<String> get() = added + retexted
+
+    companion object {
+        fun between(before: MindMapContent, after: MindMapContent): AiFit? {
+            val old = before.nodes.associateBy { it.id }
+            val added = after.nodes.filter { it.id !in old }.map { it.id }.toSet()
+            val retexted = after.nodes
+                .filter { node -> old[node.id]?.let { it.text != node.text } == true }
+                .map { it.id }
+                .toSet()
+            if (added.isEmpty() && retexted.isEmpty()) return null
+
+            val edges = { map: MindMapContent -> map.edges.map { it.fromId to it.toId }.toSet() }
+            val rearrange = added.isNotEmpty() ||
+                old.size != after.nodes.size ||
+                edges(before) != edges(after)
+            return AiFit(added, retexted, rearrange)
+        }
+    }
+}

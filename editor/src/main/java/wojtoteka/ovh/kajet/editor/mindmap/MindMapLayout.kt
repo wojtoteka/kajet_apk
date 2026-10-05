@@ -288,12 +288,23 @@ object MindMapLayout {
  * wszystkie znaki: „WWW" i „ili" są w tym samym kroju szerokie zupełnie
  * inaczej. Oszacowanie ma wychodzić raczej za duże niż za małe - węzeł
  * odrobinę za wysoki nikomu nie przeszkadza, a ucięte hasło bardzo.
+ *
+ * Tam, gdzie miary pisma są (ekran mapy po odpowiedzi KajetAI i „Rozłóż
+ * gałęzie"), rozmiar liczy [measured] z prawdziwego pomiaru, tym samym
+ * sposobem: szerokość do [MAX_WIDTH], a hasło łamane i tak - wyrównane.
  */
 object MindMapSizes {
 
     const val DEFAULT_WIDTH = 160f
     const val DEFAULT_HEIGHT = 64f
-    const val MAX_WIDTH = 280f
+    /**
+     * Granica szerokości. 400, nie 280: KajetAI pisze krótko, ale pełnymi
+     * zdaniami, a przy 280 zwykłe zdanie łamało się na kilka ciasnych wierszy
+     * i węzeł trzeba było rozciągać ręcznie.
+     */
+    const val MAX_WIDTH = 400f
+    /** Krok szerokości - węzły nie stoją na przypadkowych ułamkach piksela. */
+    private const val WIDTH_STEP = 20f
     const val DEFAULT_FONT_SIZE = 15f
 
     /**
@@ -382,16 +393,75 @@ object MindMapSizes {
         if (clean.isEmpty()) return DEFAULT_WIDTH to DEFAULT_HEIGHT
 
         val longest = clean.split("\n").maxOf { inkWidth(it, fontSize) }
-        val width = min(
+        var width = min(
             MAX_WIDTH,
-            max(DEFAULT_WIDTH, ceil((longest + PAD_X) / 20f) * 20f),
+            max(DEFAULT_WIDTH, ceil((longest + PAD_X) / WIDTH_STEP) * WIDTH_STEP),
         )
 
-        val lines = linesNeeded(clean, width - PAD_X, fontSize)
+        var lines = linesNeeded(clean, width - PAD_X, fontSize)
+
+        // Hasło i tak się łamie: zwężamy węzeł, dopóki wierszy nie przybywa.
+        if (lines > clean.split("\n").size) {
+            var narrower = DEFAULT_WIDTH
+            while (narrower < width) {
+                val there = linesNeeded(clean, narrower - PAD_X, fontSize)
+                if (there <= lines) {
+                    width = narrower
+                    lines = there
+                    break
+                }
+                narrower += WIDTH_STEP
+            }
+        }
+
         val height = max(DEFAULT_HEIGHT, ceil(lines * fontSize * LINE_RATIO + PAD_Y))
 
         return width to height
     }
+
+    /**
+     * Rozmiar węzła z PRAWDZIWEGO pomiaru pisma - ten sam rachunek co [fit],
+     * tylko bez zgadywania szerokości znaków.
+     *
+     * [natural] to szerokość najdłuższego wiersza bez łamania, [paragraphs] -
+     * ile wierszy wpisano ręcznie, a [layout] mierzy napis złamany do podanej
+     * szerokości wnętrza i oddaje liczbę wierszy i wysokość pisma. Wszystko
+     * w jednostkach mapy.
+     */
+    fun measured(
+        natural: Float,
+        paragraphs: Int,
+        layout: (usable: Float) -> Pair<Int, Float>,
+    ): Pair<Float, Float> {
+        var width = min(
+            MAX_WIDTH,
+            max(DEFAULT_WIDTH, ceil((natural + PAD_X + SLACK) / WIDTH_STEP) * WIDTH_STEP),
+        )
+        var (lines, textHeight) = layout(width - PAD_X - SLACK)
+
+        if (lines > paragraphs) {
+            var narrower = DEFAULT_WIDTH
+            while (narrower < width) {
+                val there = layout(narrower - PAD_X - SLACK)
+                if (there.first <= lines) {
+                    width = narrower
+                    lines = there.first
+                    textHeight = there.second
+                    break
+                }
+                narrower += WIDTH_STEP
+            }
+        }
+
+        return width to max(DEFAULT_HEIGHT, ceil(textHeight + PAD_Y + SLACK))
+    }
+
+    /**
+     * Zapas na zaokrąglenia pomiaru i wystające końce pochyłych liter -
+     * bez niego napis równo na styk potrafił przy innym przybliżeniu zejść
+     * do kolejnego wiersza.
+     */
+    private const val SLACK = 4f
 
     /**
      * Rozmiar, w którym hasło się zmieści - ale nigdy mniejszy niż teraz.
