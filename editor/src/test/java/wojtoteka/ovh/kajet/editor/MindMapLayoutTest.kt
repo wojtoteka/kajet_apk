@@ -6,6 +6,7 @@ import wojtoteka.ovh.kajet.core.model.MindEdge
 import wojtoteka.ovh.kajet.core.model.MindMapContent
 import wojtoteka.ovh.kajet.core.model.MindNode
 import wojtoteka.ovh.kajet.editor.mindmap.MindMapLayout
+import wojtoteka.ovh.kajet.editor.mindmap.AiFit
 import wojtoteka.ovh.kajet.editor.mindmap.MindMapSizes
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -124,7 +125,7 @@ class MindMapLayoutTest {
     fun `dluzsze haslo dostaje wiekszy wezel, zeby nie zostalo uciete`() {
         val (width, height) = MindMapSizes.fit("Koalicja polsko-litewska")
         assertThat(width).isGreaterThan(160f)
-        assertThat(width).isAtMost(280f)
+        assertThat(width).isAtMost(MindMapSizes.MAX_WIDTH)
         assertThat(height).isAtLeast(64f)
     }
 
@@ -139,5 +140,93 @@ class MindMapLayoutTest {
     fun `wezel tylko rosnie - recznie rozciagniety zostaje taki, jaki jest`() {
         val wide = MindNode(id = "x", x = 0f, y = 0f, width = 400f, height = 300f, text = "Ruch")
         assertThat(MindMapSizes.grown(wide)).isEqualTo(400f to 300f)
+    }
+
+    /*
+      Te same liczby co w testach serwera (mindmap-layout.test.ts) - oba
+      rachunki muszą dawać to samo, inaczej mapa przeskakuje po synchronizacji.
+    */
+    @Test
+    fun `zwykle zdanie od KajetAI miesci sie w jednym, najwyzej dwoch wierszach`() {
+        assertThat(MindMapSizes.fit("Bitwa pod Grunwaldem w 1410 roku")).isEqualTo(300f to 64f)
+        assertThat(MindMapSizes.fit("Unia w Krewie połączyła Polskę i Litwę osobą jednego władcy"))
+            .isEqualTo(260f to 64f)
+    }
+
+    @Test
+    fun `lamane haslo dostaje wyrownana szerokosc, nie pelna granice`() {
+        val (width, _) = MindMapSizes.fit("Wzrost znaczenia Polski w Europie Środkowej po zwycięstwie")
+        assertThat(width).isLessThan(MindMapSizes.MAX_WIDTH)
+    }
+
+    /** Udawane pismo o stałej szerokości znaku - do sprawdzenia samego rachunku. */
+    private fun mono(text: String, sign: Float = 8f, line: Float = 19.5f): Pair<Float, Float> {
+        val paragraphs = text.split("\n")
+        val natural = paragraphs.maxOf { it.length } * sign
+        return MindMapSizes.measured(natural, paragraphs.size) { usable ->
+            var lines = 0
+            for (paragraph in paragraphs) {
+                var taken = 0f
+                var count = 1
+                for (word in paragraph.split(" ")) {
+                    val w = word.length * sign
+                    val next = if (taken > 0f) taken + sign + w else w
+                    if (next > usable && taken > 0f) {
+                        count += 1
+                        taken = w
+                    } else {
+                        taken = next
+                    }
+                }
+                lines += count
+            }
+            lines to lines * line
+        }
+    }
+
+    @Test
+    fun `zmierzone haslo w jednym wierszu dostaje szerokosc pod siebie`() {
+        val (width, height) = mono("Krótkie zdanie na jeden wiersz")
+        // 30 znaków po 8 + wyściółka 20 + zapas 4 = 264, w górę do dwudziestki.
+        assertThat(width).isEqualTo(280f)
+        assertThat(height).isEqualTo(MindMapSizes.DEFAULT_HEIGHT)
+    }
+
+    @Test
+    fun `zmierzone dlugie haslo nie przekracza granicy i nie zostaje uciete`() {
+        val text = "słowo ".repeat(40).trim()
+        val (width, height) = mono(text)
+        assertThat(width).isAtMost(MindMapSizes.MAX_WIDTH)
+        // 240 znaków po 8 to co najmniej pięć wierszy po 19,5 - plus wyściółka.
+        assertThat(height).isAtLeast(5 * 19.5f + MindMapSizes.PAD_Y)
+    }
+
+    @Test
+    fun `zmierzone haslo lamane i tak dostaje wezsza, wyrownana szerokosc`() {
+        // 60 znaków: przy granicy dwa wiersze, z czego drugi prawie pusty.
+        val (width, _) = mono("a".repeat(29) + " " + "b".repeat(30))
+        assertThat(width).isLessThan(MindMapSizes.MAX_WIDTH)
+    }
+
+    @Test
+    fun `KajetAI - nowe i poprawione wezly ida do pomiaru, uklad tylko po zmianie budowy`() {
+        val before = map()
+        val retexted = before.copy(
+            nodes = before.nodes.map { if (it.id == "a") it.copy(text = "Nowe, dłuższe hasło") else it },
+        )
+        val onlyText = AiFit.between(before, retexted)!!
+        assertThat(onlyText.retexted).containsExactly("a")
+        assertThat(onlyText.added).isEmpty()
+        assertThat(onlyText.rearrange).isFalse()
+
+        val grown = retexted.copy(
+            nodes = retexted.nodes + MindNode(id = "nowy", x = 0f, y = 0f, text = "Nowy"),
+            edges = retexted.edges + MindEdge("e-nowy", "a", "nowy"),
+        )
+        val withNode = AiFit.between(before, grown)!!
+        assertThat(withNode.added).containsExactly("nowy")
+        assertThat(withNode.rearrange).isTrue()
+
+        assertThat(AiFit.between(before, before)).isNull()
     }
 }
