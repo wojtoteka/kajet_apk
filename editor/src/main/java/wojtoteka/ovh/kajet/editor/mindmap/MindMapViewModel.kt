@@ -316,7 +316,7 @@ class MindMapViewModel(
         // Edytor WWW ucina przy 500 znakach - tu tak samo, żeby pliki się zgadzały.
         val capped = text.take(500)
         changeWithoutHistory { old ->
-            old.copy(
+            val updated = old.copy(
                 nodes = old.nodes.map { node ->
                     if (node.id != id) return@map node
                     /*
@@ -331,6 +331,13 @@ class MindMapViewModel(
                     withText.copy(width = width, height = height)
                 },
             )
+            // Węzeł, który urósł, odsuwa sąsiadów, na których najechał -
+            // zamiast zasłaniać im hasła.
+            val before = old.nodes.firstOrNull { it.id == id }
+            val after = updated.nodes.firstOrNull { it.id == id }
+            val grew = before != null && after != null &&
+                (after.width > before.width || after.height > before.height)
+            if (grew) MindMapLayout.makeRoom(updated, listOf(id)) else updated
         }
     }
 
@@ -540,7 +547,20 @@ class MindMapViewModel(
                 }
             },
         )
-        val next = if (fit.rearrange) MindMapLayout.arrange(resized) else resized
+        /*
+          Bez zmiany budowy układ zostaje, ale węzeł, który po pomiarze urósł,
+          nie może wejść na sąsiadów - odsuwamy tylko te, na które najechał.
+        */
+        val next = if (fit.rearrange) {
+            MindMapLayout.arrange(resized)
+        } else {
+            val old = map.nodes.associateBy { it.id }
+            val grew = resized.nodes.filter { node ->
+                val was = old[node.id] ?: return@filter false
+                node.width > was.width || node.height > was.height
+            }.map { it.id }
+            MindMapLayout.makeRoom(resized, grew)
+        }
         if (next != map) changeWithoutHistory { next }
     }
 

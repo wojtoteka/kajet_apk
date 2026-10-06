@@ -218,6 +218,96 @@ object MindMapLayout {
         )
     }
 
+    /*
+     * Miejsce dla węzła, który urósł w miejscu.
+     *
+     * Węzeł rośnie pod dłuższe hasło - gdy KajetAI zmieni mu napis albo gdy
+     * ktoś w nim pisze - ale układu wtedy nie liczymy od nowa: przesuwanie
+     * całej mapy przy poprawianiu literówki byłoby wścibskie. Tyle że rosnący
+     * węzeł wchodził wtedy na sąsiadów i zasłaniał im hasła, a rozdzielać
+     * trzeba było ręcznie.
+     *
+     * Teraz odsuwamy TYLKO to, na co urośnięty węzeł najechał, i tylko tyle,
+     * ile trzeba: w poziomie albo w pionie, zależnie od tego, co wymaga
+     * krótszego ruchu, zawsze w stronę od niego. Odsunięty węzeł może z kolei
+     * najechać na kolejny - ten też się odsuwa, jak kostki domina. Węzeł raz
+     * ustawiony już się nie rusza, więc nic nie kręci się w kółko.
+     *
+     * Rachunek jest przepisany jeden do jednego z serwera
+     * (makeRoom w src/lib/mindmap-layout.ts).
+     */
+
+    /** Prześwit, który zostaje między odsuniętymi węzłami. */
+    const val ROOM_GAP = 24f
+
+    private class Box(var x: Float, var y: Float, val w: Float, val h: Float)
+
+    private fun collide(a: Box, b: Box, gap: Float): Boolean =
+        a.x < b.x + b.w + gap && b.x < a.x + a.w + gap &&
+            a.y < b.y + b.h + gap && b.y < a.y + a.h + gap
+
+    /**
+     * Odsuwa węzły, na które najechały węzły z [grown]. Węzły z [grown] stoją
+     * w miejscu. Gdy nic na nic nie najechało, oddaje tę samą mapę.
+     */
+    fun makeRoom(map: MindMapContent, grown: Collection<String>): MindMapContent {
+        val boxes = LinkedHashMap<String, Box>()
+        for (node in map.nodes) boxes[node.id] = Box(node.x, node.y, node.width, node.height)
+
+        val queue = grown.filter { it in boxes }.distinct().toMutableList()
+        val settled = queue.toHashSet()
+        val moved = HashSet<String>()
+
+        var at = 0
+        while (at < queue.size) {
+            val pusher = boxes.getValue(queue[at])
+            at += 1
+
+            for (node in map.nodes) {
+                if (node.id in settled) continue
+                val box = boxes.getValue(node.id)
+                if (!collide(pusher, box, ROOM_GAP)) continue
+
+                // Kierunek od środka tego, co pcha. Ruch po osi, na której
+                // wystarczy mniej - przy równych w bok.
+                val right = box.x + box.w / 2 >= pusher.x + pusher.w / 2
+                val down = box.y + box.h / 2 >= pusher.y + pusher.h / 2
+                val alongX = if (right) pusher.x + pusher.w + ROOM_GAP - box.x else box.x + box.w + ROOM_GAP - pusher.x
+                val alongY = if (down) pusher.y + pusher.h + ROOM_GAP - box.y else box.y + box.h + ROOM_GAP - pusher.y
+                val horizontal = alongX <= alongY
+                val forward = if (horizontal) right else down
+
+                if (horizontal) box.x += if (forward) alongX else -alongX
+                else box.y += if (forward) alongY else -alongY
+
+                // Dalej w tę samą stronę, póki stoi na którymś z już
+                // ustawionych. Ruch jest w jedną stronę, więc to się kończy.
+                for (guard in queue.indices) {
+                    val blocker = queue.firstOrNull { collide(boxes.getValue(it), box, ROOM_GAP) } ?: break
+                    val other = boxes.getValue(blocker)
+                    if (horizontal) {
+                        box.x = if (forward) other.x + other.w + ROOM_GAP else other.x - ROOM_GAP - box.w
+                    } else {
+                        box.y = if (forward) other.y + other.h + ROOM_GAP else other.y - ROOM_GAP - box.h
+                    }
+                }
+
+                settled += node.id
+                queue += node.id
+                moved += node.id
+            }
+        }
+
+        if (moved.isEmpty()) return map
+        return map.copy(
+            nodes = map.nodes.map { node ->
+                if (node.id !in moved) return@map node
+                val box = boxes.getValue(node.id)
+                node.copy(x = box.x.roundToInt().toFloat(), y = box.y.roundToInt().toFloat())
+            },
+        )
+    }
+
     /** Odległość od środka prostokąta do jego brzegu w podanym kierunku. */
     private fun reach(w: Float, h: Float, angle: Double): Double =
         abs(cos(angle)) * (w / 2.0) + abs(sin(angle)) * (h / 2.0)

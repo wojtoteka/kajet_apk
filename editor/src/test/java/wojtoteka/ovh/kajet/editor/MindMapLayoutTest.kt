@@ -229,4 +229,42 @@ class MindMapLayoutTest {
 
         assertThat(AiFit.between(before, before)).isNull()
     }
+
+    /*
+      Te same przypadki i te same liczby co w testach serwera
+      (mindmap-layout.test.ts, „miejsce dla węzła, który urósł").
+    */
+    private fun at(id: String, x: Float, y: Float, width: Float = 160f, height: Float = 64f) =
+        MindNode(id = id, x = x, y = y, width = width, height = height, text = id)
+
+    @Test
+    fun `wezel, ktory urosl, odsuwa sasiada zamiast na niego wejsc`() {
+        val before = MindMapContent(nodes = listOf(at("a", 0f, 0f, 400f, 90f), at("b", 220f, 0f)))
+        val after = MindMapLayout.makeRoom(before, listOf("a")).nodes
+
+        assertThat(after[0]).isEqualTo(before.nodes[0])
+        assertThat(overlaps(after)).isEmpty()
+        assertThat(after[1].x).isEqualTo(220f)
+        assertThat(after[1].y).isEqualTo(-(64f + MindMapLayout.ROOM_GAP))
+    }
+
+    @Test
+    fun `odsuwanie idzie jak domino i nie rusza tego, co stoi daleko`() {
+        val before = MindMapContent(
+            nodes = listOf(at("a", 0f, 0f, 400f, 64f), at("b", 200f, 0f), at("c", 380f, 0f), at("daleko", 0f, 600f)),
+        )
+        val after = MindMapLayout.makeRoom(before, listOf("a")).nodes
+
+        assertThat(overlaps(after)).isEmpty()
+        assertThat(after.first { it.id == "daleko" }).isEqualTo(before.nodes[3])
+        assertThat(after.map { it.x to it.y })
+            .containsExactly(0f to 0f, 200f to 88f, 424f to 0f, 0f to 600f)
+            .inOrder()
+    }
+
+    @Test
+    fun `nic nie rusza, gdy nic na nic nie najechalo`() {
+        val before = MindMapContent(nodes = listOf(at("a", 0f, 0f), at("b", 400f, 0f)))
+        assertThat(MindMapLayout.makeRoom(before, listOf("a"))).isSameInstanceAs(before)
+    }
 }
