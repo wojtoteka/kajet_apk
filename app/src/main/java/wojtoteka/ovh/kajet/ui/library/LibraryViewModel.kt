@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -218,14 +219,33 @@ class LibraryViewModel(
         }
     }
 
+    /*
+      Drzewo po lewej: foldery, a pod ROZWINIĘTYM folderem także jego notatki
+      i pliki.
+
+      Dawniej szły tu same foldery. Strzałka stoi jednak przy każdym folderze,
+      w którym cokolwiek leży, więc folder z samymi notatkami dawał się
+      „rozwinąć" - strzałka obracała się w dół, a pod spodem nie pojawiało się
+      nic. Notatki są teraz pod folderem, jak w zwykłym drzewie plików.
+
+      Korzeń biblioteki zostaje bez notatek: tamte widać w spisie obok, a przy
+      kilkudziesięciu notatkach luzem drzewo zamieniłoby się w drugi spis
+      i foldery trzeba by w nim wyszukiwać.
+    */
     private suspend fun buildTree(expanded: Set<String>): List<TreeNode> {
         val result = mutableListOf<TreeNode>()
         suspend fun descend(path: String, level: Int) {
-            val folders = runCatching { repo.foldersIn(path) }.getOrDefault(emptyList())
-            for (folder in folders) {
-                val expanded = folder.path in expanded
-                result += TreeNode(folder, level, expanded)
-                if (expanded) descend(folder.path, level + 1)
+            val inside = runCatching {
+                if (path.isEmpty()) repo.foldersIn(path) else repo.folder(path).first()
+            }.getOrDefault(emptyList())
+            for (item in inside) {
+                if (item.type != ItemType.FOLDER) {
+                    result += TreeNode(item, level, expanded = false)
+                    continue
+                }
+                val open = item.path in expanded
+                result += TreeNode(item, level, open)
+                if (open) descend(item.path, level + 1)
             }
         }
         descend("", 0)

@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -714,13 +716,25 @@ private fun TableBlock(
         ) {
             block.rows.indices.forEach { row ->
                 if (row > 0) HorizontalRule()
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                /*
+                  Kreska między kolumnami idzie przez CAŁĄ wysokość wiersza.
+                  Miała na sztywno 44 dp, więc przy dłuższym tekście w komórce
+                  urywała się po pierwszym wierszu, a dalsze wiersze sąsiednich
+                  komórek zlewały się ze sobą, jakby kolumny na siebie
+                  wchodziły.
+                */
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    verticalAlignment = Alignment.Top,
+                ) {
                     for (column in 0 until columns) {
                         if (column > 0) {
                             Box(
                                 Modifier
                                     .width(1.dp)
-                                    .height(44.dp)
+                                    .fillMaxHeight()
                                     .background(colors.line),
                             )
                         }
