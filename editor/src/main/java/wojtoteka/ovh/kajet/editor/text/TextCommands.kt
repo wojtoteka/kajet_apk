@@ -203,6 +203,48 @@ object TextCommands {
     const val SMALLEST = TextFormat.SMALLEST_FRAGMENT
     const val LARGEST = TextFormat.LARGEST_FRAGMENT
 
+    // --- Indeks górny i dolny ---
+
+    /**
+     * Cyfry w indeksie górnym (x²) albo dolnym (H₂O).
+     *
+     * Indeks to zwykłe znaki Unicode (¹ ² ₁ ₂...), a nie znacznik w zapisie -
+     * dzięki temu wygląda tak samo na stronie, w PDF-ie, w wyszukiwarce i
+     * w każdej innej aplikacji, do której notatka trafi przez schowek.
+     * Unicode ma w obu indeksach komplet cyfr i znaki + − = ( ), a liter
+     * tylko garść, więc indeks dotyczy cyfr i tych znaków.
+     *
+     * Działa na zaznaczenie, a bez zaznaczenia na liczbę tuż przed kursorem:
+     * napisane „H2" i jedno stuknięcie daje „H₂". Kiedy wszystko już jest
+     * w tym indeksie, to samo stuknięcie wraca do zwykłych cyfr; cyfry
+     * z drugiego indeksu przechodzą do wybranego. Null, gdy nie ma czego
+     * zmienić.
+     */
+    fun script(field: TextFieldValue, superscript: Boolean): TextFieldValue? {
+        val doc = Doc(field.text)
+        val (from, to) = doc.visibleSelection(field)
+        val start = if (to > from) from else ScriptDigits.numberStart(doc.layout.visible, from)
+        val end = if (to > from) to else from
+        if (end <= start) return null
+
+        // Ukryty zapis odnośnika („(adres)") idzie z opisem w całości - jego
+        // cyfr ruszać nie wolno, bo adres przestałby prowadzić tam, gdzie
+        // prowadził.
+        val chosen = doc.pieces(start, end, trim = false).flatMap { piece ->
+            piece.indices
+                .filter { !piece.line.hidden[it] && ScriptDigits.isScriptable(piece.line.text[it]) }
+                .map { piece.line to it }
+        }
+        if (chosen.isEmpty()) return null
+
+        val already = chosen.all { (line, i) -> ScriptDigits.isIn(line.text[i], superscript) }
+        for ((line, i) in chosen) {
+            val ch = line.text[i]
+            line.text.setCharAt(i, if (already) ScriptDigits.plain(ch) else ScriptDigits.to(ch, superscript))
+        }
+        return doc.fieldAfter(doc.write(), from, to)
+    }
+
     // --- Budowa akapitu ---
 
     /**
