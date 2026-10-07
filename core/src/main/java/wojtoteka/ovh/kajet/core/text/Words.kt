@@ -336,6 +336,8 @@ interface Strings {
     val italic: String
     val underline: String
     val strike: String
+    val superscript: String
+    val subscript: String
     val heading1: String
     val heading2: String
     val heading3: String
@@ -1754,6 +1756,8 @@ object PolishStrings : Strings {
     override val italic = "Kursywa"
     override val underline = "Podkreślenie"
     override val strike = "Przekreślenie"
+    override val superscript = "Indeks górny (x²)"
+    override val subscript = "Indeks dolny (H₂O)"
     override val heading1 = "Nagłówek największy"
     override val heading2 = "Nagłówek średni"
     override val heading3 = "Nagłówek mały"
@@ -2504,6 +2508,8 @@ object EnglishStrings : Strings {
     override val italic = "Italic"
     override val underline = "Underline"
     override val strike = "Strikethrough"
+    override val superscript = "Superscript (x²)"
+    override val subscript = "Subscript (H₂O)"
     override val heading1 = "Biggest heading"
     override val heading2 = "Medium heading"
     override val heading3 = "Small heading"

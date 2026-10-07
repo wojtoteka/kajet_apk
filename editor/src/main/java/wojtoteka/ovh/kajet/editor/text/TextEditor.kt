@@ -608,6 +608,7 @@ fun TextEditor(
                 lineAlign = lineAlign,
                 onAlign = { alignParagraphs(it) },
                 onToggle = { type -> toggleFormat(type) },
+                onScript = { superscript -> format { TextCommands.script(it, superscript) } },
                 headingLevel = formats.heading,
                 onHeading = { level -> toggleFormat(SpanType.HEADING, level.toString()) },
                 lineKind = lineKind,
@@ -782,6 +783,8 @@ private fun FormatBar(
     lineAlign: NoteAlign,
     onAlign: (NoteAlign) -> Unit,
     onToggle: (SpanType) -> Unit,
+    /** Cyfry w indeksie górnym (true) albo dolnym - na zaznaczenie albo liczbę przed kursorem. */
+    onScript: (superscript: Boolean) -> Unit,
     /** Poziom nagłówka pod kursorem albo w zaznaczeniu - świeci jego przycisk. */
     headingLevel: Int?,
     /** H1-H3: format znaku, jak pogrubienie - na zaznaczenie albo słowo. */
@@ -906,6 +909,18 @@ private fun FormatBar(
                 description = words.strike,
                 onClick = { onToggle(SpanType.STRIKETHROUGH) },
                 selected = isActive(SpanType.STRIKETHROUGH),
+                iconSize = 18.dp,
+            )
+            IconAction(
+                icon = KajetIcons.Superscript,
+                description = words.superscript,
+                onClick = { onScript(true) },
+                iconSize = 18.dp,
+            )
+            IconAction(
+                icon = KajetIcons.Subscript,
+                description = words.subscript,
+                onClick = { onScript(false) },
                 iconSize = 18.dp,
             )
 
@@ -1073,8 +1088,10 @@ private fun FormatBar(
 
             Divider()
 
+            // Własny znaczek, a nie „</>" bloku kodu stojącego trzy przyciski
+            // wcześniej - dwa takie same obok siebie myliły się przy stukaniu.
             IconAction(
-                icon = KajetIcons.CodeFile,
+                icon = KajetIcons.RawMarkdown,
                 description = if (blockMode) words.showRawMarkdown else words.backToContentView,
                 onClick = { onBlockMode(!blockMode) },
                 selected = !blockMode,

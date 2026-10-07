@@ -505,3 +505,66 @@ class TextCommandsParagraphTest {
         assertThat(after.text).isEqualTo("1. raz\n2. dwa\n3. trzy")
     }
 }
+
+class TextCommandsScriptTest {
+
+    @Test
+    fun `liczba przed kursorem idzie do indeksu dolnego`() {
+        val after = TextCommands.script(at("H2O i H2", 8), superscript = false)!!
+
+        assertThat(after.text).isEqualTo("H2O i H₂")
+        assertThat(after.visibleCursor()).isEqualTo(8)
+    }
+
+    @Test
+    fun `zaznaczenie idzie do indeksu gornego razem ze znakiem`() {
+        val after = TextCommands.script(at("x-12 + y", 1, 4), superscript = true)!!
+
+        assertThat(after.text).isEqualTo("x⁻¹² + y")
+        assertThat(after.selectedText()).isEqualTo("⁻¹²")
+    }
+
+    @Test
+    fun `drugie stukniecie wraca do zwyklych cyfr`() {
+        val once = TextCommands.script(at("x2", 2), superscript = true)!!
+        val twice = TextCommands.script(once, superscript = true)!!
+
+        assertThat(once.text).isEqualTo("x²")
+        assertThat(twice.text).isEqualTo("x2")
+    }
+
+    @Test
+    fun `cyfry z drugiego indeksu przechodza do wybranego`() {
+        val after = TextCommands.script(at("H₂", 2), superscript = true)!!
+
+        assertThat(after.text).isEqualTo("H²")
+    }
+
+    @Test
+    fun `minus przed liczba bez zaznaczenia zostaje dzialaniem`() {
+        val after = TextCommands.script(at("2-3", 3), superscript = true)!!
+
+        assertThat(after.text).isEqualTo("2-³")
+    }
+
+    @Test
+    fun `cyfry w formatowaniu zostaja w znacznikach`() {
+        val after = TextCommands.script(at("**CO2**", 3), superscript = false)!!
+
+        assertThat(after.text).isEqualTo("**CO₂**")
+    }
+
+    @Test
+    fun `adres odnosnika zostaje nietkniety`() {
+        val source = "[wzór 2](https://kajet.ovh/n/123)"
+        val after = TextCommands.script(at(source, 0, 6), superscript = true)!!
+
+        assertThat(after.text).isEqualTo("[wzór ²](https://kajet.ovh/n/123)")
+    }
+
+    @Test
+    fun `bez cyfr nie ma czego zmieniac`() {
+        assertThat(TextCommands.script(at("Ala ma kota", 3), superscript = true)).isNull()
+        assertThat(TextCommands.script(at("Ala ma kota", 0, 3), superscript = false)).isNull()
+    }
+}
