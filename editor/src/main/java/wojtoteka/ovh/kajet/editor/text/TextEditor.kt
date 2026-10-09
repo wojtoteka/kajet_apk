@@ -65,6 +65,7 @@ import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.editor.SaveState
+import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.editor.penWritingSurface
 import wojtoteka.ovh.kajet.ink.PenHaptics
@@ -555,6 +556,7 @@ fun TextEditor(
                 state = saveState,
                 lastSave = lastSave,
                 inCloud = inCloud,
+                live = model,
                 busy = busy,
                 onTitle = model::setTitle,
             )
@@ -727,6 +729,7 @@ private fun NoteHeader(
     state: SaveState,
     lastSave: Long?,
     inCloud: Boolean?,
+    live: NoteViewModel,
     busy: String?,
     onTitle: (String) -> Unit,
 ) {
@@ -756,7 +759,7 @@ private fun NoteHeader(
         if (busy != null) {
             Text(busy, style = Kajet.type.meta, color = Kajet.colors.muted)
         }
-        SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
+        SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud, live = live)
     }
 }
 

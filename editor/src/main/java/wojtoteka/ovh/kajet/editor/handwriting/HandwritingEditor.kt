@@ -93,6 +93,7 @@ import wojtoteka.ovh.kajet.core.text.pointsOf
 import wojtoteka.ovh.kajet.core.text.selectedStrokes
 import wojtoteka.ovh.kajet.core.text.strokeWidthOf
 import wojtoteka.ovh.kajet.editor.SaveState
+import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.ink.EditorTool
 import wojtoteka.ovh.kajet.ink.Brushes
@@ -528,6 +529,7 @@ fun HandwritingEditor(
                 state = saveState,
                 lastSave = lastSave,
                 inCloud = inCloud,
+                live = model,
                 pageCount = handwriting?.pages?.size ?: 0,
                 tool = tool,
                 pens = pens,
@@ -608,6 +610,7 @@ fun HandwritingEditor(
                     state = saveState,
                     lastSave = lastSave,
                     inCloud = inCloud,
+                    live = model,
                     pageCount = handwriting?.pages?.size ?: 0,
                     tool = tool,
                     pens = pens,
@@ -840,6 +843,7 @@ private fun TopBar(
     state: SaveState,
     lastSave: Long?,
     inCloud: Boolean?,
+    live: NoteViewModel,
     pageCount: Int,
     tool: EditorTool,
     pens: PenSettings,
@@ -903,7 +907,7 @@ private fun TopBar(
                     onTitle = onTitle,
                     modifier = Modifier.weight(1f),
                 )
-                SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
+                SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud, live = live)
                 swatch()
             }
             Row(
@@ -933,7 +937,7 @@ private fun TopBar(
                 onTitle = onTitle,
                 modifier = Modifier.widthIn(min = 72.dp, max = 220.dp),
             )
-            SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud)
+            SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud, live = live)
             if (pageCount > 1) {
                 Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
             }
