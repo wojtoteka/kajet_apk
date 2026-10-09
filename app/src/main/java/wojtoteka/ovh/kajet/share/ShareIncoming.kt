@@ -62,6 +62,13 @@ object ShareIncoming {
 fun parse(intent: Intent?): IncomingShare? {
     if (intent == null) return null
     if (intent.data?.scheme == "kajet") return null
+    // Odnośnik do udostępnienia (/n/<token>) to nie plik do skopiowania -
+    // otwiera go SharedLinkBridge.
+    if (intent.action == Intent.ACTION_VIEW &&
+        (intent.data?.scheme == "https" || intent.data?.scheme == "http")
+    ) {
+        return null
+    }
     val mime = intent.type
     return when (intent.action) {
         Intent.ACTION_SEND -> {

@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.cloud
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -171,8 +172,15 @@ class SharedLibrary(
                 version = if (keepLocal) previous!!.version else state.version,
                 base = if (keepLocal) previous!!.base else NoteCodec.encodeNote(document),
             )
-            if (keepLocal) notes.writeMeta(meta) else notes.store(meta, document)
-            downloadAttachments(entry.id, token)
+            try {
+                if (keepLocal) notes.writeMeta(meta) else notes.store(meta, document)
+                downloadAttachments(entry.id, token)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Brak miejsca, uszkodzony plik - lepiej powiedzieć niż wyłożyć aplikację.
+                return@withContext Opened.Failed(words.sharedOpenFailed)
+            }
             Opened.Note(notes.pathFor(entry.id), item.copy(permission = if (state.canEdit) "edit" else "read"))
         }
 

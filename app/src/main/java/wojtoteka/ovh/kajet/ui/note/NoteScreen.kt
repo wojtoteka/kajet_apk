@@ -44,6 +44,7 @@ import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.KajetSettings
 import wojtoteka.ovh.kajet.storage.LibraryRepository
+import wojtoteka.ovh.kajet.storage.SharedNotes
 
 @Composable
 fun NoteScreen(
@@ -140,6 +141,7 @@ fun NoteScreen(
                 },
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
+            LiveBadge(model)
         }
 
         kind == NoteKind.TEXT -> {
@@ -195,6 +197,7 @@ fun NoteScreen(
                 onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
+            LiveBadge(model)
             if (assistant != null) {
                 AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.TEXT, model) { aiOpen = false }
             }
@@ -218,6 +221,7 @@ fun NoteScreen(
                 onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
+            LiveBadge(model)
             if (assistant != null) {
                 AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.MINDMAP, model) { aiOpen = false }
             }
@@ -298,7 +302,8 @@ private fun NoteExportOverlay(
             onClose = onClose,
             // Bez konta notatka nie istnieje na serwerze - nie ma czym
             // zarządzać i przycisk się nie pokazuje.
-            onShareLink = if (cloud.account.isSignedIn()) {
+            // Cudzej notatki nie udostępnia się dalej - to robi jej właściciel.
+            onShareLink = if (cloud.account.isSignedIn() && !path.startsWith(SharedNotes.PREFIX)) {
                 {
                     onClose()
                     shareDialog = true

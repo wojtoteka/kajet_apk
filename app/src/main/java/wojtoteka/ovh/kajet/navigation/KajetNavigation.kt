@@ -57,6 +57,11 @@ import wojtoteka.ovh.kajet.ui.start.FolderPickerScreen
 import wojtoteka.ovh.kajet.cloud.AccountScreen
 import wojtoteka.ovh.kajet.cloud.AccountViewModel
 import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
+import wojtoteka.ovh.kajet.cloud.SharedLinkBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.ui.settings.SettingsScreen
 import wojtoteka.ovh.kajet.storage.KajetSettings
 import wojtoteka.ovh.kajet.share.ShareIncoming
@@ -70,8 +75,11 @@ object Routes {
     const val NOTE = "note/{path}"
     const val CODE = "code/{path}"
     const val VIEW = "view/{path}"
+    const val SHARED = "shared/{token}?folder={folder}"
 
     fun note(path: String) = "note/" + Uri.encode(path)
+    fun shared(token: String, folder: String? = null) =
+        "shared/" + Uri.encode(token) + (folder?.let { "?folder=" + Uri.encode(it) } ?: "")
     fun code(path: String) = "code/" + Uri.encode(path)
     fun view(path: String) = "view/" + Uri.encode(path)
 }
@@ -165,6 +173,98 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     }
 
     /*
+      Cudze notatki i foldery: lista „Udostępnione mi" w bibliotece
+      i odnośniki /n/<token> otwierane z zewnątrz. Chmura powstaje leniwie
+      (I/O na dysku), więc sięgamy po nią poza wątkiem głównym.
+    */
+    var shared by remember { mutableStateOf<wojtoteka.ovh.kajet.cloud.SharedLibrary?>(null) }
+    LaunchedEffect(Unit) {
+        shared = withContext(Dispatchers.Default) { runCatching { container.cloud.shared }.getOrNull() }
+    }
+    val sharedItems by (shared?.items ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList()))
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(shared, route) {
+        if (route == Routes.LIBRARY) runCatching { shared?.refresh() }
+    }
+
+    val pendingLink by SharedLinkBridge.pending.collectAsStateWithLifecycle()
+    var opening by remember { mutableStateOf(false) }
+    var openProblem by remember { mutableStateOf<wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Failed?>(null) }
+
+    fun openWeb(url: String) {
+        runCatching {
+            context.startActivity(
+                android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
+
+    fun showOpened(result: wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened) {
+        when (result) {
+            is wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Note ->
+                navController.navigate(Routes.note(result.path))
+            is wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Folder ->
+                navController.navigate(Routes.shared(result.item.token))
+            is wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Web -> openWeb(result.url)
+            is wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Failed -> openProblem = result
+        }
+    }
+
+    /*
+      Otwieranie idzie w zasięgu całej nawigacji, a nie w LaunchedEffect niżej:
+      efekt zaczyna się od zdjęcia odnośnika z kolejki, co zmienia jego klucz -
+      Compose przerwałby wtedy w pół otwieranie, które dopiero co ruszyło.
+    */
+    fun launchOpen(work: suspend () -> wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened) {
+        opening = true
+        scope.launch {
+            val result = try {
+                work()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                opening = false
+                throw e
+            } catch (e: Exception) {
+                wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Failed(words.sharedOpenFailed)
+            }
+            opening = false
+            showOpened(result)
+        }
+    }
+
+    LaunchedEffect(pendingLink, shared, route) {
+        val link = pendingLink ?: return@LaunchedEffect
+        val library = shared ?: return@LaunchedEffect
+        if (route == null) return@LaunchedEffect
+        SharedLinkBridge.clear()
+        launchOpen {
+            val opened = library.open(link.token)
+            // Odnośnik do folderu wskazał od razu notatkę w nim (?note=...).
+            val inFolder = link.noteId
+            if (opened is wojtoteka.ovh.kajet.cloud.SharedLibrary.Opened.Folder && inFolder != null) {
+                library.openNote(
+                    link.token,
+                    wojtoteka.ovh.kajet.cloud.SharedNoteEntry(id = inFolder),
+                    opened.item,
+                )
+            } else {
+                opened
+            }
+        }
+    }
+
+    fun openSharedItem(item: wojtoteka.ovh.kajet.cloud.SharedItem) {
+        val library = shared ?: return
+        val note = item.note
+        if (item.folder != null) {
+            navController.navigate(Routes.shared(item.token))
+            return
+        }
+        if (note == null) return
+        launchOpen { library.openNote(item.token, note, item) }
+    }
+
+    /*
       Kalkulator stoi nad całym stosem ekranów, a nie w każdym edytorze osobno:
       jeden stan dla notatki odręcznej, tekstowej, mapy myśli i kodu, a edytor
       stawia tylko przycisk (CalculatorAction). Poza edytorami się chowa -
@@ -231,6 +331,8 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         }
 
         composable(Routes.LIBRARY) {
+            var sharingFolder by remember { mutableStateOf<wojtoteka.ovh.kajet.ui.note.ShareTarget.Folder?>(null) }
+            var folderProblem by remember { mutableStateOf<String?>(null) }
             LibraryScreen(
                 model = model,
                 repo = container.library,
@@ -238,7 +340,66 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 defaultBackground = settings.defaultBackground,
                 onOpenItem = { item -> open(navController, item) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
+                sharedItems = sharedItems,
+                onOpenShared = ::openSharedItem,
+                onLeaveShared = { item -> scope.launch { shared?.leave(item) } },
+                onShareFolder = { item ->
+                    scope.launch {
+                        // Folder dla serwera to jego identyfikator z chmury - jest
+                        // dopiero po synchronizacji.
+                        val id = withContext(Dispatchers.IO) {
+                            runCatching { container.library.allCloudFolders() }.getOrDefault(emptyList())
+                                .firstOrNull { it.path == item.path }?.id
+                        }
+                        val signedIn = runCatching { container.cloud.account.isSignedIn() }.getOrDefault(false)
+                        if (id == null || !signedIn) {
+                            folderProblem = words.shareFolderNeedsSync
+                        } else {
+                            sharingFolder = wojtoteka.ovh.kajet.ui.note.ShareTarget.Folder(id, item.name)
+                        }
+                    }
+                },
             )
+            sharingFolder?.let { target ->
+                wojtoteka.ovh.kajet.ui.note.ShareDialog(
+                    target = target,
+                    cloud = container.cloud,
+                    service = container.export,
+                    onClose = { sharingFolder = null },
+                )
+            }
+            folderProblem?.let { message ->
+                wojtoteka.ovh.kajet.ui.library.KajetDialog(words.shareFolderTitle, onClose = { folderProblem = null }) {
+                    Text(message, style = Kajet.type.body, color = Kajet.colors.text)
+                }
+            }
+        }
+
+        composable(
+            route = Routes.SHARED,
+            arguments = listOf(
+                navArgument("token") { type = NavType.StringType },
+                navArgument("folder") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
+            val token = Uri.decode(entry.arguments?.getString("token").orEmpty())
+            val folder = entry.arguments?.getString("folder")?.let(Uri::decode)
+            val library = shared
+            if (library != null) {
+                wojtoteka.ovh.kajet.ui.shared.SharedFolderScreen(
+                    shared = library,
+                    token = token,
+                    folderId = folder,
+                    onOpenNote = { navController.navigate(Routes.note(it)) },
+                    onOpenFolder = { navController.navigate(Routes.shared(token, it)) },
+                    onOpenWeb = ::openWeb,
+                    onBack = { popOnce(navController, entry) },
+                )
+            }
         }
 
         composable(
@@ -374,6 +535,25 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
     }
 
     if (calculatorOpen) CalculatorPanel(onClose = { calculatorOpen = false })
+
+    if (opening) {
+        wojtoteka.ovh.kajet.ui.library.KajetDialog(words.sharedSection, onClose = {}) {
+            Text(words.sharedOpening, style = Kajet.type.body, color = Kajet.colors.muted)
+        }
+    }
+    openProblem?.let { problem ->
+        wojtoteka.ovh.kajet.ui.library.KajetDialog(words.sharedOpenFailed, onClose = { openProblem = null }) {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                Text(problem.message, style = Kajet.type.body, color = Kajet.colors.text)
+                if (problem.mustSignIn) {
+                    SecondaryButton(words.account, {
+                        openProblem = null
+                        navController.navigate(Routes.ACCOUNT) { launchSingleTop = true }
+                    })
+                }
+            }
+        }
+    }
     }
     }
 

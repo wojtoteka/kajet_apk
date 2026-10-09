@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.awaria.CrashLog
 import wojtoteka.ovh.kajet.awaria.ErrorActivity
 import wojtoteka.ovh.kajet.cloud.DeviceAuthBridge
+import wojtoteka.ovh.kajet.cloud.SharedLinkBridge
 import wojtoteka.ovh.kajet.share.ShareIncoming
 import wojtoteka.ovh.kajet.core.awaria.ErrorBoundary
 import wojtoteka.ovh.kajet.core.design.Kajet
@@ -63,7 +64,10 @@ class MainActivity : ComponentActivity() {
         // Po obrocie ekranu albo śmierci procesu system oddaje tę samą
         // intencję jeszcze raz - bez tego warunku plik wjeżdżałby do
         // biblioteki podwójnie.
-        if (savedInstanceState == null) ShareIncoming.offer(intent)
+        if (savedInstanceState == null) {
+            ShareIncoming.offer(intent)
+            offerSharedLink(intent)
+        }
 
         // Awaria, która trafiła Kajet zwinięty do tła, nie mogła wtedy otworzyć
         // ekranu - od Androida 12 system na to nie pozwala. Raport został w
@@ -91,6 +95,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         captureAuthIntent(intent)
         ShareIncoming.offer(intent)
+        offerSharedLink(intent)
     }
 
     override fun onResume() {
@@ -178,6 +183,14 @@ class MainActivity : ComponentActivity() {
 
     private fun captureAuthIntent(intent: Intent?) {
         DeviceAuthBridge.offer(intent?.data)
+    }
+
+    /** Odnośnik do udostępnionej notatki albo folderu (/n/<token>). */
+    private fun offerSharedLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        // Wejście z listy ostatnich aplikacji niesie starą intencję - link był już otwarty.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        SharedLinkBridge.offer(intent.data)
     }
 }
 

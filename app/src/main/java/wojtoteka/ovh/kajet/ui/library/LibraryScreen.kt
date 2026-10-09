@@ -90,6 +90,12 @@ fun LibraryScreen(
     defaultBackground: PageBackground,
     onOpenItem: (LibraryItem) -> Unit,
     onSettings: () -> Unit,
+    /** Cudze notatki i foldery przyjęte przez konto - pasek na górze biblioteki. */
+    sharedItems: List<wojtoteka.ovh.kajet.cloud.SharedItem> = emptyList(),
+    onOpenShared: (wojtoteka.ovh.kajet.cloud.SharedItem) -> Unit = {},
+    onLeaveShared: (wojtoteka.ovh.kajet.cloud.SharedItem) -> Unit = {},
+    /** Udostępnienie folderu (null - bez konta nie ma czym). */
+    onShareFolder: ((LibraryItem) -> Unit)? = null,
 ) {
     val section by model.section.collectAsStateWithLifecycle()
     val path by model.path.collectAsStateWithLifecycle()
@@ -277,6 +283,10 @@ fun LibraryScreen(
                 }
             }
 
+            if (section == LibrarySection.LIBRARY && path.isEmpty()) {
+                SharedStrip(items = sharedItems, onOpen = onOpenShared, onLeave = onLeaveShared)
+            }
+
             when (section) {
                 LibrarySection.LIBRARY -> FolderView(
                     model = model,
@@ -386,6 +396,7 @@ fun LibraryScreen(
                 model.exportFolder(context, item, format)
             },
             onTrash = { itemMenu = null; model.moveToTrash(item) },
+            onShareFolder = onShareFolder?.let { share -> { itemMenu = null; share(item) } },
         )
     }
 
@@ -1347,6 +1358,7 @@ private fun ItemMenu(
     onLook: () -> Unit,
     onExportFolder: (ExportFormat) -> Unit,
     onTrash: () -> Unit,
+    onShareFolder: (() -> Unit)? = null,
 ) {
     val words = LocalStrings.current
     KajetDialog(item.name, onClose, width = 420) {
@@ -1355,6 +1367,7 @@ private fun ItemMenu(
             MenuAction(KajetIcons.Move, words.menuMoveToFolder, onMove)
             MenuAction(KajetIcons.Copy, words.menuCopy, onCopy)
             if (item.type == ItemType.FOLDER) {
+                if (onShareFolder != null) MenuAction(KajetIcons.ShareArrow, words.shareFolderTitle, onShareFolder)
                 MenuAction(KajetIcons.ColorSwatch, words.menuLook, onLook)
                 MenuAction(
                     icon = KajetIcons.Export,

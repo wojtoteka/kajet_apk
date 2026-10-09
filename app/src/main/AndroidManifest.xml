@@ -50,6 +50,29 @@
                 <data android:scheme="kajet" android:host="auth" />
             </intent-filter>
             <!--
+              Odnośnik do udostępnionej notatki albo folderu otwiera się od razu
+              w Kajecie, a nie w przeglądarce. autoVerify: Android pyta serwer
+              o /.well-known/assetlinks.json, a serwer podaje tam odcisk
+              certyfikatu, którym podpisano to wydanie - odczytany z pliku APK
+              wgranego w panelu. Bez potwierdzenia (inny klucz, stary serwer)
+              Android zapyta, czym otworzyć - też dobrze.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="kajet.wojtoteka.ovh" />
+                <data android:pathPrefix="/n/" />
+            </intent-filter>
+            <!-- Przycisk „Otwórz w aplikacji Kajet" na stronie odnośnika. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kajet" android:host="n" />
+            </intent-filter>
+            <!--
               „Udostępnij" / „Otwórz w". Kajet zgłasza się WYŁĄCZNIE do tego,
               co naprawdę umie pokazać po skopiowaniu pliku do biblioteki:
                 - tekst i kod - edytor kodu czyta plik jako UTF-8,
