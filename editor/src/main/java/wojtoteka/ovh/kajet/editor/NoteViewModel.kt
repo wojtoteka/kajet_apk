@@ -18,6 +18,10 @@ import wojtoteka.ovh.kajet.core.model.NoteTitles
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
+import wojtoteka.ovh.kajet.storage.LiveEditor
+import wojtoteka.ovh.kajet.storage.LiveHandle
+import wojtoteka.ovh.kajet.storage.LivePerson
+import wojtoteka.ovh.kajet.storage.LiveStatus
 
 enum class SaveState {
     LOADING,
@@ -116,6 +120,70 @@ open class NoteViewModel(
 
     val history = ChangeHistory()
 
+    // --- Edycja na żywo ---
+    //
+    // Notatka z serwera (własna albo udostępniona) otwiera się na żywo: każdy
+    // zapis jedzie do innych deltą, a ich zmiany wchodzą na ekran scalone
+    // z tym, co tu właśnie powstaje. Bez konta, bez sieci albo przy notatce,
+    // której serwer jeszcze nie zna, edytor działa jak dotąd.
+
+    private var liveHandle: LiveHandle? = null
+
+    private val _liveStatus = MutableStateFlow(LiveStatus.OFF)
+    val liveStatus: StateFlow<LiveStatus> = _liveStatus.asStateFlow()
+
+    private val _livePeople = MutableStateFlow<List<LivePerson>>(emptyList())
+    val livePeople: StateFlow<List<LivePerson>> = _livePeople.asStateFlow()
+
+    /** Od kogo przyszła ostatnia zmiana z zewnątrz - pasek pokazuje to przez chwilę. */
+    private val _liveAuthor = MutableStateFlow<Pair<String, Long>?>(null)
+    val liveAuthor: StateFlow<Pair<String, Long>?> = _liveAuthor.asStateFlow()
+
+    /** Udostępnienie tylko do czytania (albo odebrany dostęp) - zmiany nie wchodzą. */
+    private val _readOnly = MutableStateFlow(false)
+    val readOnly: StateFlow<Boolean> = _readOnly.asStateFlow()
+
+    /** Cudzej notatki już nie ma albo dostęp do niej cofnięto. */
+    private val _liveGone = MutableStateFlow(false)
+    val liveGone: StateFlow<Boolean> = _liveGone.asStateFlow()
+
+    private val liveEditor = object : LiveEditor {
+        override fun current(): NoteDocument? = _document.value
+
+        override fun replaceIf(expected: NoteDocument, merged: NoteDocument, author: String): Boolean {
+            if (_document.value !== expected) return false
+            _document.value = merged
+            if (author.isNotBlank()) _liveAuthor.value = author to System.currentTimeMillis()
+            // Na dysk jak każda inna zmiana. Wysyłka po zapisie nic nie wyśle,
+            // jeśli na ekranie nie ma nic poza tym, co właśnie przyszło.
+            markChanged()
+            return true
+        }
+
+        override fun gone() {
+            _liveGone.value = true
+            _readOnly.value = true
+        }
+    }
+
+    private fun openLive() {
+        if (liveHandle != null) return
+        val live = repo.live ?: return
+        val document = _document.value ?: return
+        val handle = runCatching { live.open(path, document, liveEditor) }.getOrNull() ?: return
+        liveHandle = handle
+        _readOnly.value = handle.readOnly
+        viewModelScope.launch(failureHandler("edycja na żywo $path")) {
+            handle.status.collect { status ->
+                _liveStatus.value = status
+                _readOnly.value = handle.readOnly || _liveGone.value
+            }
+        }
+        viewModelScope.launch(failureHandler("obecność w notatce $path")) {
+            handle.people.collect { _livePeople.value = it }
+        }
+    }
+
     private val _canUndo = MutableStateFlow(false)
     val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
 
@@ -162,6 +230,7 @@ open class NoteViewModel(
             _document.value = repo.readNote(path)
             _saveState.value = SaveState.SAVED
             refreshCloudSave()
+            openLive()
         } catch (e: Exception) {
             _error.value = e.message ?: words.noteOpenFailed
             _saveState.value = SaveState.ERROR
@@ -169,6 +238,7 @@ open class NoteViewModel(
     }
 
     fun perform(change: Change, mergeable: Boolean = false) {
+        if (_readOnly.value) return
         val current = _document.value ?: return
         _document.value = change.applyTo(current)
         history.record(change, mergeable)
@@ -177,12 +247,14 @@ open class NoteViewModel(
     }
 
     fun editWithoutHistory(transform: (NoteDocument) -> NoteDocument) {
+        if (_readOnly.value) return
         val current = _document.value ?: return
         _document.value = transform(current)
         markChanged()
     }
 
     fun undo() {
+        if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.undo(current) ?: return
         _document.value = after
@@ -191,6 +263,7 @@ open class NoteViewModel(
     }
 
     fun redo() {
+        if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.redo(current) ?: return
         _document.value = after
@@ -254,6 +327,7 @@ open class NoteViewModel(
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 repo.writeNote(path, document)
             }
+            liveHandle?.saved(document)
             _saveState.value = SaveState.SAVED
             _lastSave.value = System.currentTimeMillis()
             _error.value = null
@@ -389,7 +463,7 @@ open class NoteViewModel(
         // w spokoju: zapis pod martwą ścieżką i tak by padł, a po „Odrzuć
         // zmiany" nie wolno niczego dopisywać za plecami człowieka.
         val document = _document.value
-        if (!discarded && !_remotelyDeleted.value && document != null) {
+        if (!discarded && !_remotelyDeleted.value && !_readOnly.value && document != null) {
             val tidy = tidyOnClose(withSuggestedTitle(document))
             val changed = _saveState.value != SaveState.SAVED || tidy.document != document
             if (changed || tidy.unused.isNotEmpty()) {
@@ -400,6 +474,11 @@ open class NoteViewModel(
                 )
             }
         }
+        // Edycja na żywo kończy się po ostatnim zapisie: co nie zdąży pojechać
+        // deltą, pojedzie zwykłą synchronizacją.
+        liveHandle?.close()
+        liveHandle = null
+        repo.onNoteClosed?.invoke(path)
         super.onCleared()
     }
 

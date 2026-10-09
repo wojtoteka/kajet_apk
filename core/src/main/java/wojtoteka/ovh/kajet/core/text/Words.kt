@@ -719,6 +719,30 @@ interface Strings {
     val aiConsentWithdrawn: String
     val aiConsentFailed: String
     val aiPullFailed: String
+
+    // --- Udostępnianie i edycja na żywo ---
+    val liveNow: String
+    val liveConnecting: String
+    val liveOffline: String
+    val liveReadOnly: String
+    val liveGone: String
+    val liveChangeFrom: String
+    val liveOthersHere: String
+    val sharedSection: String
+    val sharedBadge: String
+    val sharedOpening: String
+    val sharedOpenFailed: String
+    val sharedNotHere: String
+    val sharedFolderEmpty: String
+    val sharedNeedsInternet: String
+    val sharedRemove: String
+    val sharedAccepted: String
+    val sharedTemporary: String
+    val sharedDeleteNote: String
+    val sharedNewFolder: String
+    val shareFolderTitle: String
+    val shareFolderAbout: String
+    val shareFolderNeedsSync: String
 }
 
 /*
@@ -728,6 +752,9 @@ interface Strings {
   jest inny - a sklejanie kawałków w widoku daje zdania, których nikt nie
   napisałby po angielsku. Stoją więc tu, przy słowniku, całe.
 */
+
+fun Strings.sharedByOwner(name: String): String =
+    if (english) "Shared by $name" else "Udostępnia: $name"
 
 fun Strings.searchFound(count: Int): String =
     if (english) "$count found" else "Znalezione: $count"
@@ -2191,6 +2218,30 @@ object PolishStrings : Strings {
     override val aiPullFailed =
         "KajetAI zmienił treść w chmurze, ale nie udało się jej ściągnąć. " +
             "Sprawdź internet i poproś jeszcze raz."
+
+    // --- Udostępnianie i edycja na żywo ---
+    override val liveNow = "Na żywo"
+    override val liveConnecting = "Łączę…"
+    override val liveOffline = "Bez sieci - zmiany dojadą później"
+    override val liveReadOnly = "Tylko do czytania"
+    override val liveGone = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany tutaj nigdzie nie pojadą."
+    override val liveChangeFrom = "Zmiana od:"
+    override val liveOthersHere = "W notatce są też:"
+    override val sharedSection = "Udostępnione mi"
+    override val sharedBadge = "udostępnione"
+    override val sharedOpening = "Otwieram udostępnienie…"
+    override val sharedOpenFailed = "Nie udało się otworzyć udostępnienia."
+    override val sharedNotHere = "Tej udostępnionej notatki nie ma już na urządzeniu."
+    override val sharedFolderEmpty = "W tym folderze nic jeszcze nie ma."
+    override val sharedNeedsInternet = "Udostępnione foldery otwierają się przez internet."
+    override val sharedRemove = "Usuń z moich udostępnionych"
+    override val sharedAccepted = "Udostępnienie trafiło do Twojej biblioteki."
+    override val sharedTemporary = "Otwarte z odnośnika - po wyjściu nie zostanie na liście."
+    override val sharedDeleteNote = "Usuń notatkę (trafi do kosza właściciela)"
+    override val sharedNewFolder = "Nowy podfolder"
+    override val shareFolderTitle = "Udostępnij folder"
+    override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest - także notatki dodane później."
+    override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury - zsynchronizuj bibliotekę i spróbuj jeszcze raz."
 }
 
 object EnglishStrings : Strings {
@@ -2941,4 +2992,28 @@ object EnglishStrings : Strings {
     override val aiPullFailed =
         "KajetAI changed the content in the cloud, but it could not be downloaded. " +
             "Check your connection and ask again."
+
+    // --- Udostępnianie i edycja na żywo ---
+    override val liveNow = "Live"
+    override val liveConnecting = "Connecting…"
+    override val liveOffline = "Offline - changes will go later"
+    override val liveReadOnly = "Read only"
+    override val liveGone = "This note is gone or your access was taken back. Changes made here will not go anywhere."
+    override val liveChangeFrom = "Change from:"
+    override val liveOthersHere = "Also in this note:"
+    override val sharedSection = "Shared with me"
+    override val sharedBadge = "shared"
+    override val sharedOpening = "Opening the shared item…"
+    override val sharedOpenFailed = "The shared item could not be opened."
+    override val sharedNotHere = "This shared note is no longer on the device."
+    override val sharedFolderEmpty = "There is nothing in this folder yet."
+    override val sharedNeedsInternet = "Shared folders open over the internet."
+    override val sharedRemove = "Remove from my shared"
+    override val sharedAccepted = "This is now in your library."
+    override val sharedTemporary = "Opened from a link - it will not stay on your list after you leave."
+    override val sharedDeleteNote = "Delete note (it goes to the owner's bin)"
+    override val sharedNewFolder = "New subfolder"
+    override val shareFolderTitle = "Share folder"
+    override val shareFolderAbout = "They will see the folder with its subfolders and everything in it - including notes added later."
+    override val shareFolderNeedsSync = "The folder has to reach the cloud first - sync the library and try again."
 }

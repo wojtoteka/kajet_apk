@@ -48,7 +48,20 @@ class Sync(
     private val queue: SendQueue,
     private val codeIds: CodeFileIds,
     private val uploads: FileUploader? = null,
+    /** Bazy scalania - ostatnia treść potwierdzona przez serwer (null w starych testach). */
+    private val bases: SyncBase? = null,
 ) {
+
+    /**
+     * Czy notatkę prowadzi teraz edycja na żywo. Taką notatkę zwykła
+     * synchronizacja omija w obie strony - jej zmiany jadą deltami w sesji,
+     * a wysyłka całości jeszcze raz byłaby tylko zbędnym transferem.
+     */
+    @Volatile
+    var liveCheck: ((noteId: String) -> Boolean)? = null
+
+    private fun isLive(noteId: String): Boolean =
+        runCatching { liveCheck?.invoke(noteId) == true }.getOrDefault(false)
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
     val state: StateFlow<SyncState> = _state.asStateFlow()
@@ -835,6 +848,23 @@ class Sync(
                             continue
                         }
 
+                        // Notatka otwarta na żywo - jej zmiany wysyła sesja.
+                        if (isLive(document.id)) continue
+
+                        // Treść taka sama jak ta, którą serwer już potwierdził
+                        // (np. wysłana na żywo przed zamknięciem notatki) -
+                        // nie ma po co wysyłać całości jeszcze raz.
+                        val known = bases?.read(document.id)
+                        if (known != null && known.first == knownVersion(document.id) &&
+                            wojtoteka.ovh.kajet.core.live.LiveMerge.jsonEqual(
+                                known.second,
+                                SyncBase.normalize(document),
+                            )
+                        ) {
+                            queue.removeIfUnchanged(entry)
+                            continue
+                        }
+
                         val content = NoteCodec.encodeNote(document)
                         val response = client.sendNote(
                             OutgoingNote(
@@ -878,6 +908,13 @@ class Sync(
                                             // wysyłka przywraca notatkę na serwerze.
                                             rememberVersion(document.id, onServer.version)
                                             retryNeeded = true
+                                        } else if (onServer != null &&
+                                            mergeWithServer(entry.path, document, onServer)
+                                        ) {
+                                            // Zmiany tu i tam złożone w jedną notatkę -
+                                            // scalona wersja pojedzie w drugim przebiegu,
+                                            // już od nowej wersji serwera.
+                                            retryNeeded = true
                                         } else if (saveVersionAlongside(entry.path, response.data)) {
                                             // The server copy just landed next to the local note.
                                             // Remember the server version, otherwise the next fetch
@@ -915,6 +952,11 @@ class Sync(
                                     }
                                     else -> {
                                         rememberVersion(document.id, response.data.version)
+                                        bases?.write(
+                                            document.id,
+                                            response.data.version,
+                                            SyncBase.normalize(document),
+                                        )
                                         if (sendAttachments(document.id, entry.path, document.text)) {
                                             queue.removeIfUnchanged(entry)
                                             sent += 1
@@ -1140,6 +1182,12 @@ class Sync(
                             continue
                         }
 
+                        // Otwarta na żywo - sesja ma tę zmianę już na ekranie.
+                        if (isLive(fromServer.id)) {
+                            deferred(fromServer)
+                            continue
+                        }
+
                         // A note we sent ourselves a moment ago need not be read
                         // back. We recognise it by the remembered version.
                         if (knownVersion(fromServer.id) >= fromServer.version) {
@@ -1254,6 +1302,9 @@ class Sync(
                             }
                             if (fetchAttachments(fromServer.id, saved, fromServer.attachments)) {
                                 rememberVersion(fromServer.id, fromServer.version)
+                                SyncBase.normalize(content)?.let {
+                                    bases?.write(fromServer.id, fromServer.version, it)
+                                }
                                 fetched += 1
                                 settled(fromServer.updatedAt)
                             } else {
@@ -1864,6 +1915,56 @@ class Sync(
 
     private fun knownVersion(noteId: String): Int = versions.getInt(noteId, 0)
 
+    /** Wersja notatki, którą serwer ostatnio potwierdził (0 - nie zna jej). */
+    fun serverVersion(noteId: String): Int = knownVersion(noteId)
+
+    /** Czy pod tą ścieżką czeka zmiana do wysłania. */
+    fun isQueued(path: String): Boolean =
+        runCatching { queue.all().any { it.path == path } }.getOrDefault(false)
+
+    /**
+     * Sesja na żywo potwierdziła treść [content] w wersji [version] - ta sama
+     * wiedza, którą zostawia zwykła wysyłka: zapamiętana wersja i baza.
+     */
+    fun liveSynced(noteId: String, version: Int, content: kotlinx.serialization.json.JsonObject) {
+        rememberVersion(noteId, version)
+        bases?.write(noteId, version, content)
+    }
+
+    /**
+     * Konflikt po pracy bez sieci: ta notatka zmieniła się tutaj i na serwerze.
+     *
+     * Z bazą (ostatnią treścią, którą obie strony znały) zmiany składają się
+     * w jedną notatkę, tak jak w edycji na żywo: kreski i węzły z obu stron
+     * zostają, tekst scala się akapitami i słowami, a gdy oba teksty zmieniły
+     * to samo miejsce, zostają oba, jeden pod drugim. Bez bazy (notatka
+     * zsynchronizowana przed tą wersją aplikacji) - jak dawniej, kopia obok.
+     */
+    private suspend fun mergeWithServer(
+        path: String,
+        local: NoteDocument,
+        onServer: ServerNote,
+    ): Boolean {
+        val store = bases ?: return false
+        val content = onServer.content ?: return false
+        val base = store.read(local.id)?.takeIf { it.first == knownVersion(local.id) } ?: return false
+        val server = SyncBase.normalize(content) ?: return false
+        val merged = wojtoteka.ovh.kajet.core.live.LiveMerge.merge3(
+            base.second,
+            SyncBase.normalize(local),
+            server,
+        ) as? kotlinx.serialization.json.JsonObject ?: return false
+        val document = runCatching {
+            NoteCodec.json.decodeFromJsonElement(NoteDocument.serializer(), merged)
+        }.getOrNull() ?: return false
+        val written = runCatching { repository.writeNoteFromCloud(document.copy(id = local.id)) }
+            .getOrNull() ?: return false
+        if (written != path) Log.i("Kajet", "Scalona notatka ${local.id} leży pod $written")
+        rememberVersion(local.id, onServer.version)
+        store.write(local.id, onServer.version, server)
+        return true
+    }
+
     /**
      * Czy od zalogowania doszło do końca choć jedno pełne pobranie. Przed nim
      * wysyłka z baseVersion = 0 to strzał w ciemno: zero może znaczyć „nowa
@@ -1894,6 +1995,7 @@ class Sync(
     fun forgetNote(noteId: String) {
         if (noteId.isBlank()) return
         forgetVersion(noteId)
+        bases?.forget(noteId)
         runCatching {
             queue.all()
                 .filter {
@@ -1923,6 +2025,7 @@ class Sync(
     }
 
     fun forgetAllVersions() {
+        bases?.forgetAll()
         versions.edit().clear().apply()
         // Po wylogowaniu tożsamości plików z kodem też przestają obowiązywać:
         // na innym koncie te same ścieżki nie mogą nieść starych numerów.

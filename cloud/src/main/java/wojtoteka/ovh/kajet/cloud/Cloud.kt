@@ -23,6 +23,10 @@ object Cloud {
         */
         val codeIds: CodeFileIds,
         val uploads: FileUploader,
+        /** Edycja na żywo otwartych notatek. */
+        val live: CloudLive,
+        /** Cudze notatki i foldery - „Udostępnione mi" i odnośniki. */
+        val shared: SharedLibrary,
     )
 
     fun parts(context: Context, repository: LibraryRepository): Parts {
@@ -36,10 +40,17 @@ object Cloud {
                 val queue = SendQueue(appContext)
                 val codeIds = CodeFileIds(appContext)
                 val uploads = FileUploader(appContext, Storage.uploads(appContext), repository, client)
-                val sync = Sync(appContext, repository, account, client, queue, codeIds, uploads)
+                val bases = SyncBase(java.io.File(appContext.filesDir, "sync-base"))
+                val sync = Sync(appContext, repository, account, client, queue, codeIds, uploads, bases)
                 val auth = AuthWatch(account, client)
+                val live = CloudLive(appContext, repository, account, client, sync, bases)
+                client.clientId = live.clientId
+                sync.liveCheck = live::isLive
+                // Edytory pytają o edycję na żywo przez repozytorium - nie znają chmury.
+                repository.live = live
+                val shared = SharedLibrary(repository, account, client, live)
 
-                val created = Parts(account, client, queue, sync, auth, codeIds, uploads)
+                val created = Parts(account, client, queue, sync, auth, codeIds, uploads, live, shared)
                 parts = created
 
                 // Background work runs in a separate process and has no other way

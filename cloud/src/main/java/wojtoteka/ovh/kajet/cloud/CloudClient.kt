@@ -21,6 +21,13 @@ class CloudClient(
     private val account: AccountStore,
 ) : CloudTransport {
 
+    /**
+     * To urządzenie dla edycji na żywo. Jedzie przy każdym zapisie, żeby
+     * otwarta na żywo notatka poznała echo zmiany wysłanej synchronizacją.
+     */
+    @Volatile
+    var clientId: String? = null
+
     sealed interface Result<out T> {
         data class Ok<T>(val data: T) : Result<T>
         data class Error(
@@ -303,6 +310,153 @@ class CloudClient(
             )
         }
 
+    // --- Udostępnione mi ---
+
+    private fun shareQuery(token: String): String = "t=" + java.net.URLEncoder.encode(token, "UTF-8")
+
+    /**
+     * Odnośnik /n/<token> otwarty w aplikacji. Udostępnienie imienne otwarte
+     * kontem z adresem z zaproszenia zostaje w tej chwili przyjęte (trafia do
+     * biblioteki); zwykły odnośnik niczego nie przypina.
+     */
+    suspend fun openShared(token: String): Result<SharedItem> = request(
+        url = "${account.serverUrl()}/api/v1/shared/open",
+        method = "POST",
+        body = json.encodeToString(OpenSharedRequest(token)),
+        optionalToken = true,
+    )
+
+    /** Przyjęte udostępnienia tego konta. */
+    suspend fun sharedItems(): Result<SharedItemsResponse> = request(
+        url = "${account.serverUrl()}/api/v1/shared",
+        method = "GET",
+    )
+
+    /** Zawartość udostępnionego folderu (bez [folderId] - sam udostępniony). */
+    suspend fun sharedFolder(token: String, folderId: String?): Result<SharedFolderListing> = request(
+        url = "${account.serverUrl()}/api/v1/shared/folder?" + shareQuery(token) +
+            (folderId?.let { "&folder=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""),
+        method = "GET",
+        optionalToken = true,
+    )
+
+    /** Nowa notatka w udostępnionym folderze - należy do właściciela folderu. */
+    suspend fun createSharedNote(
+        token: String,
+        folderId: String,
+        noteId: String,
+        kind: String,
+        title: String,
+        content: String,
+    ): Result<SharedCreated> = request(
+        url = "${account.serverUrl()}/api/v1/shared/notes?" + shareQuery(token),
+        method = "POST",
+        body = json.encodeToString(CreateSharedNoteRequest(noteId, folderId, kind, title, content)),
+        optionalToken = true,
+    )
+
+    /** Notatka z udostępnionego folderu idzie do kosza właściciela. */
+    suspend fun deleteSharedNote(token: String, noteId: String): Result<RevokeShareResponse> = request(
+        url = "${account.serverUrl()}/api/v1/shared/notes/$noteId?" + shareQuery(token),
+        method = "DELETE",
+        optionalToken = true,
+    )
+
+    suspend fun createSharedFolder(token: String, parentId: String, name: String): Result<SharedFolderEntry> =
+        request(
+            url = "${account.serverUrl()}/api/v1/shared/folders?" + shareQuery(token),
+            method = "POST",
+            body = json.encodeToString(CreateSharedFolderRequest(parentId, name)),
+            optionalToken = true,
+        )
+
+    /** „Usuń z moich udostępnionych" - u właściciela nic się nie zmienia. */
+    suspend fun leaveShared(shareId: String): Result<RevokeShareResponse> = request(
+        url = "${account.serverUrl()}/api/v1/shared/$shareId",
+        method = "DELETE",
+    )
+
+    suspend fun sharedAttachments(noteId: String, token: String): Result<AttachmentsResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/attachments?" + shareQuery(token),
+        method = "GET",
+        optionalToken = true,
+    )
+
+    suspend fun sharedAttachment(noteId: String, name: String, token: String): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            val encoded = java.net.URLEncoder.encode(name, "UTF-8")
+            connectBytes(
+                url = "${account.serverUrl()}/api/v1/notes/$noteId/attachments?name=$encoded&" +
+                    shareQuery(token),
+                optionalToken = true,
+            )
+        }
+
+    /** Zdjęcie dołożone do cudzej notatki - trafia do właściciela. */
+    suspend fun sendSharedAttachment(
+        noteId: String,
+        name: String,
+        mime: String,
+        data: ByteArray,
+        token: String,
+    ): Result<AttachmentResponse> = withContext(Dispatchers.IO) {
+        val boundary = "----KajetBoundary${System.nanoTime()}"
+        val header = buildString {
+            append("--$boundary\r\n")
+            append("Content-Disposition: form-data; name=\"name\"\r\n\r\n")
+            append(name)
+            append("\r\n--$boundary\r\n")
+            append("Content-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\n")
+            append("Content-Type: $mime\r\n\r\n")
+        }.toByteArray(Charsets.UTF_8)
+        val footer = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
+        connect(
+            url = "${account.serverUrl()}/api/v1/notes/$noteId/attachments?" + shareQuery(token),
+            method = "POST",
+            contentType = "multipart/form-data; boundary=$boundary",
+            withToken = false,
+            optionalToken = true,
+        ) { connection ->
+            connection.setFixedLengthStreamingMode(header.size + data.size + footer.size)
+            connection.outputStream.use { stream ->
+                stream.write(header)
+                stream.write(data)
+                stream.write(footer)
+            }
+        }.let { parse(it) }
+    }
+
+    // --- Udostępnianie folderów ---
+
+    suspend fun listFolderShares(folderId: String): Result<ShareListResponse> = request(
+        url = "${account.serverUrl()}/api/v1/folders/$folderId/share",
+        method = "GET",
+    )
+
+    suspend fun createFolderShare(
+        folderId: String,
+        canEdit: Boolean,
+        email: String? = null,
+        anonymousAllowed: Boolean = true,
+        expiresInDays: Int? = null,
+    ): Result<ShareEntry> = request(
+        url = "${account.serverUrl()}/api/v1/folders/$folderId/share",
+        method = "POST",
+        body = json.encodeToString(
+            CreateShareRequest(
+                permission = if (canEdit) "edit" else "read",
+                email = email,
+                anonymousAllowed = anonymousAllowed,
+                expiresInDays = expiresInDays,
+            ),
+        ),
+    )
+
+    suspend fun revokeFolderShare(folderId: String, shareId: String): Result<RevokeShareResponse> = request(
+        url = "${account.serverUrl()}/api/v1/folders/$folderId/share/$shareId",
+        method = "DELETE",
+    )
+
     // --- Running code ---
 
     suspend fun runCode(language: String, code: String, input: String): Result<CodeResult> = request(
@@ -363,6 +517,7 @@ class CloudClient(
         withToken: Boolean = true,
         acceptPending: Boolean = false,
         readTimeout: Int = READ_TIMEOUT,
+        optionalToken: Boolean = false,
     ): Result<T> = withContext(Dispatchers.IO) {
         val raw = connect(
             url = url,
@@ -371,6 +526,7 @@ class CloudClient(
             withToken = withToken,
             acceptPending = acceptPending,
             readTimeout = readTimeout,
+            optionalToken = optionalToken,
         ) { connection ->
             if (body != null) {
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -405,6 +561,12 @@ class CloudClient(
          * z „brak odpowiedzi" przy zmianie, która może właśnie się zapisała.
          */
         readTimeout: Int = READ_TIMEOUT,
+        /**
+         * Token, jeśli jest - bez niego też idziemy. Tak otwiera się odnośnik
+         * do cudzej notatki: zalogowany przedstawia się kontem (udostępnienie
+         * imienne), niezalogowany - samym odnośnikiem.
+         */
+        optionalToken: Boolean = false,
         sendBody: (HttpURLConnection) -> Unit,
     ): Result<String> {
         if (!hasNetwork()) {
@@ -414,8 +576,12 @@ class CloudClient(
             )
         }
 
-        val token = if (withToken) account.token() else null
-        if (withToken && token.isNullOrBlank()) {
+        val token = when {
+            optionalToken -> account.token()?.takeIf { it.isNotBlank() }
+            withToken -> account.token()
+            else -> null
+        }
+        if (withToken && !optionalToken && token.isNullOrBlank()) {
             return Result.Error(words.notSignedIn, mustSignIn = true)
         }
 
@@ -440,6 +606,7 @@ class CloudClient(
                 if (words.english) "en" else "pl",
             )
             if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
+            clientId?.let { connection.setRequestProperty("X-Kajet-Client", it) }
             if (method != "GET") {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", contentType)
@@ -474,12 +641,12 @@ class CloudClient(
         }
     }
 
-    private fun connectBytes(url: String): Result<ByteArray> {
+    private fun connectBytes(url: String, optionalToken: Boolean = false): Result<ByteArray> {
         if (!hasNetwork()) {
             return Result.Error(words.noInternet, worthRetrying = true)
         }
-        val token = account.token()
-        if (token.isNullOrBlank()) {
+        val token = account.token()?.takeIf { it.isNotBlank() }
+        if (token == null && !optionalToken) {
             return Result.Error(words.notSignedIn, mustSignIn = true)
         }
 
@@ -493,7 +660,7 @@ class CloudClient(
             connection.requestMethod = "GET"
             connection.connectTimeout = CONNECT_TIMEOUT
             connection.readTimeout = READ_TIMEOUT
-            connection.setRequestProperty("Authorization", "Bearer $token")
+            if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
             connection.setRequestProperty(
                 "Accept-Language",
                 if (words.english) "en" else "pl",
@@ -506,7 +673,7 @@ class CloudClient(
                 toError(
                     status = status,
                     body = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty(),
-                    tokenUsed = true,
+                    tokenUsed = token != null,
                 )
             }
         } catch (e: IOException) {
@@ -888,3 +1055,71 @@ data class CodeResult(
 
 @Serializable
 private data class ServerError(val error: String = "", val message: String = "")
+
+// --- Udostępnione mi ---
+
+@Serializable
+private data class OpenSharedRequest(val token: String)
+
+@Serializable
+private data class CreateSharedNoteRequest(
+    val id: String,
+    val folderId: String,
+    val kind: String,
+    val title: String,
+    val content: String,
+)
+
+@Serializable
+private data class CreateSharedFolderRequest(val parentId: String, val name: String)
+
+@Serializable
+data class SharedNoteEntry(
+    val id: String = "",
+    val title: String = "",
+    val kind: String = "",
+    val version: Int = 0,
+    val updatedAt: Long = 0,
+)
+
+@Serializable
+data class SharedFolderEntry(
+    val id: String = "",
+    val name: String = "",
+    val colorId: String = "",
+    val iconId: String = "",
+)
+
+/** Jedno udostępnienie z drugiej strony - notatka albo folder. */
+@Serializable
+data class SharedItem(
+    val shareId: String = "",
+    val token: String = "",
+    val kind: String = "note",
+    val permission: String = "read",
+    val owner: String = "",
+    val acceptedAt: Long? = null,
+    val note: SharedNoteEntry? = null,
+    val folder: SharedFolderEntry? = null,
+    /** Tylko przy otwarciu odnośnika: czy zostaje w bibliotece. */
+    val accepted: Boolean = false,
+    val isOwner: Boolean = false,
+) {
+    val canEdit: Boolean get() = permission == "edit"
+}
+
+@Serializable
+data class SharedItemsResponse(val items: List<SharedItem> = emptyList())
+
+@Serializable
+data class SharedFolderListing(
+    val folder: SharedFolderEntry = SharedFolderEntry(),
+    val path: List<SharedFolderEntry> = emptyList(),
+    val folders: List<SharedFolderEntry> = emptyList(),
+    val notes: List<SharedNoteEntry> = emptyList(),
+    val permission: String = "read",
+    val owner: String = "",
+)
+
+@Serializable
+data class SharedCreated(val status: String = "", val id: String = "", val version: Int = 0)
