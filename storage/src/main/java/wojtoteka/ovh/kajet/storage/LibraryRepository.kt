@@ -96,6 +96,28 @@ class LibraryRepository(
      */
     var cloudSave: CloudSaveLookup? = null
 
+    /**
+     * Edycja na żywo - chmura podpina się tu przy starcie aplikacji. Edytor
+     * pyta o nią przy otwarciu notatki; bez konta (i bez odnośnika) jej nie ma.
+     */
+    var live: LiveNotes? = null
+
+    /**
+     * Cudze notatki otwarte w aplikacji (odnośnik albo „Udostępnione mi").
+     * Ścieżka z przedrostkiem [SharedNotes.PREFIX] trafia tutaj zamiast do
+     * katalogu notatek użytkownika.
+     */
+    val shared = SharedNotes(java.io.File(context.filesDir, "shared"))
+
+    /** Zdjęcie dołożone do cudzej notatki - chmura wysyła je od razu właścicielowi. */
+    var onSharedAttachment: ((noteId: String, name: String, data: ByteArray, mime: String) -> Unit)? = null
+
+    /** Zapis cudzej notatki na urządzeniu - chmura pilnuje, żeby dojechał na serwer. */
+    var onSharedSaved: ((noteId: String) -> Unit)? = null
+
+    /** Edytor zamknął notatkę - notatka z samego odnośnika może zniknąć z urządzenia. */
+    var onNoteClosed: ((path: String) -> Unit)? = null
+
     /** Notatki wyrzucone do kosza na urządzeniu - do zgłoszenia serwerowi. */
     var onNotesTrashed: ((noteIds: List<String>) -> Unit)? = null
 
@@ -339,16 +361,28 @@ class LibraryRepository(
     }
 
     override suspend fun readNote(path: String): NoteDocument = withContext(io) {
+        if (shared.isShared(path)) return@withContext shared.readNote(shared.noteIdOf(path))
         requireStore().readNote(path)
     }
 
     suspend fun noteKind(path: String): NoteKind? = withContext(io) {
+        if (shared.isShared(path)) {
+            return@withContext runCatching { shared.readNote(shared.noteIdOf(path)).kind }.getOrNull()
+        }
         dao.findByPath(path)?.noteKind?.let { name ->
             runCatching { NoteKind.valueOf(name) }.getOrNull()
         } ?: runCatching { readNote(path).kind }.getOrNull()
     }
 
     suspend fun writeNote(path: String, document: NoteDocument) = withContext(io) {
+        if (shared.isShared(path)) {
+            // Cudza notatka nie trafia do spisu ani do kolejki synchronizacji
+            // biblioteki - na serwer jedzie przez edycję na żywo.
+            val noteId = shared.noteIdOf(path)
+            shared.writeNote(noteId, document)
+            onSharedSaved?.invoke(noteId)
+            return@withContext
+        }
         val store = requireStore()
         store.writeNote(path, document)
         val entry = store.entry(path)
@@ -442,6 +476,8 @@ class LibraryRepository(
     }
 
     suspend fun deleteAttachments(notePath: String, names: Collection<String>) = withContext(io) {
+        // Pliki cudzej notatki leżą u właściciela - tu niczego nie kasujemy.
+        if (shared.isShared(notePath)) return@withContext
         val store = store() ?: return@withContext
         for (name in names) runCatching { store.deleteAttachment(notePath, name) }
     }
@@ -455,6 +491,7 @@ class LibraryRepository(
      */
     suspend fun entryVanished(path: String): Boolean = withContext(io) {
         if (path.isBlank()) return@withContext false
+        if (shared.isShared(path)) return@withContext !shared.exists(shared.noteIdOf(path))
         val store = store() ?: return@withContext false
         runCatching { store.entry(path) == null }.getOrDefault(false)
     }
@@ -552,15 +589,39 @@ class LibraryRepository(
     }
 
     suspend fun writeAttachment(notePath: String, name: String, data: ByteArray, mime: String): String =
-        withContext(io) { requireStore().writeAttachment(notePath, name, data, mime) }
+        withContext(io) {
+            if (shared.isShared(notePath)) {
+                putShared(notePath, name, data, mime)
+                return@withContext name
+            }
+            requireStore().writeAttachment(notePath, name, data, mime)
+        }
 
     override suspend fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) =
-        withContext(io) { requireStore().putAttachment(notePath, name, data, mime) }
+        withContext(io) {
+            if (shared.isShared(notePath)) {
+                putShared(notePath, name, data, mime)
+                return@withContext
+            }
+            requireStore().putAttachment(notePath, name, data, mime)
+        }
+
+    private fun putShared(notePath: String, name: String, data: ByteArray, mime: String) {
+        val noteId = shared.noteIdOf(notePath)
+        shared.writeAttachment(noteId, name, data)
+        onSharedAttachment?.invoke(noteId, name, data, mime)
+    }
 
     override suspend fun readAttachment(notePath: String, name: String): ByteArray? =
-        withContext(io) { store()?.readAttachment(notePath, name) }
+        withContext(io) {
+            if (shared.isShared(notePath)) {
+                return@withContext shared.readAttachment(shared.noteIdOf(notePath), name)
+            }
+            store()?.readAttachment(notePath, name)
+        }
 
     override suspend fun attachmentNames(notePath: String): List<String> = withContext(io) {
+        if (shared.isShared(notePath)) return@withContext shared.attachmentNames(shared.noteIdOf(notePath))
         val folder = store()?.entry(notePath)?.takeIf { it.isDirectory }
             ?: return@withContext emptyList()
         folder.findFile(NoteDocument.ASSETS_DIRECTORY)

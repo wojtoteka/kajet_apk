@@ -55,10 +55,31 @@ import wojtoteka.ovh.kajet.ui.library.KajetTextField
   panel jest od zarządzania, nie tylko od podania linku dalej.
 */
 
-@OptIn(ExperimentalLayoutApi::class)
+/** Co udostępniamy: notatkę albo cały folder (z podfolderami). */
+sealed interface ShareTarget {
+    val id: String
+    val title: String
+
+    data class Note(val document: NoteDocument) : ShareTarget {
+        override val id: String get() = document.id
+        override val title: String get() = document.title
+    }
+
+    data class Folder(override val id: String, override val title: String) : ShareTarget
+}
+
 @Composable
 fun ShareDialog(
     document: NoteDocument,
+    cloud: Cloud.Parts,
+    service: ExportService,
+    onClose: () -> Unit,
+) = ShareDialog(ShareTarget.Note(document), cloud, service, onClose)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ShareDialog(
+    target: ShareTarget,
     cloud: Cloud.Parts,
     service: ExportService,
     onClose: () -> Unit,
@@ -92,14 +113,20 @@ fun ShareDialog(
         }
     }
 
-    LaunchedEffect(document.id, reload) {
+    LaunchedEffect(target.id, reload) {
         listError = null
         shares = null
         if (!cloud.client.hasNetwork()) {
             listError = words.shareOfflineNow
             return@LaunchedEffect
         }
-        when (val outcome = withSyncRetry(cloud) { cloud.client.listShares(document.id) }) {
+        val listing = withSyncRetry(cloud) {
+            when (target) {
+                is ShareTarget.Note -> cloud.client.listShares(target.id)
+                is ShareTarget.Folder -> cloud.client.listFolderShares(target.id)
+            }
+        }
+        when (val outcome = listing) {
             is CloudClient.Result.Ok -> shares = outcome.data.shares
             is CloudClient.Result.Error -> listError = outcome.message
         }
@@ -125,13 +152,22 @@ fun ShareDialog(
         made = null
         scope.launch {
             val outcome = withSyncRetry(cloud) {
-                cloud.client.createShare(
-                    noteId = document.id,
-                    canEdit = canEdit,
-                    email = address,
-                    anonymousAllowed = noAccountAllowed,
-                    expiresInDays = days.toIntOrNull()?.takeIf { it > 0 },
-                )
+                when (target) {
+                    is ShareTarget.Note -> cloud.client.createShare(
+                        noteId = target.id,
+                        canEdit = canEdit,
+                        email = address,
+                        anonymousAllowed = noAccountAllowed,
+                        expiresInDays = days.toIntOrNull()?.takeIf { it > 0 },
+                    )
+                    is ShareTarget.Folder -> cloud.client.createFolderShare(
+                        folderId = target.id,
+                        canEdit = canEdit,
+                        email = address,
+                        anonymousAllowed = noAccountAllowed,
+                        expiresInDays = days.toIntOrNull()?.takeIf { it > 0 },
+                    )
+                }
             }
             creating = false
             when (outcome) {
@@ -156,7 +192,11 @@ fun ShareDialog(
             return
         }
         scope.launch {
-            when (val outcome = cloud.client.revokeShare(document.id, entry.id)) {
+            val revoked = when (target) {
+                is ShareTarget.Note -> cloud.client.revokeShare(target.id, entry.id)
+                is ShareTarget.Folder -> cloud.client.revokeFolderShare(target.id, entry.id)
+            }
+            when (val outcome = revoked) {
                 is CloudClient.Result.Ok -> {
                     shares = shares?.filterNot { it.id == entry.id }
                     if (made?.id == entry.id) made = null
@@ -170,6 +210,9 @@ fun ShareDialog(
 
     val form: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (target is ShareTarget.Folder) {
+                Text(words.shareFolderAbout, style = Kajet.type.body, color = Kajet.colors.muted)
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel(words.shareWhatMayDo)
                 ChoiceRow(
@@ -264,7 +307,7 @@ fun ShareDialog(
                         )
                         SecondaryButton(
                             text = words.sendLink,
-                            onClick = { formError = service.shareText(context, fresh.url, document.title) },
+                            onClick = { formError = service.shareText(context, fresh.url, target.title) },
                             icon = KajetIcons.ShareArrow,
                         )
                     }
@@ -321,7 +364,7 @@ fun ShareDialog(
     val wide = LocalConfiguration.current.screenWidthDp >= 600
 
     KajetDialog(
-        title = words.sharePanelTitle,
+        title = if (target is ShareTarget.Folder) words.shareFolderTitle else words.sharePanelTitle,
         onClose = onClose,
         width = if (wide) 780 else 520,
     ) {

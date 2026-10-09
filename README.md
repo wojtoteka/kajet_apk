@@ -56,6 +56,19 @@ najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
 ikona chmurki dopiero po faktycznym zapisie na serwerze, kolejka ponawiania usunięć i osłona
 przed nadpisaniem notatki skasowanej zdalnie.
 
+**Edycja na żywo.** Notatka otwarta na kilku urządzeniach albo u kilku osób (także na
+stronie) zmienia się u wszystkich od razu - tekst, pismo odręczne i mapa myśli. Idą tylko
+małe delty przez strumień zmian (SSE); gdy nikt inny notatki nie ma otwartej, przez sieć
+nie idzie nic poza krótkim „ping". Praca bez sieci scala się po powrocie z cudzymi
+zmianami (`core/live/LiveMerge.kt` - te same zasady i te same przypadki testowe co na
+serwerze): tekst do poziomu słów, przy prawdziwym konflikcie obie wersje jedna pod drugą,
+kreski zawsze się sumują, ten sam węzeł mapy - wygrywa późniejsza zmiana.
+
+**Udostępnione.** Odnośnik `https://kajet.wojtoteka.ovh/n/...` otwiera notatkę albo folder
+od razu w aplikacji (App Links). Zwykły link działa na czas oglądania i niczego nie zostawia
+w bibliotece; zaproszenie na adres e-mail po otwarciu staje w „Udostępnione mi". W folderze
+z prawem edycji można dodawać, zmieniać i usuwać notatki i podfoldery.
+
 **KajetAI.** Panel asystenta wpięty w notatkę - z ekranem zgody, limitami i komunikatami
 o błędach po polsku i angielsku.
 
@@ -84,6 +97,8 @@ Osiem modułów Gradle, każdy z własną odpowiedzialnością:
 
 Treść notatki to jeden dokument JSON (`content.json`), identyczny z tym, który trzyma serwer.
 Synchronizacja porównuje dokumenty, nie modele - to samo założenie po obu stronach.
+Do scalania po pracy bez sieci aplikacja trzyma ostatnią wersję uzgodnioną z serwerem
+(`files/sync-base`, skompresowaną).
 
 ## Stos
 
@@ -103,6 +118,17 @@ DataStore · SAF · Chaquopy (Python 3.11) · WebView
 ```
 
 `local.properties` (ścieżka do SDK) jest lokalne i nie trafia do repozytorium.
+
+Dwa testy edycji na żywo chodzą tylko przeciw prawdziwemu serwerowi i bez zmiennych
+środowiska są pomijane:
+
+```bash
+KAJET_LIVE_SERVER=http://localhost:9081 KAJET_LIVE_TOKEN=<token aplikacji> \
+    ./gradlew :cloud:testDebugUnitTest --tests '*LiveSessionServerTest*'
+```
+
+`LiveWebInteropTest` dodatkowo potrzebuje `KAJET_INTEROP_DIR` i przeglądarki po drugiej
+stronie (Playwright), z którą wymienia się plikami w tym katalogu.
 
 ## Uwagi
 
