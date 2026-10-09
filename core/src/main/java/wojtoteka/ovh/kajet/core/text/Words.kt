@@ -2220,7 +2220,7 @@ object PolishStrings : Strings {
             "Sprawdź internet i poproś jeszcze raz."
 
     // --- Udostępnianie i edycja na żywo ---
-    override val liveNow = "Na żywo"
+    override val liveNow = "Połączono"
     override val liveConnecting = "Łączę…"
     override val liveOffline = "Bez sieci - zmiany dojadą później"
     override val liveReadOnly = "Tylko do czytania"
@@ -2994,7 +2994,7 @@ object EnglishStrings : Strings {
             "Check your connection and ask again."
 
     // --- Udostępnianie i edycja na żywo ---
-    override val liveNow = "Live"
+    override val liveNow = "Connected"
     override val liveConnecting = "Connecting…"
     override val liveOffline = "Offline - changes will go later"
     override val liveReadOnly = "Read only"

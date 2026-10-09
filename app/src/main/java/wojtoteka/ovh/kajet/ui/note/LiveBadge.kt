@@ -34,10 +34,11 @@ import wojtoteka.ovh.kajet.editor.NoteViewModel
 import wojtoteka.ovh.kajet.storage.LiveStatus
 
 /**
- * Znaczek edycji na żywo nad edytorem: kropka stanu połączenia, inicjały
- * osób, które mają tę notatkę otwartą w tej chwili (każda w swoim stałym
- * kolorze, tym samym co na stronie), i - przez kilka sekund po cudzej
- * zmianie - od kogo ona przyszła.
+ * Znaczek edycji na żywo nad edytorem: napis o połączeniu, inicjały osób,
+ * które mają tę notatkę otwartą w tej chwili (każda w swoim stałym kolorze,
+ * tym samym co na stronie), i - przez kilka sekund po cudzej zmianie - od
+ * kogo ona przyszła. Bez kropki stanu, tak jak na stronie: stan mówi napis,
+ * a brak połączenia jest na czerwono.
  *
  * Stoi w osobnym okienku nad edytorem (Popup), więc żaden z trzech edytorów
  * nie musiał zmieniać swojego układu. Okienko nie łapie skupienia - pisanie
@@ -66,15 +67,17 @@ fun LiveBadge(model: NoteViewModel) {
     val label = when {
         gone -> words.liveGone
         readOnly -> words.liveReadOnly
+        // Kółka z inicjałami same mówią, że jesteśmy połączeni - napis mówi
+        // wtedy, czyje to kółka.
+        status == LiveStatus.LIVE && people.isNotEmpty() -> words.liveOthersHere
         status == LiveStatus.LIVE -> words.liveNow
         status == LiveStatus.CONNECTING -> words.liveConnecting
         else -> words.liveOffline
     }
-    val dot = when {
-        gone -> colors.danger
-        status == LiveStatus.LIVE -> colors.accent
-        status == LiveStatus.OFFLINE -> colors.danger
-        else -> colors.muted
+    val labelColor = when {
+        gone || status == LiveStatus.OFFLINE -> colors.danger
+        status == LiveStatus.CONNECTING -> colors.muted
+        else -> colors.text
     }
     val offset = with(LocalDensity.current) { 70.dp.roundToPx() }
 
@@ -91,8 +94,7 @@ fun LiveBadge(model: NoteViewModel) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(Modifier.size(8.dp).background(dot, CircleShape))
-            Text(label, style = Kajet.type.meta, color = if (gone) colors.danger else colors.text, maxLines = 2)
+            Text(label, style = Kajet.type.meta, color = labelColor, maxLines = 2)
             for (person in people.take(MAX_FACES)) {
                 Box(
                     Modifier
