@@ -726,7 +726,7 @@ fun MindMapEditor(
                         field()
                     },
                 )
-                SaveIndicator(state = saveState, lastSave = lastSave, inCloud = inCloud)
+                SaveIndicator(state = saveState, lastSave = lastSave, inCloud = inCloud, live = model)
             }
         }
 

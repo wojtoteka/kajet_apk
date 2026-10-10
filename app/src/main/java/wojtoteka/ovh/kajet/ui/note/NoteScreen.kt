@@ -141,7 +141,6 @@ fun NoteScreen(
                 },
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
-            LiveBadge(model)
         }
 
         kind == NoteKind.TEXT -> {
@@ -197,7 +196,6 @@ fun NoteScreen(
                 onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
-            LiveBadge(model)
             if (assistant != null) {
                 AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.TEXT, model) { aiOpen = false }
             }
@@ -221,7 +219,6 @@ fun NoteScreen(
                 onAi = if (assistant != null) ({ aiOpen = true }) else null,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
-            LiveBadge(model)
             if (assistant != null) {
                 AiOverlay(assistant, aiOpen, note?.id, AiNoteKind.MINDMAP, model) { aiOpen = false }
             }

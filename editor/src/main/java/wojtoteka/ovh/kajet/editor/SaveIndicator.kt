@@ -46,6 +46,8 @@ fun SaveIndicator(
       null - nie ma konta, ikony nie pokazujemy.
     */
     inCloud: Boolean? = null,
+    /** Notatka, której stan edycji na żywo stoi zaraz za stanem zapisu. */
+    live: NoteViewModel? = null,
 ) {
     val colors = Kajet.colors
     val words = LocalStrings.current
@@ -118,6 +120,8 @@ fun SaveIndicator(
                 modifier = Modifier.size(15.dp),
             )
         }
+
+        if (live != null) LiveLabel(live)
     }
 }
 

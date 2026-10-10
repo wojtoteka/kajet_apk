@@ -726,6 +726,8 @@ interface Strings {
     val liveOffline: String
     val liveReadOnly: String
     val liveGone: String
+    val liveGoneAbout: String
+    val liveOfflineAbout: String
     val liveChangeFrom: String
     val liveOthersHere: String
     val sharedSection: String
@@ -2222,9 +2224,11 @@ object PolishStrings : Strings {
     // --- Udostępnianie i edycja na żywo ---
     override val liveNow = "Połączono"
     override val liveConnecting = "Łączę…"
-    override val liveOffline = "Bez sieci - zmiany dojadą później"
+    override val liveOffline = "Offline"
+    override val liveOfflineAbout = "Offline - zmiany pojadą, gdy wróci sieć"
     override val liveReadOnly = "Tylko do czytania"
-    override val liveGone = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany tutaj nigdzie nie pojadą."
+    override val liveGone = "Brak dostępu"
+    override val liveGoneAbout = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany tutaj nigdzie nie pojadą."
     override val liveChangeFrom = "Zmiana od:"
     override val liveOthersHere = "W notatce są też:"
     override val sharedSection = "Udostępnione mi"
@@ -2996,9 +3000,11 @@ object EnglishStrings : Strings {
     // --- Udostępnianie i edycja na żywo ---
     override val liveNow = "Connected"
     override val liveConnecting = "Connecting…"
-    override val liveOffline = "Offline - changes will go later"
+    override val liveOffline = "Offline"
+    override val liveOfflineAbout = "Offline - changes will go when the network is back"
     override val liveReadOnly = "Read only"
-    override val liveGone = "This note is gone or your access was taken back. Changes made here will not go anywhere."
+    override val liveGone = "No access"
+    override val liveGoneAbout = "This note is gone or your access was taken back. Changes made here will not go anywhere."
     override val liveChangeFrom = "Change from:"
     override val liveOthersHere = "Also in this note:"
     override val sharedSection = "Shared with me"
