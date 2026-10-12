@@ -141,6 +141,15 @@ class LiveSession(
         LiveMerge.diff(known, now.content) != null
     }
 
+    /**
+     * Zrywa bieżące łącze, nie zamykając sesji. Pętla czytania zapyta wtedy
+     * [hasNetwork] od nowa - tak wstrzymanie synchronizacji rozłącza notatkę,
+     * która była już na żywo.
+     */
+    fun disconnect() {
+        runCatching { connection.get()?.disconnect() }
+    }
+
     fun close() {
         active = false
         _status.value = LiveStatus.OFF

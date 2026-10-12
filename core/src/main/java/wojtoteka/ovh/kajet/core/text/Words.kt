@@ -745,6 +745,20 @@ interface Strings {
     val shareFolderTitle: String
     val shareFolderAbout: String
     val shareFolderNeedsSync: String
+
+    // --- Wstrzymana synchronizacja ---
+    val syncPauseSection: String
+    val syncPauseAbout: String
+    val syncPausedNow: String
+    val syncPauseHour: String
+    val syncPauseDay: String
+    val syncPauseWeek: String
+    val syncPauseCustom: String
+    val syncPauseForever: String
+    val syncPausedForever: String
+    val syncResume: String
+    val syncPauseNeedsAccount: String
+    val syncPausePastTime: String
 }
 
 /*
@@ -1197,6 +1211,20 @@ fun Strings.notesWaiting(count: Int): String = if (english) {
         else -> "notatek czeka"
     }
     "$count $noun na wysłanie"
+}
+
+fun Strings.syncPausedUntil(moment: String): String =
+    if (english) "Sync is paused until $moment." else "Synchronizacja wstrzymana do $moment."
+
+fun Strings.pausedWaiting(count: Int): String = if (english) {
+    "Sync is paused. $count notes are waiting and will upload when it resumes."
+} else {
+    val noun = when {
+        count == 1 -> "notatka czeka i pójdzie"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i pójdą"
+        else -> "notatek czeka i pójdzie"
+    }
+    "Synchronizacja wstrzymana. $count $noun po wznowieniu."
 }
 
 fun Strings.offlineWaiting(count: Int): String = if (english) {
@@ -2246,6 +2274,20 @@ object PolishStrings : Strings {
     override val shareFolderTitle = "Udostępnij folder"
     override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest - także notatki dodane później."
     override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury - zsynchronizuj bibliotekę i spróbuj jeszcze raz."
+    override val syncPauseSection = "Wstrzymanie synchronizacji"
+    override val syncPauseAbout = "Na jakiś czas notatki nie jadą do chmury ani z niej, nawet gdy " +
+        "jest internet. Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline\" i szarą chmurę. " +
+        "Po końcu pauzy zaległe zmiany pojadą same."
+    override val syncPausedNow = "Synchronizacja wstrzymana."
+    override val syncPauseHour = "Na 1 godzinę"
+    override val syncPauseDay = "Na 1 dzień"
+    override val syncPauseWeek = "Na 1 tydzień"
+    override val syncPauseCustom = "Do wybranej chwili…"
+    override val syncPauseForever = "Do odwołania"
+    override val syncPausedForever = "Synchronizacja wstrzymana do odwołania."
+    override val syncResume = "Wznów synchronizację"
+    override val syncPauseNeedsAccount = "Synchronizacja działa po zalogowaniu do chmury - bez konta nie ma czego wstrzymywać."
+    override val syncPausePastTime = "Ta chwila już minęła - wybierz późniejszą."
 }
 
 object EnglishStrings : Strings {
@@ -3022,4 +3064,18 @@ object EnglishStrings : Strings {
     override val shareFolderTitle = "Share folder"
     override val shareFolderAbout = "They will see the folder with its subfolders and everything in it - including notes added later."
     override val shareFolderNeedsSync = "The folder has to reach the cloud first - sync the library and try again."
+    override val syncPauseSection = "Pause sync"
+    override val syncPauseAbout = "For a while notes do not go to or come from the cloud, even with " +
+        "internet. Everything stays on the device and the note shows \"Offline\" and a grey cloud. " +
+        "When the pause ends, waiting changes go up by themselves."
+    override val syncPausedNow = "Sync is paused."
+    override val syncPauseHour = "For 1 hour"
+    override val syncPauseDay = "For 1 day"
+    override val syncPauseWeek = "For 1 week"
+    override val syncPauseCustom = "Until a chosen time…"
+    override val syncPauseForever = "Until I resume it"
+    override val syncPausedForever = "Sync is paused until you resume it."
+    override val syncResume = "Resume sync"
+    override val syncPauseNeedsAccount = "Sync works once you sign in to the cloud - without an account there is nothing to pause."
+    override val syncPausePastTime = "That time has already passed - pick a later one."
 }

@@ -494,6 +494,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             val rebuildProgress by model.progress.collectAsStateWithLifecycle()
             val rebuildDone by model.indexRebuilt.collectAsStateWithLifecycle()
             val rebuildProblem by model.error.collectAsStateWithLifecycle()
+            val context = LocalContext.current
 
             SettingsScreen(
                 settingsStore = container.settings,
@@ -509,6 +510,9 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                     model.dismissError()
                 },
                 onAccount = { navController.navigate(Routes.ACCOUNT) },
+                syncPause = container.cloud.pause,
+                onPauseSync = { until -> container.cloud.pauseSync(context, until) },
+                onResumeSync = { container.cloud.resumeSync(context) },
             )
         }
 

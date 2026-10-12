@@ -40,6 +40,7 @@ class SyncWork(
     companion object {
         private const val ONE_OFF_NAME = "kajet-sync-now"
         private const val PERIODIC_NAME = "kajet-sync-periodic"
+        private const val AFTER_PAUSE_NAME = "kajet-sync-after-pause"
 
         @Volatile
         var syncProvider: ((Context) -> Sync?)? = null
@@ -70,10 +71,31 @@ class SyncWork(
             )
         }
 
+        /**
+         * Przebieg zaraz po końcu wstrzymanej synchronizacji - żeby to, co
+         * czekało w kolejce, nie czekało jeszcze na zadanie okresowe.
+         */
+        fun scheduleAfterPause(context: Context, delayMs: Long) {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                AFTER_PAUSE_NAME,
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<SyncWork>()
+                    .setConstraints(constraints)
+                    .setInitialDelay(delayMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    .build(),
+            )
+        }
+
+        fun cancelAfterPause(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(AFTER_PAUSE_NAME)
+        }
+
         fun stop(context: Context) {
             WorkManager.getInstance(context).apply {
                 cancelUniqueWork(ONE_OFF_NAME)
                 cancelUniqueWork(PERIODIC_NAME)
+                cancelUniqueWork(AFTER_PAUSE_NAME)
             }
         }
     }

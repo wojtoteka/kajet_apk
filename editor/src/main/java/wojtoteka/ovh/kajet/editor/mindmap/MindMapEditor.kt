@@ -74,6 +74,9 @@ import androidx.compose.ui.unit.em
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import wojtoteka.ovh.kajet.core.design.component.TitleKeyboardOptions
+import wojtoteka.ovh.kajet.core.design.component.releaseFocusWithKeyboard
+import wojtoteka.ovh.kajet.core.design.component.titleKeyboardActions
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.SectionLabel
@@ -709,6 +712,8 @@ fun MindMapEditor(
                     singleLine = true,
                     textStyle = Kajet.type.titleSmall.copy(color = colors.text),
                     cursorBrush = SolidColor(colors.accent),
+                    keyboardOptions = TitleKeyboardOptions,
+                    keyboardActions = titleKeyboardActions(),
                     /*
                       Waga bez wypełniania. Tytuł ma się mierzyć PO wskaźniku
                       zapisu, nie przed nim: bez tego zjadał całą szerokość
@@ -718,7 +723,8 @@ fun MindMapEditor(
                     */
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .widthIn(min = 80.dp, max = if (narrow) 160.dp else 280.dp),
+                        .widthIn(min = 80.dp, max = if (narrow) 160.dp else 280.dp)
+                        .releaseFocusWithKeyboard(),
                     decorationBox = { field ->
                         if (document?.title.isNullOrEmpty()) {
                             Text(words.unnamed, style = Kajet.type.titleSmall, color = colors.muted)

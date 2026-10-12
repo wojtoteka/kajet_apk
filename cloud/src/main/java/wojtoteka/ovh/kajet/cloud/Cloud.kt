@@ -27,7 +27,33 @@ object Cloud {
         val live: CloudLive,
         /** Cudze notatki i foldery - „Udostępnione mi" i odnośniki. */
         val shared: SharedLibrary,
-    )
+        /** Synchronizacja wstrzymana z ustawień - na czas albo do odwołania. */
+        val pause: SyncPause,
+    ) {
+
+        /**
+         * Wstrzymuje synchronizację do [until] ([SyncPause.FOREVER] - do
+         * odwołania). Otwarte na żywo notatki od razu schodzą z łącza, a praca
+         * w tle zostaje umówiona na chwilę końca pauzy.
+         */
+        fun pauseSync(context: Context, until: Long) {
+            pause.pauseUntil(until)
+            live.paused()
+            if (until == SyncPause.FOREVER) {
+                SyncWork.cancelAfterPause(context)
+            } else {
+                SyncWork.scheduleAfterPause(context, until - System.currentTimeMillis())
+            }
+        }
+
+        /** Wznawia synchronizację od razu - wszystko, co czekało, jedzie teraz. */
+        fun resumeSync(context: Context) {
+            pause.resume()
+            SyncWork.cancelAfterPause(context)
+            sync.syncSoon()
+            if (account.isSignedIn()) SyncWork.scheduleNow(context)
+        }
+    }
 
     fun parts(context: Context, repository: LibraryRepository): Parts {
         parts?.let { return it }
@@ -43,14 +69,16 @@ object Cloud {
                 val bases = SyncBase(java.io.File(appContext.filesDir, "sync-base"))
                 val sync = Sync(appContext, repository, account, client, queue, codeIds, uploads, bases)
                 val auth = AuthWatch(account, client)
-                val live = CloudLive(appContext, repository, account, client, sync, bases)
+                val pause = SyncPause(appContext)
+                sync.pauseCheck = pause::isPaused
+                val live = CloudLive(appContext, repository, account, client, sync, bases, pause)
                 client.clientId = live.clientId
                 sync.liveCheck = live::isLive
                 // Edytory pytają o edycję na żywo przez repozytorium - nie znają chmury.
                 repository.live = live
                 val shared = SharedLibrary(repository, account, client, live)
 
-                val created = Parts(account, client, queue, sync, auth, codeIds, uploads, live, shared)
+                val created = Parts(account, client, queue, sync, auth, codeIds, uploads, live, shared, pause)
                 parts = created
 
                 // Background work runs in a separate process and has no other way

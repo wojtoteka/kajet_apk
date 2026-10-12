@@ -63,6 +63,16 @@ class Sync(
     private fun isLive(noteId: String): Boolean =
         runCatching { liveCheck?.invoke(noteId) == true }.getOrDefault(false)
 
+    /**
+     * Czy synchronizacja jest wstrzymana w ustawieniach ([SyncPause]). Wtedy
+     * wszystko zachowuje się jak bez sieci: zmiany czekają w kolejce.
+     */
+    @Volatile
+    var pauseCheck: (() -> Boolean)? = null
+
+    private fun isPaused(): Boolean =
+        runCatching { pauseCheck?.invoke() == true }.getOrDefault(false)
+
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
@@ -111,7 +121,7 @@ class Sync(
     private var folderPathById: Map<String, String> = emptyMap()
 
     private fun scheduleSync() {
-        if (!client.hasNetwork()) return
+        if (!client.hasNetwork() || isPaused()) return
         if (!syncScheduled.compareAndSet(false, true)) return
         scope.launch {
             // Flaga gaśnie normalnie POD zamkiem w synchronise. Wyjątek przed
@@ -142,6 +152,8 @@ class Sync(
         val id = noteId?.takeIf { it.isNotBlank() }
             ?: runCatching { codeIds.existingIdFor(path) }.getOrNull()
         val known = !id.isNullOrBlank() && knownVersion(id) > 0
+        // Wstrzymana synchronizacja wygląda w notatce jak brak sieci: szara chmura.
+        if (signedIn && isPaused()) return false
         return cloudSaveState(signedIn = signedIn, inQueue = queued, knownOnServer = known)
     }
 
@@ -254,6 +266,12 @@ class Sync(
 
         if (!account.isSignedIn()) {
             return@withLock SyncResult(reason = words.notSignedIn)
+        }
+        if (isPaused()) {
+            _state.value = SyncState.Paused(queue.size())
+            // Nie „worthRetrying": praca w tle nie ma pukać co chwilę. Po
+            // końcu pauzy rusza ją [SyncPause] przez Cloud.resumeSync.
+            return@withLock SyncResult(reason = words.syncPausedNow)
         }
         if (!client.hasNetwork()) {
             _state.value = SyncState.NoNetwork(queue.size())
@@ -2093,6 +2111,8 @@ sealed interface SyncState {
     data class Done(val at: Long) : SyncState
     data class Waiting(val count: Int) : SyncState
     data class NoNetwork(val waiting: Int) : SyncState
+    /** Wstrzymana w ustawieniach - jak brak sieci, tylko z wyboru. */
+    data class Paused(val waiting: Int) : SyncState
     data object MustSignIn : SyncState
 }
 

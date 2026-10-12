@@ -47,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import wojtoteka.ovh.kajet.core.design.component.TitleKeyboardOptions
+import wojtoteka.ovh.kajet.core.design.component.releaseFocusWithKeyboard
+import wojtoteka.ovh.kajet.core.design.component.titleKeyboardActions
 import wojtoteka.ovh.kajet.core.design.InkPalette
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
@@ -748,7 +751,9 @@ private fun NoteHeader(
             singleLine = true,
             textStyle = Kajet.type.display.copy(color = Kajet.colors.text),
             cursorBrush = SolidColor(Kajet.colors.accent),
-            modifier = Modifier.weight(1f),
+            keyboardOptions = TitleKeyboardOptions,
+            keyboardActions = titleKeyboardActions(),
+            modifier = Modifier.weight(1f).releaseFocusWithKeyboard(),
             decorationBox = { field ->
                 if (title.isEmpty()) {
                     Text(words.unnamed, style = Kajet.type.display, color = Kajet.colors.muted)

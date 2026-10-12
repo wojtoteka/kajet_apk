@@ -39,6 +39,7 @@ class CloudSaveStatus(
             parts.account.state.map { },
             parts.sync.state.map { },
             parts.sync.stuck.map { },
+            parts.pause.until.map { },
         )
     }
 
