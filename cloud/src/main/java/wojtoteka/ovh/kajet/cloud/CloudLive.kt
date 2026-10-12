@@ -37,6 +37,7 @@ class CloudLive(
     private val client: CloudClient,
     private val sync: Sync,
     private val bases: SyncBase,
+    private val pause: SyncPause,
 ) : LiveNotes {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -53,6 +54,14 @@ class CloudLive(
     /** Czy tę notatkę prowadzi teraz sesja na żywo - synchronizacja ją wtedy omija. */
     fun isLive(noteId: String): Boolean =
         sessions[noteId]?.status?.value.let { it == LiveStatus.LIVE || it == LiveStatus.CONNECTING }
+
+    /** Sieć jest i synchronizacja nie jest wstrzymana - inaczej notatka stoi „Offline". */
+    private fun canConnect(): Boolean = !pause.isPaused() && client.hasNetwork()
+
+    /** Synchronizację właśnie wstrzymano - otwarte notatki schodzą z łącza. */
+    fun paused() {
+        sessions.values.forEach { it.disconnect() }
+    }
 
     override fun open(path: String, document: NoteDocument, editor: LiveEditor): LiveHandle? {
         val shared = repository.shared
@@ -77,7 +86,7 @@ class CloudLive(
                 onSynced = { version, content ->
                     shared.rememberBase(noteId, version, content.toString())
                 },
-                hasNetwork = client::hasNetwork,
+                hasNetwork = ::canConnect,
             )
         } else {
             if (!account.isSignedIn()) return null
@@ -100,7 +109,7 @@ class CloudLive(
                     pendingLocal = sync.isQueued(path),
                 ),
                 onSynced = { version, content -> sync.liveSynced(noteId, version, content) },
-                hasNetwork = client::hasNetwork,
+                hasNetwork = ::canConnect,
             )
         }
         sessions.put(noteId, session)?.close()

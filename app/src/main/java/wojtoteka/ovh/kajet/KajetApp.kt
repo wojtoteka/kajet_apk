@@ -52,7 +52,7 @@ class AppContainer(context: Context) {
       i po asystencie nie zostaje w interfejsie ani śladu.
     */
     val ai: AiAssistant by lazy {
-        KajetAi(CloudAi(cloud.account, cloud.client, cloud.sync, cloud.codeIds))
+        KajetAi(CloudAi(cloud.account, cloud.client, cloud.sync, cloud.codeIds, cloud.pause, cloud.pendingAi))
     }
 
     // Tablet: Python lokalnie (Chaquopy), chyba że jest konto i sieć - wtedy CloudCode.

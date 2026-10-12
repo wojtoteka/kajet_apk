@@ -13,6 +13,9 @@ package wojtoteka.ovh.kajet.core.ai
 
   Do serwera jedzie WYŁĄCZNIE identyfikator notatki i polecenie. Treści nie -
   serwer ją ma. Zapis robi on sam, tą samą drogą co zwykła synchronizacja.
+
+  Wyjątek: wstrzymana synchronizacja. Wtedy treść jedzie z urządzenia, serwer
+  niczego nie zapisuje, a zmiana i rozmowa czekają w aplikacji na wznowienie.
 */
 
 /** Typ notatki, przy której asystent w ogóle się pokazuje. */
@@ -22,7 +25,7 @@ enum class AiNoteKind { TEXT, MINDMAP, CODE }
 data class AiTurn(val request: String, val reply: String)
 
 sealed interface AiOutcome {
-    /** Notatka zmieniona i zapisana na serwerze. */
+    /** Notatka zmieniona - na serwerze, albo przy wstrzymanej synchronizacji na urządzeniu. */
     data class Changed(val summary: String, val version: Int) : AiOutcome
 
     /** Asystent nie zrozumiał polecenia. Notatka nietknięta. */

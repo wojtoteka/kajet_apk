@@ -53,6 +53,7 @@ import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.core.text.notesStuck
 import wojtoteka.ovh.kajet.core.text.notesWaiting
 import wojtoteka.ovh.kajet.core.text.offlineWaiting
+import wojtoteka.ovh.kajet.core.text.pausedWaiting
 import wojtoteka.ovh.kajet.core.text.spaceUsed
 import wojtoteka.ovh.kajet.core.text.spaceUsedNoLimit
 
@@ -343,13 +344,13 @@ private fun SignedIn(
             ) {
                 Icon(
                     imageVector = when (syncState) {
-                        is SyncState.NoNetwork -> KajetIcons.Offline
+                        is SyncState.NoNetwork, is SyncState.Paused -> KajetIcons.Offline
                         is SyncState.Done -> KajetIcons.CloudDone
                         else -> KajetIcons.CloudMark
                     },
                     contentDescription = null,
                     tint = when (syncState) {
-                        is SyncState.NoNetwork, SyncState.MustSignIn -> colors.muted
+                        is SyncState.NoNetwork, is SyncState.Paused, SyncState.MustSignIn -> colors.muted
                         is SyncState.Done -> colors.accent
                         else -> colors.text
                     },
@@ -449,6 +450,8 @@ private fun describeState(state: SyncState, waiting: Int, words: Strings): Strin
     is SyncState.Waiting -> words.notesWaiting(state.count)
     is SyncState.NoNetwork ->
         if (state.waiting > 0) words.offlineWaiting(state.waiting) else words.noInternet
+    is SyncState.Paused ->
+        if (state.waiting > 0) words.pausedWaiting(state.waiting) else words.syncPausedNow
     SyncState.MustSignIn -> words.sessionExpired
 }
 

@@ -54,7 +54,9 @@ najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
 
 **Chmura.** Konto, logowanie urządzenia własnym tokenem, synchronizacja notatek i folderów,
 ikona chmurki dopiero po faktycznym zapisie na serwerze, kolejka ponawiania usunięć i osłona
-przed nadpisaniem notatki skasowanej zdalnie.
+przed nadpisaniem notatki skasowanej zdalnie. Synchronizację da się w ustawieniach wstrzymać
+na godzinę, dzień, tydzień, do wybranej chwili albo do odwołania - notatki zachowują się wtedy
+jak bez sieci („Offline", szara chmurka), a zaległe zmiany jadą same po końcu pauzy.
 
 **Edycja na żywo.** Notatka otwarta na kilku urządzeniach albo u kilku osób (także na
 stronie) zmienia się u wszystkich od razu - tekst, pismo odręczne i mapa myśli. Idą tylko

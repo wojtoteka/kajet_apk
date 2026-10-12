@@ -63,6 +63,7 @@ import wojtoteka.ovh.kajet.cloud.AccountStore
 import wojtoteka.ovh.kajet.cloud.KajetLinks
 import wojtoteka.ovh.kajet.cloud.LinkOutcome
 import wojtoteka.ovh.kajet.cloud.SignInState
+import wojtoteka.ovh.kajet.cloud.SyncPause
 import wojtoteka.ovh.kajet.cloud.UpdateCheck
 import wojtoteka.ovh.kajet.cloud.humanSize
 import wojtoteka.ovh.kajet.cloud.openLink
@@ -95,6 +96,9 @@ fun SettingsScreen(
     rebuildProblem: String?,
     onRebuildNoticeRead: () -> Unit,
     onAccount: () -> Unit,
+    syncPause: SyncPause,
+    onPauseSync: (until: Long) -> Unit,
+    onResumeSync: () -> Unit,
 ) {
     val settings by settingsStore.settings.collectAsStateWithLifecycle(KajetSettings())
     val signIn by account.state.collectAsStateWithLifecycle()
@@ -317,6 +321,18 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+
+            SettingsSection(
+                title = words.syncPauseSection,
+                description = words.syncPauseAbout,
+            ) {
+                SyncPauseControls(
+                    pause = syncPause,
+                    signedIn = signIn is SignInState.SignedIn,
+                    onPause = onPauseSync,
+                    onResume = onResumeSync,
+                )
             }
 
             SettingsSection(
