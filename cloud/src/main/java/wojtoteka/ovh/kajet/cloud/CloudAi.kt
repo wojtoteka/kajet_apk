@@ -24,6 +24,9 @@ class CloudAi(
     private val client: CloudClient,
     private val sync: Sync,
     private val codeIds: CodeFileIds,
+    /** Wstrzymana synchronizacja - wtedy asystent pracuje bez zapisu na serwerze. */
+    private val pause: SyncPause? = null,
+    private val pending: PendingAiTurns? = null,
 ) {
 
     /**
@@ -51,12 +54,11 @@ class CloudAi(
     suspend fun ask(noteId: String, instruction: String): Outcome {
         if (!available()) return Outcome.Refused(words.notSignedIn)
         if (!client.hasNetwork()) return Outcome.Refused(words.aiOffline)
+        if (pause?.isPaused() == true && pending != null) return askDetached(noteId, instruction, pending)
 
         // 1. Świeża treść na serwer. Gdyby wysyłka padła, nie ma sensu pytać
         //    modelu - poprawiałby coś, czego człowiek już nie ma na ekranie.
-        //    Wstrzymana synchronizacja nie zatrzymuje asystenta: bez tej
-        //    wysyłki i ściągnięcia po zmianie odpowiedź by nie dotarła.
-        if (!runCatching { sync.synchronise(ignorePause = true) }.isSuccess) {
+        if (!runCatching { sync.synchronise() }.isSuccess) {
             return Outcome.Refused(words.aiSaveFirst)
         }
 
@@ -68,7 +70,7 @@ class CloudAi(
                     // 3. Wynik z powrotem na urządzenie. Gdyby ściągnięcie
                     //    padło po cichu, ekran pokazałby sukces przy starej
                     //    treści - stąd osobna odmowa, nie przełknięcie błędu.
-                    if (!runCatching { sync.synchronise(ignorePause = true) }.isSuccess) {
+                    if (!runCatching { sync.synchronise() }.isSuccess) {
                         return Outcome.Refused(words.aiPullFailed)
                     }
                     Outcome.Changed(response.data.opis, response.data.version)
@@ -80,14 +82,59 @@ class CloudAi(
         }
     }
 
-    suspend fun history(noteId: String): List<AiTurn> =
-        when (val response = client.aiHistory(noteId)) {
+    /*
+      Przy wstrzymanej synchronizacji: treść notatki z dysku jedzie razem
+      z poleceniem, serwer pyta model i odsyła wynik, ale sam niczego nie
+      zapisuje - ani notatki, ani rozmowy. Zmienioną treść zapisujemy tutaj
+      i stawiamy w kolejce, a wymianę odkładamy w [PendingAiTurns]. Jedno
+      i drugie trafi na serwer dopiero po wznowieniu synchronizacji.
+    */
+    private suspend fun askDetached(
+        noteId: String,
+        instruction: String,
+        pending: PendingAiTurns,
+    ): Outcome {
+        val local = sync.localForAi(noteId) ?: return Outcome.Refused(words.aiSaveFirst)
+        val detached = AiDetached(
+            kind = local.kind,
+            title = local.title,
+            content = local.content,
+            pending = pending.of(noteId),
+        )
+        return when (val response = client.aiEdit(noteId, instruction, baseVersion = 0, detached = detached)) {
+            is CloudClient.Result.Error -> Outcome.Refused(response.message)
+
+            is CloudClient.Result.Ok -> when (response.data.status) {
+                "zmieniono" -> {
+                    val content = response.data.content ?: return Outcome.Refused(words.serverGibberish)
+                    if (!sync.applyAiResult(local, content)) {
+                        return Outcome.Refused(words.aiDetachedSaveFailed)
+                    }
+                    pending.add(noteId, AiTurn(instruction, response.data.opis))
+                    Outcome.Changed(response.data.opis, 0)
+                }
+                "pytanie" -> {
+                    pending.add(noteId, AiTurn(instruction, response.data.pytanie))
+                    Outcome.Question(response.data.pytanie)
+                }
+                else -> Outcome.Refused(words.serverGibberish)
+            }
+        }
+    }
+
+    /** To, co serwer pamięta, i dalej wymiany z wstrzymanej synchronizacji. */
+    suspend fun history(noteId: String): List<AiTurn> {
+        val remembered = when (val response = client.aiHistory(noteId)) {
             is CloudClient.Result.Ok -> response.data.turns
             is CloudClient.Result.Error -> emptyList()
         }
+        return remembered + (pending?.of(noteId) ?: emptyList())
+    }
 
-    suspend fun forgetHistory(noteId: String): Boolean =
-        client.aiForgetHistory(noteId) is CloudClient.Result.Ok
+    suspend fun forgetHistory(noteId: String): Boolean {
+        pending?.forget(noteId)
+        return client.aiForgetHistory(noteId) is CloudClient.Result.Ok
+    }
 
     sealed interface Outcome {
         data class Changed(val summary: String, val version: Int) : Outcome

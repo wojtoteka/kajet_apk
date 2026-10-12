@@ -29,6 +29,8 @@ object Cloud {
         val shared: SharedLibrary,
         /** Synchronizacja wstrzymana z ustawień - na czas albo do odwołania. */
         val pause: SyncPause,
+        /** Rozmowa z KajetAI z czasu pauzy - dojedzie po wznowieniu. */
+        val pendingAi: PendingAiTurns,
     ) {
 
         /**
@@ -71,6 +73,8 @@ object Cloud {
                 val auth = AuthWatch(account, client)
                 val pause = SyncPause(appContext)
                 sync.pauseCheck = pause::isPaused
+                val pendingAi = PendingAiTurns(appContext)
+                sync.afterSend = { pendingAi.sendAll(client) }
                 val live = CloudLive(appContext, repository, account, client, sync, bases, pause)
                 client.clientId = live.clientId
                 sync.liveCheck = live::isLive
@@ -78,7 +82,7 @@ object Cloud {
                 repository.live = live
                 val shared = SharedLibrary(repository, account, client, live)
 
-                val created = Parts(account, client, queue, sync, auth, codeIds, uploads, live, shared, pause)
+                val created = Parts(account, client, queue, sync, auth, codeIds, uploads, live, shared, pause, pendingAi)
                 parts = created
 
                 // Background work runs in a separate process and has no other way

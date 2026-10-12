@@ -759,6 +759,7 @@ interface Strings {
     val syncResume: String
     val syncPauseNeedsAccount: String
     val syncPausePastTime: String
+    val aiDetachedSaveFailed: String
 }
 
 /*
@@ -2277,6 +2278,7 @@ object PolishStrings : Strings {
     override val syncPauseSection = "Wstrzymanie synchronizacji"
     override val syncPauseAbout = "Na jakiś czas notatki nie jadą do chmury ani z niej, nawet gdy " +
         "jest internet. Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline\" i szarą chmurę. " +
+        "KajetAI działa dalej, ale jego zmiany i rozmowa też czekają na urządzeniu. " +
         "Po końcu pauzy zaległe zmiany pojadą same."
     override val syncPausedNow = "Synchronizacja wstrzymana."
     override val syncPauseHour = "Na 1 godzinę"
@@ -2288,6 +2290,7 @@ object PolishStrings : Strings {
     override val syncResume = "Wznów synchronizację"
     override val syncPauseNeedsAccount = "Synchronizacja działa po zalogowaniu do chmury - bez konta nie ma czego wstrzymywać."
     override val syncPausePastTime = "Ta chwila już minęła - wybierz późniejszą."
+    override val aiDetachedSaveFailed = "KajetAI odpowiedział, ale zmiany nie udało się zapisać na urządzeniu. Notatka zostaje bez zmian."
 }
 
 object EnglishStrings : Strings {
@@ -3067,6 +3070,7 @@ object EnglishStrings : Strings {
     override val syncPauseSection = "Pause sync"
     override val syncPauseAbout = "For a while notes do not go to or come from the cloud, even with " +
         "internet. Everything stays on the device and the note shows \"Offline\" and a grey cloud. " +
+        "KajetAI keeps working, but its changes and the conversation wait on the device too. " +
         "When the pause ends, waiting changes go up by themselves."
     override val syncPausedNow = "Sync is paused."
     override val syncPauseHour = "For 1 hour"
@@ -3078,4 +3082,5 @@ object EnglishStrings : Strings {
     override val syncResume = "Resume sync"
     override val syncPauseNeedsAccount = "Sync works once you sign in to the cloud - without an account there is nothing to pause."
     override val syncPausePastTime = "That time has already passed - pick a later one."
+    override val aiDetachedSaveFailed = "KajetAI answered, but the change could not be saved on the device. The note stays as it was."
 }

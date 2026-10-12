@@ -484,11 +484,20 @@ class CloudClient(
         noteId: String,
         instruction: String,
         baseVersion: Int,
+        /** Wstrzymana synchronizacja: treść jedzie w żądaniu, serwer nic nie zapisuje. */
+        detached: AiDetached? = null,
     ): Result<AiEditResponse> = request(
         url = "${account.serverUrl()}/api/v1/notes/$noteId/ai-edit",
         method = "POST",
-        body = json.encodeToString(AiEditRequest(instruction, baseVersion)),
+        body = json.encodeToString(AiEditRequest(instruction, baseVersion, detached)),
         readTimeout = AI_READ_TIMEOUT,
+    )
+
+    /** Rozmowa z czasu wstrzymanej synchronizacji - dosyłana po wznowieniu. */
+    suspend fun aiAppendHistory(noteId: String, turns: List<AiTurn>): Result<AiAppendedResponse> = request(
+        url = "${account.serverUrl()}/api/v1/notes/$noteId/ai-history",
+        method = "POST",
+        body = json.encodeToString(AiAppendRequest(turns)),
     )
 
     suspend fun aiHistory(noteId: String): Result<AiHistoryResponse> = request(
@@ -852,7 +861,27 @@ data class AiState(
 )
 
 @Serializable
-private data class AiEditRequest(val instruction: String, val baseVersion: Int)
+private data class AiEditRequest(
+    val instruction: String,
+    val baseVersion: Int,
+    val detached: AiDetached? = null,
+)
+
+/** Notatka dla KajetAI przy wstrzymanej synchronizacji - patrz [CloudClient.aiEdit]. */
+@Serializable
+data class AiDetached(
+    val kind: String,
+    val title: String,
+    val content: String,
+    /** Wymiany z tej pauzy, których serwer jeszcze nie zna. */
+    val pending: List<AiTurn> = emptyList(),
+)
+
+@Serializable
+private data class AiAppendRequest(val turns: List<AiTurn>)
+
+@Serializable
+data class AiAppendedResponse(val status: String = "ok", val added: Int = 0)
 
 /**
  * Odpowiedź asystenta. `status` mówi, co się stało:
@@ -868,6 +897,7 @@ data class AiEditResponse(
     val version: Int = 0,
     val updatedAt: Long = 0,
     val content: String? = null,
+    val title: String = "",
 )
 
 @Serializable

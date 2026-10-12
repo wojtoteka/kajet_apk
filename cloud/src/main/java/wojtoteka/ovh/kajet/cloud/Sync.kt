@@ -73,6 +73,13 @@ class Sync(
     private fun isPaused(): Boolean =
         runCatching { pauseCheck?.invoke() == true }.getOrDefault(false)
 
+    /**
+     * Ostatni krok udanego przebiegu, gdy notatki są już na serwerze - tu
+     * dojeżdża rozmowa z KajetAI z czasu wstrzymanej synchronizacji.
+     */
+    @Volatile
+    var afterSend: (suspend () -> Unit)? = null
+
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
@@ -254,12 +261,7 @@ class Sync(
         synchronise()
     }
 
-    /**
-     * [ignorePause] - przebieg na wyraźną prośbę KajetAI: asystent musi
-     * wysłać notatkę przed pytaniem i ściągnąć wynik po nim, więc wstrzymana
-     * synchronizacja ([SyncPause]) go nie zatrzymuje.
-     */
-    suspend fun synchronise(ignorePause: Boolean = false): SyncResult = lock.withLock {
+    suspend fun synchronise(): SyncResult = lock.withLock {
         // Dopiero teraz kolejne scheduleSync ma prawo zaplanować nowy przebieg:
         // ten wyśle wszystko, co zdążyło wpaść do kolejki przed tym miejscem.
         syncScheduled.set(false)
@@ -272,7 +274,7 @@ class Sync(
         if (!account.isSignedIn()) {
             return@withLock SyncResult(reason = words.notSignedIn)
         }
-        if (!ignorePause && isPaused()) {
+        if (isPaused()) {
             _state.value = SyncState.Paused(queue.size())
             // Nie „worthRetrying": praca w tle nie ma pukać co chwilę. Po
             // końcu pauzy rusza ją [SyncPause] przez Cloud.resumeSync.
@@ -374,6 +376,9 @@ class Sync(
         // od serwerowego kosza - wersja nagrobka już zapamiętana, trzeci
         // przebieg przywraca notatkę zamiast kazać czekać do następnego razu.
         val sentLast = if (sentAfter.retryNeeded) sendPending() else StepResult()
+
+        runCatching { afterSend?.invoke() }
+            .onFailure { Log.w("Kajet", "Rozmowa z KajetAI nie dojechała na serwer", it) }
 
         val stuckNow = queue.stuckCount()
         _stuck.value = stuckNow
@@ -1750,6 +1755,68 @@ class Sync(
      */
     private fun samePayload(local: NoteDocument, fromServer: NoteDocument): Boolean =
         local.copy(favorite = false) == fromServer.copy(favorite = false)
+
+    // --- KajetAI przy wstrzymanej synchronizacji ---
+
+    /** Notatka z dysku w kształcie, w jakim pojechałaby na serwer. */
+    data class AiLocalNote(
+        val noteId: String,
+        val path: String,
+        val kind: String,
+        val title: String,
+        val content: String,
+    )
+
+    /**
+     * Treść notatki dla KajetAI bez synchronizacji - ta sama, którą wysłałaby
+     * zwykła wysyłka. null, gdy notatki nie ma na dysku albo jest nieczytelna.
+     */
+    suspend fun localForAi(noteId: String): AiLocalNote? = runCatching {
+        val codePath = codeIds.pathFor(noteId)
+        if (codePath != null) {
+            val text = repository.readText(codePath)
+            return@runCatching AiLocalNote(
+                noteId = noteId,
+                path = codePath,
+                kind = KIND_CODE,
+                title = codePath.substringAfterLast('/'),
+                content = codeNoteContent(noteId, codePath, text),
+            )
+        }
+        val path = repository.allNoteIds().firstOrNull { it.second == noteId }?.first
+            ?: return@runCatching null
+        val document = repository.readNote(path)
+        AiLocalNote(
+            noteId = noteId,
+            path = path,
+            kind = toServerKind(document.kind),
+            title = document.title,
+            content = NoteCodec.encodeNote(document),
+        )
+    }.getOrNull()
+
+    /**
+     * Zapisuje na dysku treść zmienioną przez KajetAI i stawia notatkę
+     * w kolejce - na serwer pojedzie zwykłą drogą po wznowieniu.
+     */
+    suspend fun applyAiResult(local: AiLocalNote, content: String): Boolean = runCatching {
+        if (local.kind == KIND_CODE) {
+            val code = parseCodeContent(content) ?: return@runCatching false
+            repository.writeTextFromCloud(local.path, code.source)
+            reportCodeChange(local.path)
+        } else {
+            val current = repository.readNote(local.path)
+            val changed = NoteCodec.decodeNote(content).copy(
+                id = current.id,
+                favorite = current.favorite,
+                createdAt = current.createdAt,
+                updatedAt = System.currentTimeMillis(),
+            )
+            repository.writeNoteFromCloud(changed) ?: return@runCatching false
+            reportChange(local.path, current.id)
+        }
+        true
+    }.getOrDefault(false)
 
     // --- Code files as CODE notes ---
 

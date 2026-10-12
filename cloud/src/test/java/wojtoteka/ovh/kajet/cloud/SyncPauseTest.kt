@@ -11,6 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import wojtoteka.ovh.kajet.core.model.NoteDocument
 import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.TextContent
+import wojtoteka.ovh.kajet.storage.NoteCodec
 
 /**
  * Wstrzymana synchronizacja ([SyncPause]) ma działać jak brak sieci:
@@ -90,12 +91,37 @@ class SyncPauseTest {
     }
 
     @Test
-    fun `KajetAI synchronizuje mimo pauzy, pauza zostaje`() {
+    fun `KajetAI przy pauzie bierze treść z dysku i zapisuje wynik u siebie, do kolejki`() {
         pause.pauseUntil(SyncPause.FOREVER)
+        queue.clear()
 
-        runBlocking { sync.synchronise(ignorePause = true) }
+        val local = runBlocking { sync.localForAi(noteId) }!!
+        assertThat(local.kind).isEqualTo("TEXT")
+        assertThat(NoteCodec.decodeNote(local.content).text?.markdown).isEqualTo("treść")
 
-        assertThat(transport.sentNotes.map { it.id }).containsExactly(noteId)
-        assertThat(pause.isPaused()).isTrue()
+        val changed = NoteCodec.encodeNote(
+            NoteCodec.decodeNote(local.content).copy(text = TextContent(markdown = "treść i chleb")),
+        )
+        assertThat(runBlocking { sync.applyAiResult(local, changed) }).isTrue()
+
+        assertThat(library.notes.values.map { it.text?.markdown }).contains("treść i chleb")
+        // Na serwer nic nie poszło - zmiana czeka w kolejce na wznowienie.
+        assertThat(transport.sentNotes).isEmpty()
+        assertThat(queue.size()).isEqualTo(1)
+    }
+
+    @Test
+    fun `rozmowa z pauzy czeka przy notatce i schodzi po dosłaniu`() {
+        val pending = PendingAiTurns(context)
+        pending.forget(noteId)
+
+        pending.add(noteId, AiTurn("dopisz masło", "Dopisano masło."))
+        pending.add(noteId, AiTurn("dopisz chleb", "Dopisano chleb."))
+        assertThat(pending.of(noteId).map { it.request }).containsExactly("dopisz masło", "dopisz chleb").inOrder()
+        assertThat(pending.noteIds()).contains(noteId)
+
+        pending.dropFirst(noteId, 2)
+        assertThat(pending.of(noteId)).isEmpty()
+        assertThat(pending.noteIds()).doesNotContain(noteId)
     }
 }
