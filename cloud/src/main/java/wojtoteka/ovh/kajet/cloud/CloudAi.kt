@@ -54,7 +54,9 @@ class CloudAi(
 
         // 1. Świeża treść na serwer. Gdyby wysyłka padła, nie ma sensu pytać
         //    modelu - poprawiałby coś, czego człowiek już nie ma na ekranie.
-        if (!runCatching { sync.synchronise() }.isSuccess) {
+        //    Wstrzymana synchronizacja nie zatrzymuje asystenta: bez tej
+        //    wysyłki i ściągnięcia po zmianie odpowiedź by nie dotarła.
+        if (!runCatching { sync.synchronise(ignorePause = true) }.isSuccess) {
             return Outcome.Refused(words.aiSaveFirst)
         }
 
@@ -66,7 +68,7 @@ class CloudAi(
                     // 3. Wynik z powrotem na urządzenie. Gdyby ściągnięcie
                     //    padło po cichu, ekran pokazałby sukces przy starej
                     //    treści - stąd osobna odmowa, nie przełknięcie błędu.
-                    if (!runCatching { sync.synchronise() }.isSuccess) {
+                    if (!runCatching { sync.synchronise(ignorePause = true) }.isSuccess) {
                         return Outcome.Refused(words.aiPullFailed)
                     }
                     Outcome.Changed(response.data.opis, response.data.version)

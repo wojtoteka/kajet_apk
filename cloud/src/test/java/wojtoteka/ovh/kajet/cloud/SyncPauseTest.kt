@@ -88,4 +88,14 @@ class SyncPauseTest {
         assertThat(pause.isPaused()).isFalse()
         assertThat(transport.sentNotes.map { it.id }).containsExactly(noteId)
     }
+
+    @Test
+    fun `KajetAI synchronizuje mimo pauzy, pauza zostaje`() {
+        pause.pauseUntil(SyncPause.FOREVER)
+
+        runBlocking { sync.synchronise(ignorePause = true) }
+
+        assertThat(transport.sentNotes.map { it.id }).containsExactly(noteId)
+        assertThat(pause.isPaused()).isTrue()
+    }
 }

@@ -254,7 +254,12 @@ class Sync(
         synchronise()
     }
 
-    suspend fun synchronise(): SyncResult = lock.withLock {
+    /**
+     * [ignorePause] - przebieg na wyraźną prośbę KajetAI: asystent musi
+     * wysłać notatkę przed pytaniem i ściągnąć wynik po nim, więc wstrzymana
+     * synchronizacja ([SyncPause]) go nie zatrzymuje.
+     */
+    suspend fun synchronise(ignorePause: Boolean = false): SyncResult = lock.withLock {
         // Dopiero teraz kolejne scheduleSync ma prawo zaplanować nowy przebieg:
         // ten wyśle wszystko, co zdążyło wpaść do kolejki przed tym miejscem.
         syncScheduled.set(false)
@@ -267,7 +272,7 @@ class Sync(
         if (!account.isSignedIn()) {
             return@withLock SyncResult(reason = words.notSignedIn)
         }
-        if (isPaused()) {
+        if (!ignorePause && isPaused()) {
             _state.value = SyncState.Paused(queue.size())
             // Nie „worthRetrying": praca w tle nie ma pukać co chwilę. Po
             // końcu pauzy rusza ją [SyncPause] przez Cloud.resumeSync.
