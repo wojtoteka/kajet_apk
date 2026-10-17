@@ -2271,10 +2271,10 @@ object PolishStrings : Strings {
     override val liveNow = "Połączono"
     override val liveConnecting = "Łączę…"
     override val liveOffline = "Offline"
-    override val liveOfflineAbout = "Offline – zmiany pojadą, gdy wróci sieć"
+    override val liveOfflineAbout = "Offline – zmiany wyślą się, gdy wróci sieć"
     override val liveReadOnly = "Tylko do czytania"
     override val liveGone = "Brak dostępu"
-    override val liveGoneAbout = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany tutaj nigdzie nie pojadą."
+    override val liveGoneAbout = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany wprowadzone tutaj nie zostaną nigdzie zapisane."
     override val liveChangeFrom = "Zmiana od:"
     override val liveOthersHere = "W notatce są też:"
     override val sharedSection = "Udostępnione mi"
@@ -2293,10 +2293,10 @@ object PolishStrings : Strings {
     override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest – także notatki dodane później."
     override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury – zsynchronizuj bibliotekę i spróbuj jeszcze raz."
     override val syncPauseSection = "Wstrzymanie synchronizacji"
-    override val syncPauseAbout = "Na jakiś czas notatki nie trafiają do chmury ani z niej, nawet gdy jest internet. " +
+    override val syncPauseAbout = "Na jakiś czas notatki przestają się synchronizować z chmurą, nawet gdy jest internet. " +
         "Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline” i szarą chmurę. " +
         "KajetAI działa dalej, ale jego zmiany i rozmowa też czekają na urządzeniu. Po " +
-        "końcu pauzy zaległe zmiany trafią do chmury same."
+        "końcu pauzy zaległe zmiany zsynchronizują się same."
     override val syncPausedNow = "Synchronizacja wstrzymana."
     override val syncPauseHour = "Na 1 godzinę"
     override val syncPauseDay = "Na 1 dzień"
