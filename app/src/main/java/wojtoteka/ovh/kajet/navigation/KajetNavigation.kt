@@ -275,7 +275,8 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
         CalculatorControl(calculatorOpen) { calculatorOpen = !calculatorOpen }
     }
     LaunchedEffect(route) {
-        if (route != Routes.NOTE && route != Routes.CODE && route != Routes.VIEW) calculatorOpen = false
+        // Podgląd zdjęcia albo PDF-a to nie edytor - tam kalkulator też znika.
+        if (route != Routes.NOTE && route != Routes.CODE) calculatorOpen = false
     }
 
     CompositionLocalProvider(LocalCalculator provides calculator) {
