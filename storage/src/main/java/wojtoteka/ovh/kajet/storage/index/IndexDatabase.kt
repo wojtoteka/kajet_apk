@@ -128,7 +128,15 @@ interface IndexDao {
     @Query("DELETE FROM entries WHERE documentUri = :uri")
     suspend fun delete(uri: String)
 
-    @Query("DELETE FROM entries WHERE path = :path OR path LIKE :path || '/%'")
+    /*
+      Gałąź to wpis i wszystko pod nim - po DOKŁADNYM przedrostku ścieżki.
+
+      Było tu porównanie przez LIKE. LIKE czyta jednak `_` i `%` w nazwie
+      jako dowolny znak i nie patrzy na wielkość liter, więc gałąź „a_b"
+      obejmowała też „axb" i „A_B". Przy wyrzucaniu folderu do kosza serwer
+      dostawał wtedy do skasowania notatki z zupełnie innego folderu.
+    */
+    @Query("DELETE FROM entries WHERE path = :path OR substr(path, 1, length(:path) + 1) = :path || '/'")
     suspend fun deleteBranch(path: String)
 
     @Query("DELETE FROM entries")
@@ -197,7 +205,10 @@ interface IndexDao {
     suspend fun allEntries(): List<IndexEntry>
 
     /** Adresy plików w gałęzi - po nich kasuje się treść z wyszukiwarki. */
-    @Query("SELECT documentUri FROM entries WHERE path = :path OR path LIKE :path || '/%'")
+    @Query(
+        "SELECT documentUri FROM entries " +
+            "WHERE path = :path OR substr(path, 1, length(:path) + 1) = :path || '/'",
+    )
     suspend fun urisUnder(path: String): List<String>
 
     /** Wszystkie pliki z kodem - one też jeżdżą do chmury. */
@@ -212,7 +223,7 @@ interface IndexDao {
     @Query(
         """
         SELECT * FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'NOTE' AND documentId != ''
         """,
     )
@@ -222,7 +233,7 @@ interface IndexDao {
     @Query(
         """
         SELECT path FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'FOLDER'
         """,
     )
@@ -232,7 +243,7 @@ interface IndexDao {
     @Query(
         """
         SELECT path FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'CODE_FILE'
         """,
     )
