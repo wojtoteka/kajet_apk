@@ -12,11 +12,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
@@ -52,6 +61,19 @@ data class TrashContents(
     val codeSlots: Map<String, String> = emptyMap(),
 )
 
+/**
+ * Zawartość folderu dla widoku biblioteki.
+ *
+ * [fromDisk] fałszywe znaczy, że to dopiero zapamiętany spis i dysk jeszcze
+ * nie potwierdził - pusta lista nie oznacza wtedy pustego folderu, więc
+ * widok nie pisze „Folder jest pusty", tylko czeka.
+ */
+data class FolderContent(
+    val path: String,
+    val items: List<LibraryItem>,
+    val fromDisk: Boolean,
+)
+
 /** Co synchronizacja zrobiła z notatką, którą serwer zgłosił jako skasowaną. */
 enum class ServerDeletion {
     /** Leżała w koszu - zniknęła doszczętnie. */
@@ -70,6 +92,8 @@ class LibraryRepository(
     private val dao: IndexDao,
     private val retries: DeleteRetryQueue,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** Gotowy magazyn zamiast katalogu z ustawień - tylko dla testów. */
+    private val fixedStore: LibraryStore? = null,
 ) : CloudLibrary {
 
     private val refreshTick = MutableStateFlow(0)
@@ -176,6 +200,26 @@ class LibraryRepository(
 
     private var cache: Pair<String, LibraryStore>? = null
 
+    private val thumbnails = NoteThumbnails(java.io.File(context.cacheDir, NoteThumbnails.DIRECTORY))
+
+    /*
+      Pełne odczyty notatek w tle - miniatury i uzupełnianie spisu - idą
+      najwyżej po dwa naraz. Notatka odręczna to potrafi być kilka megabajtów
+      punktów kreski; kilka takich odczytów jednocześnie kończyło się na
+      telefonie brakiem pamięci i notatkami, których nie udało się przeczytać.
+    */
+    private val fullReads = Semaphore(2)
+
+    /** Jedna odbudowa spisu naraz - zadanie w tle i synchronizacja nie piszą tego samego dwa razy. */
+    private val rebuildLock = Mutex()
+
+    /**
+     * Notatki, których nie udało się przeczytać przy uzupełnianiu spisu w tym
+     * uruchomieniu. Następne wejście do folderu ich nie męczy; spróbuje znowu
+     * dopiero kolejne uruchomienie aplikacji.
+     */
+    private val unreadable: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     val folderSelected: Flow<Boolean> = settings.settings.map { current ->
         hasPersistedAccess(current.libraryFolder)
     }
@@ -210,7 +254,34 @@ class LibraryRepository(
 
     override suspend fun hasStore(): Boolean = store() != null
 
+    /**
+     * Chowa przed galerią obrazki notatek zapisanych, zanim aplikacja zaczęła
+     * zakładać im `.nomedia`. Zwraca ścieżki obrazków do ponownego skanu
+     * i to, czy przejście objęło całą bibliotekę - albo null bez biblioteki.
+     */
+    internal suspend fun keepNotesOutOfGallery(): Pair<List<String>, Boolean>? = withContext(io) {
+        val store = store() ?: return@withContext null
+        val pass = store.keepNotesOutOfGallery()
+        pass.images.mapNotNull { DiskFiles.filePathOf(it) } to pass.complete
+    }
+
+    /** Adres wybranego katalogu notatek - po nim sprzątanie pamięta, co już zrobiło. */
+    internal suspend fun libraryUri(): String? = store()?.rootUri
+
+    /**
+     * Otwiera spis i katalog notatek zawczasu, poza wątkiem rysowania.
+     *
+     * Pierwsze otwarcie bazy i pierwsze pytanie o wybrany katalog trwają na
+     * telefonie zauważalną chwilę, a biblioteka pyta o jedno i drugie zaraz
+     * po starcie. Gdy już są otwarte, pierwszy widok przychodzi od razu.
+     */
+    suspend fun warmUp() {
+        runCatching { dao.count() }
+        runCatching { store() }
+    }
+
     suspend fun store(): LibraryStore? = withContext(io) {
+        fixedStore?.let { return@withContext it }
         val uri = settings.settings.first().libraryFolder ?: return@withContext null
         if (!hasPersistedAccess(uri)) {
             cache = null
@@ -236,37 +307,210 @@ class LibraryRepository(
 
     // Reading lists
 
-    fun folder(path: String): Flow<List<LibraryItem>> =
-        combine(refreshTick, settings.settings) { _, current -> current.favoriteFiles }
-            .map { starredFiles ->
+    /*
+      Zawartość folderu: najpierw ze spisu, od razu - potem z dysku.
+
+      Spis (baza w pamięci aplikacji) odpowiada w milisekundach, magazyn
+      plików potrafi dużo dłużej, zwłaszcza na telefonie i przy dużym
+      folderze. Dawniej każde wejście czekało na dysk, a do tego czasu ekran
+      był pusty albo pokazywał „Folder jest pusty". Teraz widać od razu to,
+      co spis pamięta, a dysk dogrywa się w tle i po cichu poprawia różnice
+      - także w samym spisie, więc następne wejście jest już dokładne.
+
+      Odświeżenia zbijają się w jedno: synchronizacja potrafi zgłosić zmianę
+      kilkadziesiąt razy na sekundę, a każdy przebieg to spis z dysku.
+    */
+    fun folderContent(path: String): Flow<FolderContent> = channelFlow {
+        val remembered = withContext(io) {
+            runCatching { indexedFolder(path, starredFiles()) }.getOrDefault(emptyList())
+        }
+        if (remembered.isNotEmpty()) send(FolderContent(path, remembered, fromDisk = false))
+        var shown = remembered
+        combine(refreshTick, settings.settings.map { it.favoriteFiles }.distinctUntilChanged()) { _, starred ->
+            starred
+        }
+            .conflate()
+            .collect { starred ->
                 withContext(io) {
-                    val store = store() ?: return@withContext emptyList()
-                    val fromDisk = store.list(path)
-                    // Sortujemy jeszcze raz, bo indeks ma pewniejsze daty niż SAF,
-                    // który potrafi oddać zero w lastModified.
-                    fromDisk.map { item -> enrichFromIndex(item, starredFiles) }
-                        .sortedWith(LibraryStore.libraryOrder)
+                    diskPass(path, starred, shown) { content ->
+                        shown = content.items
+                        send(content)
+                    }
+                }
+                delay(REFRESH_GAP_MS)
+            }
+    }
+
+    fun folder(path: String): Flow<List<LibraryItem>> = folderContent(path).map { it.items }
+
+    /**
+     * Folder tak, jak pamięta go spis - bez dysku. Do pierwszego widoku i do
+     * drzewa folderów, które przy każdej zmianie składa się od nowa.
+     */
+    suspend fun indexedFolder(path: String, starred: Set<String>? = null): List<LibraryItem> =
+        withContext(io) {
+            val rows = dao.childrenOf(path)
+            val folders = rows.filter { it.type == ItemType.FOLDER.name }.map { it.path }
+            val counts = if (folders.isEmpty()) {
+                emptyMap()
+            } else {
+                dao.childCounts(folders).associate { it.parent to it.count }
+            }
+            val starredFiles = starred ?: starredFiles()
+            rows.map { row ->
+                val item = row.toLibraryItem()
+                when (item.type) {
+                    ItemType.FOLDER -> item.copy(childCount = counts[item.path] ?: 0)
+                    ItemType.NOTE -> item
+                    else -> item.copy(favorite = item.path in starredFiles)
+                }
+            }.sortedWith(LibraryStore.libraryOrder)
+        }
+
+    /**
+     * Przebieg po dysku. Lista z dysku idzie na ekran od razu, a dopiero potem
+     * spis dogania dysk - notatki, których nie znał, czyta się po kolei i co
+     * kilka z nich lista dostaje tytuły i podglądy. Gdy magazyn nie odpowiada,
+     * zostaje to, co już widać.
+     */
+    private suspend fun diskPass(
+        path: String,
+        starred: Set<String>,
+        shown: List<LibraryItem>,
+        show: suspend (FolderContent) -> Unit,
+    ) {
+        val store = store() ?: return show(FolderContent(path, emptyList(), fromDisk = true))
+        // Znacznik i spis bierzemy PRZED dyskiem. Zmiana zrobiona w trakcie
+        // (zapis, kasowanie, synchronizacja) przesuwa znacznik - wtedy spisu
+        // nie poprawiamy, bo obraz z dysku mógł się już zestarzeć, a następny
+        // przebieg i tak zaraz przyjdzie.
+        val tick = refreshTick.value
+        val before = runCatching { dao.childrenOf(path) }.getOrDefault(emptyList())
+        val found = when (val listing = runCatching { store.listing(path) }.getOrDefault(FolderListing.Unknown)) {
+            is FolderListing.Found -> listing
+            FolderListing.Missing -> return show(FolderContent(path, emptyList(), fromDisk = true))
+            // Magazyn milczy - zostaje to, co widać, tylko już nie „w drodze".
+            FolderListing.Unknown -> return show(FolderContent(path, shown, fromDisk = true))
+        }
+        show(FolderContent(path, merged(found.items, before, starred), fromDisk = true))
+        runCatching {
+            reconcileFolder(store, found, before, starred, tick) {
+                val now = runCatching { dao.childrenOf(path) }.getOrDefault(before)
+                show(FolderContent(path, merged(found.items, now, starred), fromDisk = true))
+            }
+        }
+    }
+
+    /** Wpisy z dysku uzupełnione o to, co wie spis: tytuł, rodzaj, podgląd, datę. */
+    private fun merged(
+        onDisk: List<LibraryItem>,
+        rows: List<IndexEntry>,
+        starredFiles: Set<String>,
+    ): List<LibraryItem> {
+        val byUri = rows.associateBy { it.documentUri }
+        return onDisk.map { item ->
+            // Plik gwiazdki w sobie nie niesie - ta stoi w ustawieniach, patrz
+            // [KajetSettings.favoriteFiles]. Spis jest tu tylko odbiciem.
+            if (item.type != ItemType.NOTE) return@map item.copy(favorite = item.path in starredFiles)
+            val indexed = byUri[item.documentUri] ?: return@map item
+            item.copy(
+                name = indexed.name.ifBlank { item.name },
+                noteKind = runCatching { indexed.noteKind?.let { NoteKind.valueOf(it) } }.getOrNull(),
+                favorite = indexed.favorite,
+                tags = indexed.tags.split('|').filter { it.isNotBlank() },
+                preview = indexed.preview.ifBlank { null },
+                updatedAt = if (indexed.updatedAt > 0) indexed.updatedAt else item.updatedAt,
+            )
+        }
+            // Sortujemy jeszcze raz, bo indeks ma pewniejsze daty niż SAF,
+            // który potrafi oddać zero w lastModified.
+            .sortedWith(LibraryStore.libraryOrder)
+    }
+
+    /**
+     * Doprowadza spis tego jednego folderu do stanu z dysku: dopisuje to,
+     * czego nie znał, poprawia foldery i pliki, które się zmieniły, i zdejmuje
+     * wiersze po wpisach, których w folderze już nie ma.
+     *
+     * Kasuje wyłącznie WIERSZE spisu, nigdy plików - to samo, co od zawsze
+     * robi nocne sprzątanie sierot, tylko od razu i tylko dla folderu, który
+     * ktoś właśnie ogląda. I tylko na podstawie pełnej odpowiedzi magazynu.
+     * Zwraca true, kiedy coś w spisie się zmieniło.
+     */
+    private suspend fun reconcileFolder(
+        store: LibraryStore,
+        listing: FolderListing.Found,
+        before: List<IndexEntry>,
+        starred: Set<String>,
+        tick: Int,
+        refreshed: suspend () -> Unit,
+    ) {
+        if (refreshTick.value != tick) return
+        val onDiskByPath = listing.items.associateBy { it.path }
+        val knownByUri = before.associateBy { it.documentUri }
+
+        var changed = false
+        for (row in before) {
+            val onDisk = onDiskByPath[row.path]
+            when {
+                onDisk == null -> {
+                    dao.deleteBranchWithContent(row.path)
+                    changed = true
+                }
+                // Ta sama ścieżka, inny plik - stary wiersz odchodzi, nowy przychodzi niżej.
+                onDisk.documentUri != row.documentUri -> {
+                    dao.delete(row.documentUri)
+                    dao.deleteContent(row.documentUri)
+                    changed = true
                 }
             }
-
-    private suspend fun enrichFromIndex(
-        item: LibraryItem,
-        starredFiles: Set<String>,
-    ): LibraryItem {
-        // Plik gwiazdki w sobie nie niesie - ta stoi w ustawieniach, patrz
-        // [KajetSettings.favoriteFiles]. Spis jest tu tylko odbiciem.
-        if (item.type != ItemType.NOTE) {
-            return item.copy(favorite = item.path in starredFiles)
         }
-        val indexed = dao.find(item.documentUri) ?: return item
-        return item.copy(
-            name = indexed.name.ifBlank { item.name },
-            noteKind = runCatching { indexed.noteKind?.let { NoteKind.valueOf(it) } }.getOrNull(),
-            favorite = indexed.favorite,
-            tags = indexed.tags.split('|').filter { it.isNotBlank() },
-            preview = indexed.preview.ifBlank { null },
-            updatedAt = if (indexed.updatedAt > 0) indexed.updatedAt else item.updatedAt,
-        )
+        for (item in listing.items) {
+            if (item.type == ItemType.NOTE) continue
+            val row = knownByUri[item.documentUri]
+            val stale = when {
+                row == null -> true
+                // Folder, do którego nie dało się zajrzeć, ma pusty opis - tego
+                // nie wpisujemy w miejsce dobrych danych.
+                item.type == ItemType.FOLDER -> listing.complete &&
+                    (row.name != item.name || row.colorId != item.colorId || row.iconId != item.iconId)
+                else -> row.updatedAt != item.updatedAt || row.favorite != (item.path in starred)
+            }
+            if (!stale) continue
+            dao.upsertKeepingOpened(item.toIndexEntry().copy(favorite = item.path in starred))
+            changed = true
+        }
+
+        // Notatki, których spis nie zna - albo zna bez treści, bo kiedyś nie
+        // dało się ich przeczytać. Każdą trzeba przeczytać, a to trwa. Idą po
+        // kolei i każda trafia do spisu od razu: przebieg przerwany zmianą albo
+        // zamknięciem aplikacji nie traci tego, co już przeczytał, a następny
+        // zaczyna od reszty. Nieudany odczyt nie zostawia w spisie pustego
+        // wiersza - lista pokazuje wtedy notatkę z dysku, tak jak przed odczytem.
+        var sinceShown = 0
+        for (item in listing.items) {
+            if (item.type != ItemType.NOTE) continue
+            val row = knownByUri[item.documentUri]
+            if (row != null && row.noteKind != null) continue
+            if (item.documentUri in unreadable) continue
+            if (refreshTick.value != tick) break
+            val document = fullReads.withPermit {
+                runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
+            }
+            if (refreshTick.value != tick) break
+            if (document == null) {
+                unreadable += item.documentUri
+                continue
+            }
+            writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+            changed = true
+            sinceShown += 1
+            if (sinceShown >= NOTES_PER_UPDATE) {
+                sinceShown = 0
+                refreshed()
+            }
+        }
+        if (changed) refreshed()
     }
 
     fun favorites(): Flow<List<LibraryItem>> =
@@ -374,7 +618,12 @@ class LibraryRepository(
         } ?: runCatching { readNote(path).kind }.getOrNull()
     }
 
-    suspend fun writeNote(path: String, document: NoteDocument) = withContext(io) {
+    /**
+     * [touch] - czy to zmiana treści, która ma przesunąć notatkę na górę
+     * listy jako świeżo zmienioną. Sama gwiazdka postawiona na liście nią nie
+     * jest: notatka uciekałaby spod palca na samą górę.
+     */
+    suspend fun writeNote(path: String, document: NoteDocument, touch: Boolean = true) = withContext(io) {
         if (shared.isShared(path)) {
             // Cudza notatka nie trafia do spisu ani do kolejki synchronizacji
             // biblioteki - na serwer jedzie przez edycję na żywo.
@@ -383,25 +632,29 @@ class LibraryRepository(
             onSharedSaved?.invoke(noteId)
             return@withContext
         }
-        val store = requireStore()
-        store.writeNote(path, document)
-        val entry = store.entry(path)
-        if (entry != null) {
-            writeToIndex(
-                LibraryItem(
-                    id = document.id,
-                    path = path,
-                    name = document.title,
-                    type = ItemType.NOTE,
-                    documentUri = entry.uri.toString(),
-                    updatedAt = document.updatedAt,
-                    noteKind = document.kind,
-                    favorite = document.favorite,
-                    tags = document.tags,
-                ),
-                document,
-            )
-        }
+        val saved = requireStore().writeNote(path, document)
+        /*
+          Do spisu idzie data, która właśnie trafiła na dysk. Edytor nie
+          zmienia daty w swojej kopii treści, więc dawniej spis zostawał przy
+          dacie sprzed otwarcia notatki: lista mówiła „2 dni temu" o notatce
+          poprawionej przed chwilą i nie przesuwała jej na górę. Ta sama data
+          pilnuje świeżości miniatury.
+        */
+        val indexed = if (touch) saved.document else document
+        writeToIndex(
+            LibraryItem(
+                id = document.id,
+                path = path,
+                name = document.title,
+                type = ItemType.NOTE,
+                documentUri = saved.documentUri,
+                updatedAt = indexed.updatedAt,
+                noteKind = document.kind,
+                favorite = document.favorite,
+                tags = document.tags,
+            ),
+            indexed,
+        )
         onNoteSaved?.invoke(path, document.id)
     }
 
@@ -421,7 +674,7 @@ class LibraryRepository(
         }
         val document = requireStore().readNote(path)
         val after = document.copy(favorite = !document.favorite)
-        writeNote(path, after)
+        writeNote(path, after, touch = false)
         refresh()
         after.favorite
     }
@@ -493,7 +746,9 @@ class LibraryRepository(
         if (path.isBlank()) return@withContext false
         if (shared.isShared(path)) return@withContext !shared.exists(shared.noteIdOf(path))
         val store = store() ?: return@withContext false
-        runCatching { store.entry(path) == null }.getOrDefault(false)
+        // Tylko pewne „nie ma". Magazyn, który chwilowo nie odpowiada, to
+        // jeszcze nie skasowana notatka.
+        runCatching { store.lookup(path) == PathLookup.Missing }.getOrDefault(false)
     }
 
     /**
@@ -622,13 +877,7 @@ class LibraryRepository(
 
     override suspend fun attachmentNames(notePath: String): List<String> = withContext(io) {
         if (shared.isShared(notePath)) return@withContext shared.attachmentNames(shared.noteIdOf(notePath))
-        val folder = store()?.entry(notePath)?.takeIf { it.isDirectory }
-            ?: return@withContext emptyList()
-        folder.findFile(NoteDocument.ASSETS_DIRECTORY)
-            ?.listFiles()
-            ?.filter { it.isFile }
-            ?.mapNotNull { it.name }
-            .orEmpty()
+        store()?.attachmentNames(notePath).orEmpty()
     }
 
     override suspend fun writeNoteFromCloud(
@@ -640,14 +889,20 @@ class LibraryRepository(
         // Zwietrzały wiersz spisu - plik zniknął z dysku, a wiersz został -
         // robił przy każdym pobraniu nową kopię notatki, zostawiając siebie
         // na miejscu, i tak w kółko. Sprzątamy, zanim cokolwiek utworzymy.
+        //
+        // Tylko wiersz, którego pliku na pewno nie ma. Gdy magazyn chwilowo nie
+        // odpowiada, zapis idzie pod znaną ścieżkę i najwyżej się nie uda -
+        // synchronizacja spróbuje jeszcze raz, zamiast zakładać drugą kopię.
         var existing = dao.findById(document.id)
+        var where = existing?.let { store.lookup(it.path) }
         var guard = 0
-        while (existing != null && store.entry(existing.path) == null && guard < 10) {
+        while (existing != null && where == PathLookup.Missing && guard < 10) {
             dao.deleteBranch(existing.path)
             existing = dao.findById(document.id)
+            where = existing?.let { store.lookup(it.path) }
             guard += 1
         }
-        if (existing != null && store.entry(existing.path) != null) {
+        if (existing != null && where != PathLookup.Missing) {
             store.writeNote(existing.path, document)
             writeToIndex(
                 LibraryItem(
@@ -757,9 +1012,7 @@ class LibraryRepository(
         // z kosza już się do nich nie dostaniemy.
         val store = requireStore()
         val folderIds = runCatching {
-            dao.folderPathsUnder(path).mapNotNull { folderPath ->
-                store.entry(folderPath)?.let { store.readFolderMeta(it)?.id }
-            }
+            dao.folderPathsUnder(path).mapNotNull { folderPath -> store.folderMetaAt(folderPath)?.id }
         }.getOrDefault(emptyList())
         store.moveToTrash(path)
         dao.deleteBranchWithContent(path)
@@ -893,7 +1146,7 @@ class LibraryRepository(
         // Kopia widoczna w bibliotece.
         val indexed = runCatching { dao.findById(noteId) }.getOrNull()
         if (indexed != null) {
-            if (store.entry(indexed.path) != null) {
+            if (store.lookup(indexed.path) != PathLookup.Missing) {
                 if (store.deleteEntry(indexed.path)) erased = true else retries.addPath(indexed.path)
             }
             runCatching { dao.deleteBranchWithContent(indexed.path) }
@@ -932,7 +1185,7 @@ class LibraryRepository(
         val store = store() ?: return@withContext false
         var erased = false
 
-        if (store.entry(path) != null) {
+        if (store.lookup(path) != PathLookup.Missing) {
             if (store.deleteEntry(path)) erased = true else retries.addPath(path)
         }
         runCatching { dao.deleteBranchWithContent(path) }
@@ -970,7 +1223,7 @@ class LibraryRepository(
     override suspend fun trashNoteFromCloud(noteId: String): Boolean = withContext(io) {
         val entry = dao.findById(noteId) ?: return@withContext false
         val store = store() ?: return@withContext false
-        if (store.entry(entry.path) == null) {
+        if (store.lookup(entry.path) == PathLookup.Missing) {
             dao.deleteBranchWithContent(entry.path)
             reportRemotelyRemoved(entry.path)
             return@withContext false
@@ -985,7 +1238,7 @@ class LibraryRepository(
     /** Jak wyżej, ale dla pliku z kodem wskazanego ścieżką. */
     override suspend fun trashFileFromCloud(path: String): Boolean = withContext(io) {
         val store = store() ?: return@withContext false
-        if (store.entry(path) == null) {
+        if (store.lookup(path) == PathLookup.Missing) {
             dao.deleteBranchWithContent(path)
             reportRemotelyRemoved(path)
             return@withContext false
@@ -1171,22 +1424,33 @@ class LibraryRepository(
         val store = store() ?: return@withContext 0
         var cleaned = 0
 
-        // Sprawdzenie wiersza to zejście po katalogach przez SAF, a ono przy
-        // dużej bibliotece nie jest darmowe. Bierzemy więc porcję na przebieg;
-        // reszta doczeka jutra. Ile zostało - widać w dzienniku, żeby nie
-        // wyglądało to na „przejrzano wszystko".
+        // Jedno przejście po drzewie - jedno zapytanie na folder - zamiast
+        // schodzenia po katalogach osobno dla każdego wiersza spisu.
         val entries = runCatching { dao.allEntries() }.getOrDefault(emptyList())
-        val portion = entries.take(MAX_ORPHAN_CHECKS)
-        for (entry in portion) {
-            if (runCatching { store.entry(entry.path) }.getOrNull() != null) continue
-            runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
-        }
-        if (entries.size > portion.size) {
-            Log.i(
-                "Kajet",
-                "Sprzątanie spisu: sprawdzono ${portion.size} z ${entries.size} wpisów, " +
-                    "reszta przy następnym przebiegu",
-            )
+        val onDisk = HashSet<String>()
+        val complete = runCatching { store.walk { onDisk += it.path } }.getOrDefault(false)
+        if (complete) {
+            for (entry in entries) {
+                if (entry.path in onDisk) continue
+                runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
+            }
+        } else {
+            // Część drzewa nie odpowiedziała. Wiersz spoza przejścia może więc
+            // wskazywać plik, który jest - sprawdzamy go osobno i kasujemy tylko
+            // przy pewnym „nie ma". Porcja na przebieg, reszta doczeka jutra.
+            val unsure = entries.filter { it.path !in onDisk }
+            val portion = unsure.take(MAX_ORPHAN_CHECKS)
+            for (entry in portion) {
+                if (runCatching { store.lookup(entry.path) }.getOrNull() != PathLookup.Missing) continue
+                runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
+            }
+            if (unsure.size > portion.size) {
+                Log.i(
+                    "Kajet",
+                    "Sprzątanie spisu: sprawdzono ${portion.size} z ${unsure.size} wpisów, " +
+                        "reszta przy następnym przebiegu",
+                )
+            }
         }
 
         for (slotId in runCatching { store.brokenTrashSlots() }.getOrDefault(emptyList())) {
@@ -1204,6 +1468,12 @@ class LibraryRepository(
     private companion object {
         /** Ile wierszy spisu sprawdzamy w jednym przebiegu sprzątania. */
         const val MAX_ORPHAN_CHECKS = 500
+
+        /** Najkrótsza przerwa między dwoma przebiegami po dysku dla jednego folderu. */
+        const val REFRESH_GAP_MS = 250L
+
+        /** Co tyle przeczytanych notatek lista dostaje ich tytuły i podglądy. */
+        const val NOTES_PER_UPDATE = 8
 
         const val DAY = 24 * 60 * 60 * 1000L
     }
@@ -1229,9 +1499,15 @@ class LibraryRepository(
      */
     override suspend fun allCloudFolders(): List<CloudFolder> = withContext(io) {
         val store = store() ?: return@withContext emptyList()
+        // Opisy wszystkich folderów jednym przejściem po drzewie. Gdy któryś
+        // folder nie odpowiedział, jego opis czytamy jeszcze raz osobno - bez
+        // niego synchronizacja wzięłaby folder za nieistniejący i założyłaby
+        // drugi z tym samym identyfikatorem.
+        val onDisk = store.allFolderMetas()
         dao.allFolderPaths().mapNotNull { path ->
-            val entry = store.entry(path) ?: return@mapNotNull null
-            val meta = store.readFolderMeta(entry) ?: return@mapNotNull null
+            val meta = onDisk.byPath[path]
+                ?: (if (onDisk.complete) null else store.folderMetaAt(path))
+                ?: return@mapNotNull null
             CloudFolder(
                 id = meta.id,
                 path = path,
@@ -1291,7 +1567,7 @@ class LibraryRepository(
         val currentParent = entry.path.substringBeforeLast('/', "")
         if (currentParent == targetFolder) return@withContext entry.path
         val store = store() ?: return@withContext null
-        if (store.entry(entry.path) == null) return@withContext null
+        if (store.lookup(entry.path) == PathLookup.Missing) return@withContext null
         val newPath = store.move(entry.path, targetFolder)
         dao.deleteBranch(entry.path)
         reindexBranch(newPath)
@@ -1314,91 +1590,150 @@ class LibraryRepository(
     // settings. A silent return there looks exactly like a dead button - the
     // person taps it and nothing happens, not even a word about the folder
     // being gone. The automatic rebuild above stays silent on purpose.
+    //
+    // Spisu nie czyścimy na starcie. Odbudowa nadpisuje wiersz po wierszu,
+    // a zdejmuje tylko te, których plików nie znalazła - i dopiero na końcu
+    // pełnego przejścia. Przerwana (zamknięta aplikacja, wyłączony telefon)
+    // zostawia więc spis stary albo częściowo odświeżony, a nie pusty albo
+    // połowiczny, jak dawniej po `clear()` na początku.
     suspend fun rebuildIndex(progress: ((done: Int, total: Int) -> Unit)? = null) = withContext(io) {
-        val store = requireStore()
-        dao.clear()
+        rebuildLock.withLock {
+            val store = requireStore()
 
-        // Gwiazdki na plikach przeżywają odbudowę, bo leżą w ustawieniach,
-        // a nie w spisie. Wracają do świeżych wierszy tutaj.
-        val starred = starredFiles()
+            // Gwiazdki na plikach przeżywają odbudowę, bo leżą w ustawieniach,
+            // a nie w spisie. Wracają do świeżych wierszy tutaj.
+            val starred = starredFiles()
 
-        // A listing of everything first, so we can show how much is still left.
-        val items = ArrayList<LibraryItem>(128)
-        store.walkTree { items += it }
+            // A listing of everything first, so we can show how much is still left.
+            progress?.invoke(0, 0)
+            val items = ArrayList<LibraryItem>(128)
+            val complete = store.walk { items += it }
 
-        items.forEachIndexed { number, item ->
+            val seen = HashSet<String>(items.size * 2)
+            items.forEachIndexed { number, item ->
+                ensureActive()
+                seen += item.documentUri
+                if (item.type == ItemType.NOTE) {
+                    val document = fullReads.withPermit {
+                        runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
+                    }
+                    if (document != null) {
+                        writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+                    } else {
+                        dao.upsertKeepingOpened(item.toIndexEntry())
+                    }
+                } else {
+                    dao.upsertKeepingOpened(
+                        item.toIndexEntry().copy(favorite = item.path in starred),
+                    )
+                }
+                progress?.invoke(number + 1, items.size)
+            }
+
+            // Wiersze po plikach, których przejście nie znalazło - tylko po
+            // pełnym przejściu, bo inaczej brak w spisie nic nie znaczy.
+            if (complete) {
+                for (row in dao.allEntries()) {
+                    if (row.documentUri in seen) continue
+                    dao.delete(row.documentUri)
+                    dao.deleteContent(row.documentUri)
+                }
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Odbudowa spisu jako zadanie systemu - idzie dalej, gdy ktoś wyjdzie
+     * z aplikacji, bo nie chce czekać. [restart] przerywa trwającą i zaczyna
+     * od nowa (nowy folder, przycisk w ustawieniach). Zwraca numer zlecenia.
+     */
+    fun scheduleRebuild(restart: Boolean = true): java.util.UUID =
+        IndexRebuildWork.start(context, restart)
+
+    /** Odbudowa, gdy spis jest pusty, a biblioteka nie - po aktualizacji albo przerwanym pierwszym wczytaniu. */
+    suspend fun scheduleRebuildIfEmpty() = withContext(io) {
+        if (dao.count() > 0) return@withContext
+        val store = store() ?: return@withContext
+        if (store.list("").isEmpty()) return@withContext
+        scheduleRebuild(restart = false)
+    }
+
+    fun rebuildState(): Flow<RebuildState?> = IndexRebuildWork.state(context)
+
+    private suspend fun reindexBranch(path: String) {
+        val store = store() ?: return
+        // Wpis i wszystko pod nim jednym przejściem - jedno zapytanie na folder.
+        val items = store.branch(path) ?: return
+        // Zbiór czytamy raz na całą gałąź, a nie raz na plik w środku.
+        val starredFiles = starredFiles()
+        for (item in items) {
             if (item.type == ItemType.NOTE) {
-                val document = runCatching { store.readNote(item.path) }.getOrNull()
+                val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
                 if (document != null) {
-                    writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+                    writeToIndex(
+                        item.copy(
+                            id = document.id,
+                            name = document.title,
+                            noteKind = document.kind,
+                            favorite = document.favorite,
+                            tags = document.tags,
+                        ),
+                        document,
+                    )
                 } else {
                     dao.upsertKeepingOpened(item.toIndexEntry())
                 }
             } else {
-                dao.upsertKeepingOpened(
-                    item.toIndexEntry().copy(favorite = item.path in starred),
-                )
-            }
-            progress?.invoke(number + 1, items.size)
-        }
-        refresh()
-    }
-
-    private suspend fun reindexBranch(path: String, starred: Set<String>? = null) {
-        val store = store() ?: return
-        val entry = store.entry(path) ?: return
-        if (entry.isDirectory && FileNames.isNote(entry.name.orEmpty())) {
-            val document = runCatching { store.readDocument(entry) }.getOrNull()
-            val item = LibraryItem(
-                id = document?.id ?: entry.uri.toString(),
-                path = path,
-                name = document?.title ?: FileNames.withoutNoteExtension(entry.name.orEmpty()),
-                type = ItemType.NOTE,
-                documentUri = entry.uri.toString(),
-                updatedAt = entry.lastModified(),
-                noteKind = document?.kind,
-                favorite = document?.favorite ?: false,
-                tags = document?.tags.orEmpty(),
-            )
-            if (document != null) {
-                writeToIndex(item, document)
-            } else {
-                dao.upsertKeepingOpened(item.toIndexEntry())
-            }
-            return
-        }
-        // A folder or a plain file: we walk the branch again.
-        val parentPath = path.substringBeforeLast('/', "")
-        val onDisk = store.list(parentPath).firstOrNull { it.path == path } ?: return
-        // Zbiór czytamy raz na całą gałąź, a nie raz na plik w środku.
-        val starredFiles = starred ?: starredFiles()
-        dao.upsertKeepingOpened(
-            onDisk.toIndexEntry().copy(favorite = onDisk.path in starredFiles),
-        )
-        if (onDisk.type == ItemType.FOLDER) {
-            for (child in store.list(path)) {
-                reindexBranch(child.path, starredFiles)
+                dao.upsertKeepingOpened(item.toIndexEntry().copy(favorite = item.path in starredFiles))
             }
         }
     }
 
     private suspend fun writeToIndex(item: LibraryItem, document: NoteDocument) {
+        val entry = item.toIndexEntry().copy(
+            // The identifier comes from the content rather than the listing
+            // entry: when read from disk the entry carries the file address,
+            // not the note's number.
+            documentId = document.id,
+            name = document.title,
+            noteKind = document.kind.name,
+            favorite = document.favorite,
+            tags = document.tags.joinToString("|"),
+            updatedAt = document.updatedAt,
+            preview = IndexText.preview(document),
+        )
         dao.save(
-            entry = item.toIndexEntry().copy(
-                // The identifier comes from the content rather than the listing
-                // entry: when read from disk the entry carries the file address,
-                // not the note's number.
-                documentId = document.id,
-                name = document.title,
-                noteKind = document.kind.name,
-                favorite = document.favorite,
-                tags = document.tags.joinToString("|"),
-                updatedAt = document.updatedAt,
-                preview = IndexText.preview(document),
-            ),
+            entry = entry,
             title = document.title,
             content = IndexText.content(document),
         )
+        // Treść jest właśnie w pamięci - miniatura powstaje teraz, a nie przy
+        // przewijaniu listy z ponownym odczytem całej notatki z dysku.
+        if (document.kind == NoteKind.HANDWRITTEN) {
+            runCatching { thumbnails.put(entry.documentUri, PageThumbnail.of(document, entry.updatedAt)) }
+        }
+    }
+
+    /**
+     * Miniatura notatki odręcznej z listy. Zwykle gotowa w pamięci albo w
+     * pliku; gdy jej nie ma (notatka spoza aplikacji, wyczyszczona pamięć
+     * podręczna), czyta notatkę raz - najwyżej dwie naraz, żeby przewinięcie
+     * długiej listy nie zaczęło kilkudziesięciu odczytów jednocześnie.
+     */
+    suspend fun thumbnail(item: LibraryItem): PageThumbnail? = withContext(io) {
+        thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withContext it }
+        fullReads.withPermit {
+            thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withPermit it }
+            val document = runCatching {
+                if (shared.isShared(item.path)) {
+                    readNote(item.path)
+                } else {
+                    store()?.readNoteAt(item.documentUri)
+                }
+            }.getOrNull() ?: return@withPermit null
+            PageThumbnail.of(document, item.updatedAt).also { thumbnails.put(item.documentUri, it) }
+        }
     }
 }
 

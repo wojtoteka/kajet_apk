@@ -18,6 +18,7 @@ import wojtoteka.ovh.kajet.runner.KajetServerRunner
 import wojtoteka.ovh.kajet.runner.TabletPythonRunner
 import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.storage.Housekeeping
+import wojtoteka.ovh.kajet.storage.IndexRebuildWork
 import wojtoteka.ovh.kajet.storage.Storage
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
@@ -73,6 +74,9 @@ class AppContainer(context: Context) {
     }
 
     init {
+        // Odbudowa spisu chodzi jako zadanie systemu - także w procesie, który
+        // system wskrzesił tylko po to, żeby ją dokończyć.
+        IndexRebuildWork.repositoryProvider = { library }
         // The repository only reports that something was saved; the container decides
         // that it goes to the cloud.
         library.onNoteSaved = { path, id ->
@@ -175,6 +179,12 @@ class KajetApp : Application() {
 
         container = AppContainer(this)
 
+        // Spis notatek i wybrany katalog wstają w tle, zanim biblioteka o nie
+        // poprosi - pierwszy widok listy nie czeka wtedy na otwarcie bazy.
+        Thread {
+            runCatching { kotlinx.coroutines.runBlocking { container.library.warmUp() } }
+        }.start()
+
         // Rozgrzewka chmury poza wątkiem głównym: magazyn kluczy i WorkManager
         // zdążą wstać, zanim MainActivity.onResume poprosi o synchronizację.
         Thread {
@@ -204,7 +214,14 @@ class KajetApp : Application() {
         */
         Thread {
             runCatching {
-                kotlinx.coroutines.runBlocking { container.housekeeping.runIfDue() }
+                kotlinx.coroutines.runBlocking {
+                    container.housekeeping.runIfDue()
+                    // Zdjęcia i rysunki z notatek znikają z galerii - raz na
+                    // bibliotekę i dopiero po chwili, żeby nie spowalniać
+                    // pierwszego widoku listy.
+                    kotlinx.coroutines.delay(10_000)
+                    container.housekeeping.keepNoteImagesOutOfGallery()
+                }
             }
         }.start()
     }

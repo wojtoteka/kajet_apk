@@ -43,7 +43,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.design.Kajet
-import wojtoteka.ovh.kajet.core.design.component.CalculatorAction
 import wojtoteka.ovh.kajet.core.design.component.EmptyState
 import wojtoteka.ovh.kajet.core.design.component.HorizontalRule
 import wojtoteka.ovh.kajet.core.design.component.IconAction
@@ -93,7 +92,8 @@ fun FileViewer(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            CalculatorAction()
+            // Bez kalkulatora: to tylko podgląd zdjęcia albo PDF-a, nie miejsce
+            // do pracy - przycisk wyglądał tu na pomyłkę.
         }
         HorizontalRule()
         when (kind) {

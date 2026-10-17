@@ -38,6 +38,12 @@ data class IndexEntry(
     val parentPath: String get() = path.substringBeforeLast('/', "")
 }
 
+/** Licznik wpisów w folderze, patrz [IndexDao.childCounts]. */
+data class ChildCount(
+    val parent: String,
+    val count: Int,
+)
+
 @Entity(tableName = "content_fts")
 @Fts4(tokenizer = FtsOptions.TOKENIZER_UNICODE61)
 data class ContentFts(
@@ -128,7 +134,15 @@ interface IndexDao {
     @Query("DELETE FROM entries WHERE documentUri = :uri")
     suspend fun delete(uri: String)
 
-    @Query("DELETE FROM entries WHERE path = :path OR path LIKE :path || '/%'")
+    /*
+      Gałąź to wpis i wszystko pod nim - po DOKŁADNYM przedrostku ścieżki.
+
+      Było tu porównanie przez LIKE. LIKE czyta jednak `_` i `%` w nazwie
+      jako dowolny znak i nie patrzy na wielkość liter, więc gałąź „a_b"
+      obejmowała też „axb" i „A_B". Przy wyrzucaniu folderu do kosza serwer
+      dostawał wtedy do skasowania notatki z zupełnie innego folderu.
+    */
+    @Query("DELETE FROM entries WHERE path = :path OR substr(path, 1, length(:path) + 1) = :path || '/'")
     suspend fun deleteBranch(path: String)
 
     @Query("DELETE FROM entries")
@@ -136,6 +150,30 @@ interface IndexDao {
 
     @Query("SELECT * FROM entries WHERE documentUri = :uri")
     suspend fun find(uri: String): IndexEntry?
+
+    /*
+      Folder ze spisu, bez dysku - to, co biblioteka pokazuje od razu po
+      wejściu, zanim magazyn odpowie.
+
+      Rodzic liczy się z samej ścieżki: wewnętrzny rtrim zdejmuje z prawej
+      wszystkie znaki ostatniego członu (każdy z nich występuje w ścieżce
+      bez ukośników), a zatrzymuje się na ostatnim ukośniku, który zdejmuje
+      zewnętrzny rtrim. Z „a/b/c" zostaje „a/b", z „a" pusty tekst - korzeń.
+    */
+    @Query("SELECT * FROM entries WHERE rtrim(rtrim(path, replace(path, '/', '')), '/') = :parent")
+    suspend fun childrenOf(parent: String): List<IndexEntry>
+
+    /** Ile wpisów leży wprost w każdym z [folders] - tak samo jak licznik z dysku. */
+    @Query(
+        """
+        SELECT parent, COUNT(*) AS count FROM (
+            SELECT rtrim(rtrim(path, replace(path, '/', '')), '/') AS parent FROM entries
+        )
+        WHERE parent IN (:folders)
+        GROUP BY parent
+        """,
+    )
+    suspend fun childCounts(folders: List<String>): List<ChildCount>
 
     @Query("SELECT * FROM entries WHERE path = :path LIMIT 1")
     suspend fun findByPath(path: String): IndexEntry?
@@ -197,7 +235,10 @@ interface IndexDao {
     suspend fun allEntries(): List<IndexEntry>
 
     /** Adresy plików w gałęzi - po nich kasuje się treść z wyszukiwarki. */
-    @Query("SELECT documentUri FROM entries WHERE path = :path OR path LIKE :path || '/%'")
+    @Query(
+        "SELECT documentUri FROM entries " +
+            "WHERE path = :path OR substr(path, 1, length(:path) + 1) = :path || '/'",
+    )
     suspend fun urisUnder(path: String): List<String>
 
     /** Wszystkie pliki z kodem - one też jeżdżą do chmury. */
@@ -212,7 +253,7 @@ interface IndexDao {
     @Query(
         """
         SELECT * FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'NOTE' AND documentId != ''
         """,
     )
@@ -222,7 +263,7 @@ interface IndexDao {
     @Query(
         """
         SELECT path FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'FOLDER'
         """,
     )
@@ -232,7 +273,7 @@ interface IndexDao {
     @Query(
         """
         SELECT path FROM entries
-        WHERE (path = :path OR path LIKE :path || '/%')
+        WHERE (path = :path OR substr(path, 1, length(:path) + 1) = :path || '/')
           AND type = 'CODE_FILE'
         """,
     )

@@ -99,7 +99,12 @@ fun LibraryScreen(
 ) {
     val section by model.section.collectAsStateWithLifecycle()
     val path by model.path.collectAsStateWithLifecycle()
-    val content by model.content.collectAsStateWithLifecycle()
+    val folderContent by model.folderContent.collectAsStateWithLifecycle()
+    // Zawartość innego folderu (jeszcze sprzed przejścia) nie trafia na ekran.
+    val current = folderContent?.takeIf { it.path == path }
+    val content = current?.items.orEmpty()
+    // Pusty spis, którego dysk jeszcze nie potwierdził, to nie pusty folder.
+    val settled = current != null && (current.fromDisk || current.items.isNotEmpty())
     val tree by model.tree.collectAsStateWithLifecycle()
     // Okna przenoszenia wskazują folder, więc notatki z drzewa nie mają tam wstępu.
     val folderTree = remember(tree) { tree.filter { it.item.type == ItemType.FOLDER } }
@@ -292,6 +297,7 @@ fun LibraryScreen(
                     model = model,
                     path = path,
                     items = content,
+                    settled = settled,
                     repo = repo,
                     stuckPaths = stuckPaths,
                     showPath = !roomForTree,
@@ -738,6 +744,8 @@ private fun FolderView(
     model: LibraryViewModel,
     path: String,
     items: List<LibraryItem>,
+    /** Czy wiadomo już, co jest w folderze. Do tej pory pusto, bez „Folder jest pusty". */
+    settled: Boolean,
     repo: LibraryRepository,
     stuckPaths: Set<String>,
     showPath: Boolean,
@@ -781,7 +789,11 @@ private fun FolderView(
         )
         HorizontalRule()
 
-        if (items.isEmpty()) {
+        if (items.isEmpty() && !settled) {
+            // Dysk jeszcze odpowiada - zwykle ułamek sekundy. Napis o pustym
+            // folderze mignąłby tu tylko po to, żeby zaraz zniknąć.
+            Spacer(Modifier.fillMaxSize())
+        } else if (items.isEmpty()) {
             EmptyState(
                 title = words.libFolderEmpty,
                 description = words.libFolderEmptyHint,

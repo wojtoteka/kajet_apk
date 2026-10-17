@@ -19,12 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
@@ -39,7 +39,6 @@ import wojtoteka.ovh.kajet.core.text.checkingProgress
 import wojtoteka.ovh.kajet.core.text.deletingOne
 import wojtoteka.ovh.kajet.core.text.deletingProgress
 import wojtoteka.ovh.kajet.core.text.movingProgress
-import wojtoteka.ovh.kajet.core.text.refreshingIndex
 import wojtoteka.ovh.kajet.core.text.trashingProgress
 import wojtoteka.ovh.kajet.core.text.uploadNotTextAbout
 import wojtoteka.ovh.kajet.core.text.savingFolder
@@ -50,6 +49,8 @@ import wojtoteka.ovh.kajet.export.ExportFormat
 import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.share.IncomingShare
 import wojtoteka.ovh.kajet.share.ShareImport
+import wojtoteka.ovh.kajet.storage.FolderContent
+import wojtoteka.ovh.kajet.storage.RebuildState
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
 import wojtoteka.ovh.kajet.cloud.FileUploader
@@ -114,8 +115,6 @@ class LibraryViewModel(
     private val _expanded = MutableStateFlow(
         saved.get<ArrayList<String>>(KEY_EXPANDED)?.toSet() ?: setOf(""),
     )
-    private val _tree = MutableStateFlow<List<TreeNode>>(emptyList())
-    val tree: StateFlow<List<TreeNode>> = _tree.asStateFlow()
 
     private val _trash = MutableStateFlow<List<TrashEntry>>(emptyList())
     val trash: StateFlow<List<TrashEntry>> = _trash.asStateFlow()
@@ -130,14 +129,62 @@ class LibraryViewModel(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _progress = MutableStateFlow<String?>(null)
-    val progress: StateFlow<String?> = _progress.asStateFlow()
+
+    /*
+      Odbudowa spisu idzie jako zadanie systemu (patrz IndexRebuildWork) - po
+      wyjściu z aplikacji nie staje. Ekran tylko czyta jej stan, więc postęp
+      wraca też po ponownym otwarciu aplikacji w trakcie odbudowy.
+    */
+    private val rebuild: StateFlow<RebuildState?> = repo.rebuildState()
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val progress: StateFlow<String?> = combine(_progress, rebuild) { own, state ->
+        own ?: state?.takeIf { it.running }?.let { running ->
+            // Całe zdanie, nie sam ogon: pasek postępu pokazuje to, co dostanie,
+            // a chodzi nim także zapis folderu i robota na wielu wpisach naraz.
+            if (running.total == 0) {
+                "${words.libRebuilding} ${words.walkingLibrary}"
+            } else {
+                "${words.libRebuilding} ${words.checkingProgress(running.done, running.total)}"
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // Każdy z tych spisów ma własne .catch. Bez niego jeden nieczytelny plik
     // w katalogu przewraca korutynę, a człowiek widzi czarny ekran zamiast
     // biblioteki i nie wie, co się stało.
-    val content: StateFlow<List<LibraryItem>> = _path
-        .flatMapLatest { repo.folder(it) }
-        .catch { failure -> reportAndEmpty(failure, words.readingFolderFailed) }
+    //
+    // Zawartość niesie ścieżkę, do której należy. Po przejściu do innego
+    // folderu przez ułamek sekundy w stanie siedzi jeszcze poprzedni - ekran
+    // nie może go wtedy pokazać jako zawartości nowego.
+    val folderContent: StateFlow<FolderContent?> = _path
+        .flatMapLatest { path ->
+            repo.folderContent(path).catch { failure ->
+                _error.value = failure.message?.takeIf { it.isNotBlank() } ?: words.readingFolderFailed
+                emit(FolderContent(path, emptyList(), fromDisk = true))
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val content: StateFlow<List<LibraryItem>> = folderContent
+        .map { it?.items.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /*
+      Drzewo folderów po lewej, składane od nowa przy każdej zmianie folderu.
+
+      Tylko dopóki ktoś na nie patrzy. Dawniej zbierała je korutyna żyjąca
+      tyle, co model - a ona trzymała przy życiu także spis oglądanego
+      folderu. W czasie pisania w notatce każda synchronizacja robiła więc
+      w tle przebieg po dysku dla biblioteki, której nikt nie widział.
+
+      Wyjątek kończy składanie i zostawia drzewo takim, jakie było - dawniej
+      jeden nieczytelny folder zabierał ze sobą całą aplikację.
+    */
+    val tree: StateFlow<List<TreeNode>> = combine(_expanded, content) { expanded, _ -> expanded }
+        .mapLatest { expanded -> buildTree(expanded) }
+        .catch { failure -> _error.value = failure.message }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val favorites: StateFlow<List<LibraryItem>> = repo.favorites()
@@ -197,25 +244,25 @@ class LibraryViewModel(
     }
 
     init {
-        // Drzewo folderów po lewej. Bez handlera jeden nieczytelny folder
-        // przewracał tę korutynę, a wyjątek szedł dalej i zabierał ze sobą całą
-        // aplikację - zamiast po prostu zostawić drzewo takim, jakie było.
-        viewModelScope.launch(failureHandler("drzewo folderów") { _error.value = it.message }) {
-            combine(_expanded, content) { expanded, _ -> expanded }.collect { expanded ->
-                _tree.value = buildTree(expanded)
-            }
-        }
-
         // Po aktualizacji, która zmieniła budowę spisu, jest on pusty.
         // Odbudowujemy go sami, żeby favorites i ostatnio otwarte nie zniknęły
         // człowiekowi z oczu bez żadnego wyjaśnienia.
         viewModelScope.launch(failureHandler("odbudowa spisu")) {
-            runCatching {
-                repo.rebuildIfEmpty { done, total ->
-                    _progress.value = words.refreshingIndex(done, total)
+            runCatching { repo.scheduleRebuildIfEmpty() }
+        }
+
+        // Koniec odbudowy zleconej z tego ekranu: znak „gotowe" albo powód.
+        viewModelScope.launch(failureHandler("koniec odbudowy spisu")) {
+            rebuild.collect { state ->
+                if (state == null || state.id != requestedRebuild || !state.finished) return@collect
+                requestedRebuild = null
+                val failure = state.failure
+                if (failure != null) {
+                    _error.value = failure.ifBlank { words.actionFailed }
+                } else {
+                    _indexRebuilt.value = true
                 }
             }
-            _progress.value = null
         }
     }
 
@@ -232,11 +279,18 @@ class LibraryViewModel(
       kilkudziesięciu notatkach luzem drzewo zamieniłoby się w drugi spis
       i foldery trzeba by w nim wyszukiwać.
     */
+    /*
+      Drzewo składa się ze spisu, nie z dysku: przy każdej zmianie budowało
+      się od nowa, a każdy rozwinięty folder to był osobny spis z dysku. Spis
+      dla oglądanego folderu poprawia się sam po każdym przebiegu po dysku,
+      więc drzewo idzie za nim bez własnych odczytów.
+    */
     private suspend fun buildTree(expanded: Set<String>): List<TreeNode> {
         val result = mutableListOf<TreeNode>()
         suspend fun descend(path: String, level: Int) {
             val inside = runCatching {
-                if (path.isEmpty()) repo.foldersIn(path) else repo.folder(path).first()
+                val items = repo.indexedFolder(path)
+                if (path.isEmpty()) items.filter { it.type == ItemType.FOLDER } else items
             }.getOrDefault(emptyList())
             for (item in inside) {
                 if (item.type != ItemType.FOLDER) {
@@ -562,16 +616,15 @@ class LibraryViewModel(
         _indexRebuilt.value = false
     }
 
-    fun rebuildIndex() = inBackground {
+    /** Zlecona z tego ekranu odbudowa - po jej końcu pokazuje się „gotowe". */
+    private var requestedRebuild: java.util.UUID? = null
+
+    fun rebuildIndex() {
         _indexRebuilt.value = false
-        // Całe zdanie, nie sam ogon: pasek postępu pokazuje to, co dostanie,
-        // a chodzi nim także zapis folderu i robota na wielu wpisach naraz.
-        _progress.value = "${words.libRebuilding} ${words.walkingLibrary}"
-        repo.rebuildIndex { done, total ->
-            _progress.value = "${words.libRebuilding} ${words.checkingProgress(done, total)}"
+        requestedRebuild = runCatching { repo.scheduleRebuild() }.getOrElse { failure ->
+            _error.value = failure.message ?: words.actionFailed
+            null
         }
-        _progress.value = null
-        _indexRebuilt.value = true
     }
 
     private fun inBackground(block: suspend () -> Unit) {
@@ -625,5 +678,3 @@ class LibraryViewModel(
     }
 }
 
-private suspend fun LibraryRepository.foldersIn(path: String): List<LibraryItem> =
-    store()?.list(path)?.filter { it.type == ItemType.FOLDER } ?: emptyList()

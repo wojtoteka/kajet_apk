@@ -31,10 +31,10 @@ import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.IconAction
+import wojtoteka.ovh.kajet.core.design.component.PreviewDrawing
 import wojtoteka.ovh.kajet.core.design.component.StrokePreview
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
-import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
 import wojtoteka.ovh.kajet.core.model.NoteKind
@@ -48,6 +48,8 @@ import wojtoteka.ovh.kajet.core.text.actionsFor
 import wojtoteka.ovh.kajet.core.text.starNote
 import wojtoteka.ovh.kajet.core.text.unstarNote
 import wojtoteka.ovh.kajet.storage.LibraryRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -332,44 +334,56 @@ private fun RowMark(item: LibraryItem) {
 @Composable
 private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
     val words = LocalStrings.current
-    var strokes by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<InkStroke>>(emptyList()) }
-    // Kształty idą do podglądu jako gotowe łamane - miniatura nie zna ich geometrii.
-    var outlines by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<FloatArray>>(emptyList()) }
+    /*
+      Miniatura przychodzi gotowa ze spisu (powstaje przy zapisie notatki),
+      a nie z odczytu całej notatki przy każdym pokazaniu wiersza. Ścieżki
+      do narysowania składają się w tle - kształty dostają przy tym obrys,
+      bo ich geometria siedzi w module atramentu - więc wiersz wjeżdżający na
+      ekran przy przewijaniu tylko je rysuje. Do tej chwili wiersz ma już
+      swoją wysokość, a pasek jest pusty - bez napisu „Pusta strona", który
+      zaraz by zniknął.
+    */
+    var ready by remember(item.documentUri, item.updatedAt) { mutableStateOf(false) }
+    var drawing by remember(item.documentUri, item.updatedAt) { mutableStateOf<PreviewDrawing?>(null) }
 
     LaunchedEffect(item.documentUri, item.updatedAt) {
-        val page = runCatching {
-            repo.readNote(item.path).handwriting?.pages?.firstOrNull()
-        }.getOrNull()
-        strokes = page?.strokes.orEmpty()
-        outlines = page?.shapes.orEmpty().map { shape ->
-            val points = ShapeGeometry.points(shape)
+        val thumbnail = runCatching { repo.thumbnail(item) }.getOrNull()
+        drawing = withContext(Dispatchers.Default) {
+            val lines = thumbnail?.lines.orEmpty().map { line -> FloatArray(line.size) { line[it].toFloat() } }
             // Figura zamknięta wraca do pierwszego punktu, żeby obrys się domykał.
-            if (shape.kind.open) points else points + floatArrayOf(points[0], points[1])
+            val shapes = thumbnail?.shapes.orEmpty().map { shape ->
+                val points = ShapeGeometry.points(shape)
+                if (shape.kind.open) points else points + floatArrayOf(points[0], points[1])
+            }
+            PreviewDrawing.of(lines + shapes)
         }
+        ready = true
     }
 
-    if (strokes.isEmpty() && outlines.isEmpty()) {
-        Text(
-            text = words.emptyPage,
-            style = Kajet.type.meta,
-            color = Kajet.colors.muted,
-        )
-        Spacer(Modifier.height(2.dp))
-    } else {
-        Box(
+    val shown = drawing
+    when {
+        !ready -> Spacer(Modifier.height(34.dp))
+        shown == null -> {
+            Text(
+                text = words.emptyPage,
+                style = Kajet.type.meta,
+                color = Kajet.colors.muted,
+            )
+            Spacer(Modifier.height(2.dp))
+        }
+        else -> Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(34.dp)
                 .background(Kajet.colors.desk),
         ) {
             StrokePreview(
-                strokes = strokes,
+                drawing = shown,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(34.dp)
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 color = Kajet.colors.muted,
-                outlines = outlines,
             )
         }
     }

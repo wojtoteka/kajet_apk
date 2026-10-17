@@ -10,82 +10,71 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import wojtoteka.ovh.kajet.core.model.Rect
 
 /**
- * Miniatura strony.
+ * Miniatura strony gotowa do rysowania: łamane złożone już w ścieżki i
+ * prostokąt, który obejmują - we współrzędnych strony.
  *
- * [outlines] to gotowe łamane kształtów - ciąg x, y, x, y… we współrzędnych
- * strony. Kształty przychodzą policzone z zewnątrz, bo ich geometria siedzi w
- * module atramentu, a ten leży wyżej niż wygląd aplikacji.
+ * Składa się ją poza wątkiem rysowania ([of] można wołać z dowolnego wątku).
+ * Wiersz listy, który wjeżdża na ekran, tylko rysuje gotowe ścieżki. Dawniej
+ * w chwili pokazania wiersza składał setki łamanych i przewijanie listy
+ * z notatkami odręcznymi się zacinało.
+ */
+class PreviewDrawing private constructor(
+    val paths: List<Path>,
+    val bounds: Rect,
+) {
+    companion object {
+        /** [lines] to łamane x, y, x, y… we współrzędnych strony. null - nie ma czego rysować. */
+        fun of(lines: List<FloatArray>): PreviewDrawing? {
+            val bounds = boundsOf(lines) ?: return null
+            val paths = lines.filter { it.size >= 4 }.map { line ->
+                Path().apply {
+                    moveTo(line[0], line[1])
+                    var i = 2
+                    while (i + 1 < line.size) {
+                        lineTo(line[i], line[i + 1])
+                        i += 2
+                    }
+                }
+            }
+            return PreviewDrawing(paths, bounds)
+        }
+    }
+}
+
+/**
+ * Miniatura strony na liście.
+ *
+ * Podgląd pokazuje górę strony: skaluje do szerokości i ucina to, co nie
+ * mieści się na wysokości. Przycięcie do własnych granic, bo bez niego
+ * rysunek wchodziłby na datę i na tytuł następnej notatki.
  */
 @Composable
 fun StrokePreview(
-    strokes: List<InkStroke>,
+    drawing: PreviewDrawing,
     modifier: Modifier = Modifier,
     color: Color,
-    maxStrokes: Int = 240,
     width: Float = 1.4f,
-    outlines: List<FloatArray> = emptyList(),
 ) {
-    if (strokes.isEmpty() && outlines.isEmpty()) return
-    val shown = if (strokes.size > maxStrokes) strokes.take(maxStrokes) else strokes
-
-    // Przycięcie do własnych granic. Bez niego rysunek wychodzi poza pasek
-    // podglądu i wchodzi na datę oraz na tytuł następnej notatki - kreski
-    // ratowało do tej pory pomijanie punktów spod dolnej krawędzi, ale kształt
-    // to jedna łamana, której w środku nie da się w ten sposób uciąć.
     Canvas(modifier.clipToBounds()) {
-        val bounds = boundsOf(shown, outlines) ?: return@Canvas
-        val contentWidth = (bounds.width).coerceAtLeast(1f)
-        val contentHeight = (bounds.height).coerceAtLeast(1f)
-
-        // Podgląd pokazuje górę strony, więc skalujemy do szerokości
-        // i ucinamy to, co nie mieści się na wysokości.
+        val bounds = drawing.bounds
+        val contentWidth = bounds.width.coerceAtLeast(1f)
+        val contentHeight = bounds.height.coerceAtLeast(1f)
         val scale = size.width / contentWidth
         val verticalScale = size.height / contentHeight
         val used = minOf(scale, verticalScale * 3f).coerceAtMost(scale)
-
-        for (stroke in shown) {
-            val count = stroke.pointCount
-            if (count < 2) continue
-            val path = Path()
-            var started = false
-            for (i in 0 until count) {
-                val x = (stroke.x(i) - bounds.left) * used
-                val y = (stroke.y(i) - bounds.top) * used
-                if (y > size.height + 8f) continue
-                if (!started) {
-                    path.moveTo(x, y)
-                    started = true
-                } else {
-                    path.lineTo(x, y)
-                }
-            }
-            if (!started) continue
-            drawPath(
-                path = path,
-                color = color,
-                style = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
-        }
-
-        for (outline in outlines) {
-            if (outline.size < 4) continue
-            val path = Path()
-            var i = 0
-            while (i < outline.size) {
-                val x = (outline[i] - bounds.left) * used
-                val y = (outline[i + 1] - bounds.top) * used
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                i += 2
-            }
-            drawPath(
-                path = path,
-                color = color,
-                style = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
+        // Ścieżki są we współrzędnych strony - skala idzie na całe płótno,
+        // a grubość kreski dzieli się przez nią, żeby na ekranie była stała.
+        val stroke = Stroke(width = width / used, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        withTransform({
+            scale(used, used, pivot = Offset.Zero)
+            translate(-bounds.left, -bounds.top)
+        }) {
+            for (path in drawing.paths) drawPath(path = path, color = color, style = stroke)
         }
     }
 }
@@ -113,29 +102,18 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStrokes(
     }
 }
 
-private fun boundsOf(strokes: List<InkStroke>, outlines: List<FloatArray>): Rect? {
+private fun boundsOf(lines: List<FloatArray>): Rect? {
     var minX = Float.MAX_VALUE
     var minY = Float.MAX_VALUE
     var maxX = -Float.MAX_VALUE
     var maxY = -Float.MAX_VALUE
     var empty = true
-    for (stroke in strokes) {
-        for (i in 0 until stroke.pointCount) {
-            empty = false
-            val x = stroke.x(i)
-            val y = stroke.y(i)
-            if (x < minX) minX = x
-            if (x > maxX) maxX = x
-            if (y < minY) minY = y
-            if (y > maxY) maxY = y
-        }
-    }
-    for (outline in outlines) {
+    for (line in lines) {
         var i = 0
-        while (i < outline.size) {
+        while (i + 1 < line.size) {
             empty = false
-            val x = outline[i]
-            val y = outline[i + 1]
+            val x = line[i]
+            val y = line[i + 1]
             if (x < minX) minX = x
             if (x > maxX) maxX = x
             if (y < minY) minY = y
