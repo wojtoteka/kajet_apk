@@ -39,7 +39,6 @@ import wojtoteka.ovh.kajet.core.text.checkingProgress
 import wojtoteka.ovh.kajet.core.text.deletingOne
 import wojtoteka.ovh.kajet.core.text.deletingProgress
 import wojtoteka.ovh.kajet.core.text.movingProgress
-import wojtoteka.ovh.kajet.core.text.refreshingIndex
 import wojtoteka.ovh.kajet.core.text.trashingProgress
 import wojtoteka.ovh.kajet.core.text.uploadNotTextAbout
 import wojtoteka.ovh.kajet.core.text.savingFolder
@@ -51,6 +50,7 @@ import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.share.IncomingShare
 import wojtoteka.ovh.kajet.share.ShareImport
 import wojtoteka.ovh.kajet.storage.FolderContent
+import wojtoteka.ovh.kajet.storage.RebuildState
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
 import wojtoteka.ovh.kajet.cloud.FileUploader
@@ -129,7 +129,27 @@ class LibraryViewModel(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _progress = MutableStateFlow<String?>(null)
-    val progress: StateFlow<String?> = _progress.asStateFlow()
+
+    /*
+      Odbudowa spisu idzie jako zadanie systemu (patrz IndexRebuildWork) - po
+      wyjściu z aplikacji nie staje. Ekran tylko czyta jej stan, więc postęp
+      wraca też po ponownym otwarciu aplikacji w trakcie odbudowy.
+    */
+    private val rebuild: StateFlow<RebuildState?> = repo.rebuildState()
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val progress: StateFlow<String?> = combine(_progress, rebuild) { own, state ->
+        own ?: state?.takeIf { it.running }?.let { running ->
+            // Całe zdanie, nie sam ogon: pasek postępu pokazuje to, co dostanie,
+            // a chodzi nim także zapis folderu i robota na wielu wpisach naraz.
+            if (running.total == 0) {
+                "${words.libRebuilding} ${words.walkingLibrary}"
+            } else {
+                "${words.libRebuilding} ${words.checkingProgress(running.done, running.total)}"
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // Każdy z tych spisów ma własne .catch. Bez niego jeden nieczytelny plik
     // w katalogu przewraca korutynę, a człowiek widzi czarny ekran zamiast
@@ -228,12 +248,21 @@ class LibraryViewModel(
         // Odbudowujemy go sami, żeby favorites i ostatnio otwarte nie zniknęły
         // człowiekowi z oczu bez żadnego wyjaśnienia.
         viewModelScope.launch(failureHandler("odbudowa spisu")) {
-            runCatching {
-                repo.rebuildIfEmpty { done, total ->
-                    _progress.value = words.refreshingIndex(done, total)
+            runCatching { repo.scheduleRebuildIfEmpty() }
+        }
+
+        // Koniec odbudowy zleconej z tego ekranu: znak „gotowe" albo powód.
+        viewModelScope.launch(failureHandler("koniec odbudowy spisu")) {
+            rebuild.collect { state ->
+                if (state == null || state.id != requestedRebuild || !state.finished) return@collect
+                requestedRebuild = null
+                val failure = state.failure
+                if (failure != null) {
+                    _error.value = failure.ifBlank { words.actionFailed }
+                } else {
+                    _indexRebuilt.value = true
                 }
             }
-            _progress.value = null
         }
     }
 
@@ -587,16 +616,15 @@ class LibraryViewModel(
         _indexRebuilt.value = false
     }
 
-    fun rebuildIndex() = inBackground {
+    /** Zlecona z tego ekranu odbudowa - po jej końcu pokazuje się „gotowe". */
+    private var requestedRebuild: java.util.UUID? = null
+
+    fun rebuildIndex() {
         _indexRebuilt.value = false
-        // Całe zdanie, nie sam ogon: pasek postępu pokazuje to, co dostanie,
-        // a chodzi nim także zapis folderu i robota na wielu wpisach naraz.
-        _progress.value = "${words.libRebuilding} ${words.walkingLibrary}"
-        repo.rebuildIndex { done, total ->
-            _progress.value = "${words.libRebuilding} ${words.checkingProgress(done, total)}"
+        requestedRebuild = runCatching { repo.scheduleRebuild() }.getOrElse { failure ->
+            _error.value = failure.message ?: words.actionFailed
+            null
         }
-        _progress.value = null
-        _indexRebuilt.value = true
     }
 
     private fun inBackground(block: suspend () -> Unit) {

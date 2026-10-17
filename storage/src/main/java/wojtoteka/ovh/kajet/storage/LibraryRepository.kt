@@ -21,7 +21,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
@@ -206,6 +209,9 @@ class LibraryRepository(
       telefonie brakiem pamięci i notatkami, których nie udało się przeczytać.
     */
     private val fullReads = Semaphore(2)
+
+    /** Jedna odbudowa spisu naraz - zadanie w tle i synchronizacja nie piszą tego samego dwa razy. */
+    private val rebuildLock = Mutex()
 
     /**
      * Notatki, których nie udało się przeczytać przy uzupełnianiu spisu w tym
@@ -1584,35 +1590,76 @@ class LibraryRepository(
     // settings. A silent return there looks exactly like a dead button - the
     // person taps it and nothing happens, not even a word about the folder
     // being gone. The automatic rebuild above stays silent on purpose.
+    //
+    // Spisu nie czyścimy na starcie. Odbudowa nadpisuje wiersz po wierszu,
+    // a zdejmuje tylko te, których plików nie znalazła - i dopiero na końcu
+    // pełnego przejścia. Przerwana (zamknięta aplikacja, wyłączony telefon)
+    // zostawia więc spis stary albo częściowo odświeżony, a nie pusty albo
+    // połowiczny, jak dawniej po `clear()` na początku.
     suspend fun rebuildIndex(progress: ((done: Int, total: Int) -> Unit)? = null) = withContext(io) {
-        val store = requireStore()
-        dao.clear()
+        rebuildLock.withLock {
+            val store = requireStore()
 
-        // Gwiazdki na plikach przeżywają odbudowę, bo leżą w ustawieniach,
-        // a nie w spisie. Wracają do świeżych wierszy tutaj.
-        val starred = starredFiles()
+            // Gwiazdki na plikach przeżywają odbudowę, bo leżą w ustawieniach,
+            // a nie w spisie. Wracają do świeżych wierszy tutaj.
+            val starred = starredFiles()
 
-        // A listing of everything first, so we can show how much is still left.
-        val items = ArrayList<LibraryItem>(128)
-        store.walkTree { items += it }
+            // A listing of everything first, so we can show how much is still left.
+            progress?.invoke(0, 0)
+            val items = ArrayList<LibraryItem>(128)
+            val complete = store.walk { items += it }
 
-        items.forEachIndexed { number, item ->
-            if (item.type == ItemType.NOTE) {
-                val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
-                if (document != null) {
-                    writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+            val seen = HashSet<String>(items.size * 2)
+            items.forEachIndexed { number, item ->
+                ensureActive()
+                seen += item.documentUri
+                if (item.type == ItemType.NOTE) {
+                    val document = fullReads.withPermit {
+                        runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
+                    }
+                    if (document != null) {
+                        writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+                    } else {
+                        dao.upsertKeepingOpened(item.toIndexEntry())
+                    }
                 } else {
-                    dao.upsertKeepingOpened(item.toIndexEntry())
+                    dao.upsertKeepingOpened(
+                        item.toIndexEntry().copy(favorite = item.path in starred),
+                    )
                 }
-            } else {
-                dao.upsertKeepingOpened(
-                    item.toIndexEntry().copy(favorite = item.path in starred),
-                )
+                progress?.invoke(number + 1, items.size)
             }
-            progress?.invoke(number + 1, items.size)
+
+            // Wiersze po plikach, których przejście nie znalazło - tylko po
+            // pełnym przejściu, bo inaczej brak w spisie nic nie znaczy.
+            if (complete) {
+                for (row in dao.allEntries()) {
+                    if (row.documentUri in seen) continue
+                    dao.delete(row.documentUri)
+                    dao.deleteContent(row.documentUri)
+                }
+            }
+            refresh()
         }
-        refresh()
     }
+
+    /**
+     * Odbudowa spisu jako zadanie systemu - idzie dalej, gdy ktoś wyjdzie
+     * z aplikacji, bo nie chce czekać. [restart] przerywa trwającą i zaczyna
+     * od nowa (nowy folder, przycisk w ustawieniach). Zwraca numer zlecenia.
+     */
+    fun scheduleRebuild(restart: Boolean = true): java.util.UUID =
+        IndexRebuildWork.start(context, restart)
+
+    /** Odbudowa, gdy spis jest pusty, a biblioteka nie - po aktualizacji albo przerwanym pierwszym wczytaniu. */
+    suspend fun scheduleRebuildIfEmpty() = withContext(io) {
+        if (dao.count() > 0) return@withContext
+        val store = store() ?: return@withContext
+        if (store.list("").isEmpty()) return@withContext
+        scheduleRebuild(restart = false)
+    }
+
+    fun rebuildState(): Flow<RebuildState?> = IndexRebuildWork.state(context)
 
     private suspend fun reindexBranch(path: String) {
         val store = store() ?: return

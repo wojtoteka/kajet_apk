@@ -248,4 +248,44 @@ class LibraryFolderContentTest {
         assertThat(shown[1].items.map { it.name }).containsExactly("Dobra", "Zepsuta")
         assertThat(runBlocking { repository.allNoteIds() }.map { it.first }).containsExactly("Dobra.note")
     }
+
+    @Test
+    fun `an interrupted rebuild leaves the index as it was, not half empty`() {
+        runBlocking {
+            repeat(5) { number -> repository.createNote("", "Notatka $number", NoteKind.TEXT) }
+        }
+
+        val interrupted = runCatching {
+            runBlocking {
+                repository.rebuildIndex { done, _ ->
+                    if (done == 2) throw kotlinx.coroutines.CancellationException("wyjście z aplikacji")
+                }
+            }
+        }
+
+        assertThat(interrupted.isFailure).isTrue()
+        assertThat(runBlocking { repository.allNoteIds() }).hasSize(5)
+    }
+
+    @Test
+    fun `a full rebuild drops rows of files that are gone and keeps what was opened`() {
+        val opened = runBlocking { repository.createNote("", "Otwierana", NoteKind.TEXT) }
+        runBlocking {
+            repository.rememberOpened(opened)
+            database.index().upsert(
+                wojtoteka.ovh.kajet.storage.index.IndexEntry(
+                    documentUri = "uri:nieistniejaca",
+                    documentId = "nieistniejaca",
+                    path = "Nie ma.note",
+                    name = "Nie ma",
+                    type = "NOTE",
+                ),
+            )
+        }
+
+        runBlocking { repository.rebuildIndex() }
+
+        assertThat(runBlocking { repository.allNoteIds() }.map { it.first }).containsExactly("Otwierana.note")
+        assertThat(runBlocking { repository.recent().first() }.map { it.name }).containsExactly("Otwierana")
+    }
 }
