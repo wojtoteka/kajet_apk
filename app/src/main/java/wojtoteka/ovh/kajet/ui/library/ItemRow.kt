@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import wojtoteka.ovh.kajet.core.design.FolderColor
 import wojtoteka.ovh.kajet.core.design.Kajet
 import wojtoteka.ovh.kajet.core.design.component.IconAction
+import wojtoteka.ovh.kajet.core.design.component.PreviewDrawing
 import wojtoteka.ovh.kajet.core.design.component.StrokePreview
 import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
@@ -335,30 +336,34 @@ private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
     val words = LocalStrings.current
     /*
       Miniatura przychodzi gotowa ze spisu (powstaje przy zapisie notatki),
-      a nie z odczytu całej notatki przy każdym pokazaniu wiersza. Kształty
-      dostają obrys dopiero tutaj, bo ich geometria siedzi w module atramentu.
-      Do chwili jej nadejścia wiersz ma już swoją wysokość, a pasek jest
-      pusty - bez napisu „Pusta strona", który zaraz by zniknął.
+      a nie z odczytu całej notatki przy każdym pokazaniu wiersza. Ścieżki
+      do narysowania składają się w tle - kształty dostają przy tym obrys,
+      bo ich geometria siedzi w module atramentu - więc wiersz wjeżdżający na
+      ekran przy przewijaniu tylko je rysuje. Do tej chwili wiersz ma już
+      swoją wysokość, a pasek jest pusty - bez napisu „Pusta strona", który
+      zaraz by zniknął.
     */
-    var outlines by remember(item.documentUri, item.updatedAt) { mutableStateOf<List<FloatArray>?>(null) }
+    var ready by remember(item.documentUri, item.updatedAt) { mutableStateOf(false) }
+    var drawing by remember(item.documentUri, item.updatedAt) { mutableStateOf<PreviewDrawing?>(null) }
 
     LaunchedEffect(item.documentUri, item.updatedAt) {
         val thumbnail = runCatching { repo.thumbnail(item) }.getOrNull()
-        outlines = withContext(Dispatchers.Default) {
+        drawing = withContext(Dispatchers.Default) {
             val lines = thumbnail?.lines.orEmpty().map { line -> FloatArray(line.size) { line[it].toFloat() } }
             // Figura zamknięta wraca do pierwszego punktu, żeby obrys się domykał.
             val shapes = thumbnail?.shapes.orEmpty().map { shape ->
                 val points = ShapeGeometry.points(shape)
                 if (shape.kind.open) points else points + floatArrayOf(points[0], points[1])
             }
-            lines + shapes
+            PreviewDrawing.of(lines + shapes)
         }
+        ready = true
     }
 
-    val shown = outlines
+    val shown = drawing
     when {
-        shown == null -> Spacer(Modifier.height(34.dp))
-        shown.isEmpty() -> {
+        !ready -> Spacer(Modifier.height(34.dp))
+        shown == null -> {
             Text(
                 text = words.emptyPage,
                 style = Kajet.type.meta,
@@ -373,13 +378,12 @@ private fun HandwritingThumbnail(item: LibraryItem, repo: LibraryRepository) {
                 .background(Kajet.colors.desk),
         ) {
             StrokePreview(
-                strokes = emptyList(),
+                drawing = shown,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(34.dp)
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 color = Kajet.colors.muted,
-                outlines = shown,
             )
         }
     }
