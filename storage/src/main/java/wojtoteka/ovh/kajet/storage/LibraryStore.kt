@@ -2,6 +2,7 @@ package wojtoteka.ovh.kajet.storage
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
@@ -19,7 +20,7 @@ import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.core.model.TextContent
 import java.io.IOException
 import java.util.UUID
-import wojtoteka.ovh.kajet.core.text.cannotReadFile
+import java.util.concurrent.ConcurrentHashMap
 import wojtoteka.ovh.kajet.core.text.entryGone
 import wojtoteka.ovh.kajet.core.text.fileGone
 import wojtoteka.ovh.kajet.core.text.fileGoneFromBin
@@ -31,12 +32,72 @@ import wojtoteka.ovh.kajet.core.text.noteGoneUnsaved
 import wojtoteka.ovh.kajet.core.text.noteUnreadable
 import wojtoteka.ovh.kajet.core.text.renameFailed
 
+/** Zapisana notatka: adres jej katalogu i treść z datą, która trafiła na dysk. */
+data class SavedNote(
+    val documentUri: String,
+    val document: NoteDocument,
+)
+
+/**
+ * Co leży pod ścieżką. „Nie ma" i „nie wiadomo" to dwie różne odpowiedzi:
+ * pierwsza pozwala posprzątać po wpisie, druga każe niczego nie ruszać.
+ */
+internal sealed interface PathLookup {
+    class Found(val entry: DiskEntry) : PathLookup
+    data object Missing : PathLookup
+    data object Unknown : PathLookup
+}
+
+/** Zawartość folderu z dysku - z tym samym rozróżnieniem co [PathLookup]. */
+internal sealed interface FolderListing {
+    /** [complete] fałszywe, gdy któregoś podfolderu nie dało się zajrzeć do środka. */
+    class Found(val items: List<LibraryItem>, val complete: Boolean) : FolderListing
+    data object Missing : FolderListing
+    data object Unknown : FolderListing
+}
+
+/** Opisy folderów z jednego przejścia po drzewie, patrz [LibraryStore.allFolderMetas]. */
+internal class FolderMetas(
+    val byPath: Map<String, FolderMeta>,
+    val complete: Boolean,
+)
+
 class LibraryStore(
     private val resolver: ContentResolver,
     val root: DocumentFile,
 ) {
 
     val rootUri: String get() = root.uri.toString()
+
+    private val rootEntry = DiskEntry(
+        uri = root.uri,
+        name = "",
+        mime = DocumentsContract.Document.MIME_TYPE_DIR,
+        lastModified = 0L,
+        size = 0L,
+    )
+
+    /*
+      Opisy folderów (folder.json) z ostatniego odczytu.
+
+      Każde wejście do folderu czytało folder.json każdego podfolderu od nowa,
+      choć te pliki zmieniają się tylko przy zmianie nazwy albo wyglądu. Wpis
+      jest ważny, dopóki plik ma tę samą datę i ten sam rozmiar, a własny zapis
+      wyrzuca go od razu.
+    */
+    private class CachedMeta(val lastModified: Long, val size: Long, val meta: FolderMeta)
+
+    private val folderMetas = ConcurrentHashMap<String, CachedMeta>()
+
+    /*
+      Identyfikatory notatek z każdego wpisu kosza.
+
+      Synchronizacja pyta o zawartość kosza przy każdym przebiegu, a żeby
+      poznać identyfikator, trzeba przeczytać plik notatki. Wpis kosza się
+      nie zmienia - zmienia się tylko przez kasowanie z niego, które tę
+      pamięć czyści - więc wystarczy przeczytać go raz.
+    */
+    private val slotNoteIds = ConcurrentHashMap<String, List<String>>()
 
     // Finding places in the tree
 
@@ -45,18 +106,41 @@ class LibraryStore(
         var current: DocumentFile = root
         for (part in path.split('/')) {
             if (part.isEmpty()) continue
-            val next = current.findFile(part) ?: return null
-            if (!next.isDirectory) return null
-            current = next
+            val next = DiskFiles.locate(resolver, current, part) ?: return null
+            if (!next.entry.isDirectory) return null
+            current = next.file
         }
         return current
     }
 
-    fun entry(path: String): DocumentFile? {
-        if (path.isBlank()) return root
+    fun entry(path: String): DocumentFile? = located(path)?.file
+
+    /** Wpis pod ścieżką razem z jego opisem - do zmian na dysku. */
+    internal fun located(path: String): Located? {
+        if (path.isBlank()) return Located(root, rootEntry)
         val parent = folder(path.substringBeforeLast('/', "")) ?: return null
-        return parent.findFile(path.substringAfterLast('/'))
+        return DiskFiles.locate(resolver, parent, path.substringAfterLast('/'))
     }
+
+    /**
+     * Wpis pod ścieżką, tylko do czytania - jedno zapytanie na poziom drzewa,
+     * bez obiektów DocumentFile, które są potrzebne dopiero do zmian.
+     */
+    internal fun lookup(path: String): PathLookup {
+        var current = rootEntry
+        for (part in path.split('/')) {
+            if (part.isEmpty()) continue
+            if (!current.isDirectory) return PathLookup.Missing
+            val inside = DiskFiles.children(resolver, current.uri) ?: return PathLookup.Unknown
+            current = inside.firstOrNull { it.name == part } ?: return PathLookup.Missing
+        }
+        return PathLookup.Found(current)
+    }
+
+    internal fun describe(path: String): DiskEntry? = (lookup(path) as? PathLookup.Found)?.entry
+
+    private fun noteFolder(path: String): DocumentFile? =
+        located(path)?.takeIf { it.entry.isDirectory }?.file
 
     private fun requireFolder(path: String): DocumentFile =
         folder(path) ?: throw IOException(
@@ -65,17 +149,39 @@ class LibraryStore(
 
     // Reading the content of a folder
 
-    fun list(path: String): List<LibraryItem> {
-        val folder = folder(path) ?: return emptyList()
-        return folder.listFiles()
-            .mapNotNull { toItem(it, path) }
-            .sortedWith(libraryOrder)
+    fun list(path: String): List<LibraryItem> =
+        (listing(path) as? FolderListing.Found)?.items.orEmpty()
+
+    internal fun listing(path: String): FolderListing {
+        val folder = when (val found = lookup(path)) {
+            is PathLookup.Found -> found.entry.takeIf { it.isDirectory } ?: return FolderListing.Missing
+            PathLookup.Missing -> return FolderListing.Missing
+            PathLookup.Unknown -> return FolderListing.Unknown
+        }
+        val inside = DiskFiles.children(resolver, folder.uri) ?: return FolderListing.Unknown
+        var complete = true
+        val items = inside.mapNotNull { child ->
+            if (child.isDirectory && !FileNames.isNote(child.name) && !FileNames.isHidden(child.name)) {
+                val nested = DiskFiles.children(resolver, child.uri)
+                if (nested == null) complete = false
+                folderItem(child, path, nested)
+            } else {
+                toItem(child, path)
+            }
+        }
+        return FolderListing.Found(items.sortedWith(libraryOrder), complete)
     }
 
-    private fun toItem(file: DocumentFile, parentPath: String): LibraryItem? {
-        val name = file.name ?: return null
+    /** Jeden wpis pod ścieżką w tym samym kształcie co w spisie folderu. */
+    internal fun item(path: String): LibraryItem? {
+        val entry = describe(path) ?: return null
+        return toItem(entry, path.substringBeforeLast('/', ""))
+    }
+
+    private fun toItem(file: DiskEntry, parentPath: String): LibraryItem? {
+        val name = file.name
         if (FileNames.isHidden(name)) return null
-        val path = if (parentPath.isEmpty()) name else "$parentPath/$name"
+        val path = childPath(parentPath, name)
 
         return when {
             file.isDirectory && FileNames.isNote(name) -> {
@@ -85,32 +191,12 @@ class LibraryStore(
                     name = FileNames.withoutNoteExtension(name),
                     type = ItemType.NOTE,
                     documentUri = file.uri.toString(),
-                    updatedAt = file.lastModified(),
+                    updatedAt = file.lastModified,
                     noteKind = null,
                 )
             }
 
-            file.isDirectory -> {
-                val meta = readFolderMeta(file)
-                LibraryItem(
-                    id = meta?.id ?: file.uri.toString(),
-                    path = path,
-                    name = meta?.displayName ?: name,
-                    type = ItemType.FOLDER,
-                    documentUri = file.uri.toString(),
-                    updatedAt = file.lastModified(),
-                    colorId = meta?.colorId,
-                    iconId = meta?.iconId,
-                    // Liczymy to, co widać w folderze. Plik z jego barwą i ikoną
-                    // to nie wpis - przez niego pusty folder meldował „1 wpis".
-                    childCount = file.listFiles().count { child ->
-                        val childName = child.name
-                        childName != null &&
-                            !FileNames.isHidden(childName) &&
-                            childName != FolderMeta.FILE
-                    },
-                )
-            }
+            file.isDirectory -> folderItem(file, parentPath, DiskFiles.children(resolver, file.uri))
 
             else -> {
                 val language = CodeLanguage.fromExtension(name)
@@ -121,24 +207,59 @@ class LibraryStore(
                     name = name,
                     type = if (language != null) ItemType.CODE_FILE else ItemType.OTHER_FILE,
                     documentUri = file.uri.toString(),
-                    updatedAt = file.lastModified(),
+                    updatedAt = file.lastModified,
                     language = language,
                 )
             }
         }
     }
 
+    /** [inside] null - zawartości nie dało się przeczytać; folder bez opisu i licznika. */
+    private fun folderItem(file: DiskEntry, parentPath: String, inside: List<DiskEntry>?): LibraryItem {
+        val meta = inside?.let(::folderMetaIn)
+        return LibraryItem(
+            id = meta?.id ?: file.uri.toString(),
+            path = childPath(parentPath, file.name),
+            name = meta?.displayName ?: file.name,
+            type = ItemType.FOLDER,
+            documentUri = file.uri.toString(),
+            updatedAt = file.lastModified,
+            colorId = meta?.colorId,
+            iconId = meta?.iconId,
+            // Liczymy to, co widać w folderze. Plik z jego barwą i ikoną
+            // to nie wpis - przez niego pusty folder meldował „1 wpis".
+            childCount = inside?.count { child ->
+                !FileNames.isHidden(child.name) && child.name != FolderMeta.FILE
+            } ?: 0,
+        )
+    }
+
     // Folders
 
-    fun readFolderMeta(folder: DocumentFile): FolderMeta? {
-        val file = folder.findFile(FolderMeta.FILE) ?: return null
-        if (!file.isFile) return null
-        return runCatching { NoteCodec.decodeFolder(DiskFiles.readText(resolver, file)) }.getOrNull()
+    fun readFolderMeta(folder: DocumentFile): FolderMeta? =
+        DiskFiles.children(resolver, folder.uri)?.let(::folderMetaIn)
+
+    private fun folderMetaIn(inside: List<DiskEntry>): FolderMeta? {
+        val file = inside.firstOrNull { it.name == FolderMeta.FILE }?.takeIf { it.isFile } ?: return null
+        val key = file.uri.toString()
+        folderMetas[key]?.let { cached ->
+            if (cached.lastModified > 0L && cached.lastModified == file.lastModified && cached.size == file.size) {
+                return cached.meta
+            }
+        }
+        // Nieudany odczyt nie trafia do pamięci - chwilowy kłopot z magazynem
+        // nie może zostawić folderu bez nazwy i barwy aż do następnej zmiany.
+        val meta = runCatching { NoteCodec.decodeFolder(DiskFiles.readText(resolver, file)) }.getOrNull()
+            ?: return null
+        if (folderMetas.size > MAX_REMEMBERED) folderMetas.clear()
+        folderMetas[key] = CachedMeta(file.lastModified, file.size, meta)
+        return meta
     }
 
     fun writeFolderMeta(folder: DocumentFile, meta: FolderMeta) {
-        val file = DiskFiles.fileForWrite(folder, FolderMeta.FILE, DiskFiles.MIME_JSON)
+        val file = DiskFiles.fileForWrite(resolver, folder, FolderMeta.FILE, DiskFiles.MIME_JSON)
         DiskFiles.writeText(resolver, file, NoteCodec.encodeFolder(meta))
+        folderMetas.remove(file.uri.toString())
     }
 
     fun createFolder(
@@ -151,7 +272,7 @@ class LibraryStore(
         id: String? = null,
     ): LibraryItem {
         val parent = requireFolder(parentPath)
-        val nameOnDisk = FileNames.unique(name, DiskFiles.occupiedNames(parent))
+        val nameOnDisk = FileNames.unique(name, DiskFiles.occupiedNames(resolver, parent))
         val folder = parent.createDirectory(nameOnDisk)
             ?: throw IOException(words.folderCreateFailed(name))
 
@@ -166,7 +287,7 @@ class LibraryStore(
         )
         writeFolderMeta(folder, meta)
 
-        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        val path = childPath(parentPath, nameOnDisk)
         return LibraryItem(
             id = meta.id,
             path = path,
@@ -204,7 +325,7 @@ class LibraryStore(
         val parent = requireFolder(parentPath)
         val nameOnDisk = FileNames.unique(
             name = title,
-            occupied = DiskFiles.occupiedNames(parent),
+            occupied = DiskFiles.occupiedNames(resolver, parent),
             extension = NoteDocument.EXTENSION,
         )
         val folder = parent.createDirectory(nameOnDisk)
@@ -231,7 +352,7 @@ class LibraryStore(
         )
         writeDocument(folder, document)
 
-        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        val path = childPath(parentPath, nameOnDisk)
         return LibraryItem(
             id = document.id,
             path = path,
@@ -250,53 +371,84 @@ class LibraryStore(
     )
 
     fun readNote(path: String): NoteDocument {
-        val folder = entry(path)?.takeIf { it.isDirectory }
+        val folder = describe(path)?.takeIf { it.isDirectory }
             ?: throw IOException(words.noteGone(path))
-        return readDocument(folder)
+        return readDocumentIn(folder.uri) { folder.name }
     }
 
-    fun readDocument(noteFolder: DocumentFile): NoteDocument {
-        val main = noteFolder.findFile(NoteDocument.CONTENT_FILE)
-        if (main != null && main.isFile) {
-            val result = runCatching { NoteCodec.decodeNote(DiskFiles.readText(resolver, main)) }
-            result.getOrNull()?.let { return it }
-        }
-        val backup = noteFolder.findFile(BACKUP_FILE)
-        if (backup != null && backup.isFile) {
-            val result = runCatching { NoteCodec.decodeNote(DiskFiles.readText(resolver, backup)) }
+    /** Notatka po adresie katalogu ze spisu - bez schodzenia po ścieżce. */
+    internal fun readNoteAt(documentUri: String): NoteDocument {
+        val uri = Uri.parse(documentUri)
+        return readDocumentIn(uri) { uri.lastPathSegment }
+    }
+
+    fun readDocument(noteFolder: DocumentFile): NoteDocument =
+        readDocumentIn(noteFolder.uri) { noteFolder.name }
+
+    private fun readDocumentIn(noteFolder: Uri, folderName: () -> String?): NoteDocument {
+        val inside = DiskFiles.children(resolver, noteFolder).orEmpty()
+        for (name in CONTENT_FILES) {
+            val file = inside.firstOrNull { it.name == name }?.takeIf { it.isFile } ?: continue
+            val result = runCatching { NoteCodec.decodeNote(DiskFiles.readText(resolver, file)) }
             result.getOrNull()?.let { return it }
         }
         throw FormatException(
-            words.noteUnreadable(noteFolder.name),
+            words.noteUnreadable(folderName()),
         )
     }
 
-    fun writeNote(path: String, document: NoteDocument) {
-        val folder = entry(path)?.takeIf { it.isDirectory }
-            ?: throw IOException(words.noteGoneUnsaved(path))
-        writeDocument(folder, document)
+    /**
+     * Sam identyfikator notatki - bez budowania całej treści. Kosz pyta o to
+     * przy każdej synchronizacji, a pełny odczyt notatki odręcznej to tysiące
+     * punktów kreski, z których nic tu nie jest potrzebne.
+     */
+    private fun noteIdIn(noteFolder: Uri): String? {
+        val inside = DiskFiles.children(resolver, noteFolder).orEmpty()
+        for (name in CONTENT_FILES) {
+            val file = inside.firstOrNull { it.name == name }?.takeIf { it.isFile } ?: continue
+            runCatching { NoteCodec.decodeNoteId(DiskFiles.readText(resolver, file)) }.getOrNull()?.let { return it }
+        }
+        return null
     }
 
-    fun writeDocument(noteFolder: DocumentFile, document: NoteDocument) {
-        val content = NoteCodec.encodeNote(document.copy(updatedAt = System.currentTimeMillis()))
-        val backup = DiskFiles.fileForWrite(noteFolder, BACKUP_FILE, DiskFiles.MIME_JSON)
-        DiskFiles.writeText(resolver, backup, content)
-        val main = DiskFiles.fileForWrite(noteFolder, NoteDocument.CONTENT_FILE, DiskFiles.MIME_JSON)
-        DiskFiles.writeText(resolver, main, content)
+    fun writeNote(path: String, document: NoteDocument): SavedNote {
+        val folder = noteFolder(path)
+            ?: throw IOException(words.noteGoneUnsaved(path))
+        return SavedNote(folder.uri.toString(), writeDocument(folder, document))
+    }
+
+    /** Zwraca treść w takiej postaci, w jakiej trafiła na dysk - z datą zapisu. */
+    fun writeDocument(noteFolder: DocumentFile, document: NoteDocument): NoteDocument {
+        val stamped = document.copy(updatedAt = System.currentTimeMillis())
+        val content = NoteCodec.encodeNote(stamped)
+        // Oba pliki leżą w tym samym katalogu, więc spis wystarczy na dwa zapisy.
+        val inside = DiskFiles.children(resolver, noteFolder.uri)
+        if (inside == null) {
+            val backup = DiskFiles.fileForWrite(resolver, noteFolder, BACKUP_FILE, DiskFiles.MIME_JSON)
+            DiskFiles.writeText(resolver, backup, content)
+            val main = DiskFiles.fileForWrite(resolver, noteFolder, NoteDocument.CONTENT_FILE, DiskFiles.MIME_JSON)
+            DiskFiles.writeText(resolver, main, content)
+            return stamped
+        }
+        val backup = DiskFiles.uriForWrite(inside, noteFolder, BACKUP_FILE, DiskFiles.MIME_JSON)
+        DiskFiles.writeText(resolver, backup, content, BACKUP_FILE)
+        val main = DiskFiles.uriForWrite(inside, noteFolder, NoteDocument.CONTENT_FILE, DiskFiles.MIME_JSON)
+        DiskFiles.writeText(resolver, main, content, NoteDocument.CONTENT_FILE)
+        return stamped
     }
 
     // Note attachments
 
     fun assetsFolder(noteFolder: DocumentFile): DocumentFile =
-        DiskFiles.folderForWrite(noteFolder, NoteDocument.ASSETS_DIRECTORY)
+        DiskFiles.folderForWrite(resolver, noteFolder, NoteDocument.ASSETS_DIRECTORY)
 
     fun writeAttachment(notePath: String, name: String, data: ByteArray, mime: String): String {
-        val folder = entry(notePath)?.takeIf { it.isDirectory }
+        val folder = noteFolder(notePath)
             ?: throw IOException(words.noteGone(notePath))
         val assets = assetsFolder(folder)
         val nameOnDisk = FileNames.unique(
             name = name.substringBeforeLast('.'),
-            occupied = DiskFiles.occupiedNames(assets),
+            occupied = DiskFiles.occupiedNames(resolver, assets),
             extension = "." + name.substringAfterLast('.', "bin"),
         )
         val file = DiskFiles.createFile(assets, nameOnDisk, mime)
@@ -306,18 +458,30 @@ class LibraryStore(
 
     /** Overwrite-or-create under the exact name (sync pull; markdown links stay valid). */
     fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) {
-        val folder = entry(notePath)?.takeIf { it.isDirectory }
+        val folder = noteFolder(notePath)
             ?: throw IOException(words.noteGone(notePath))
         val assets = assetsFolder(folder)
-        val file = DiskFiles.fileForWrite(assets, name, mime)
+        val file = DiskFiles.fileForWrite(resolver, assets, name, mime)
         DiskFiles.writeBytes(resolver, file, data)
     }
 
+    private fun attachment(notePath: String, name: String): DiskEntry? {
+        // Nazwa z ukośnikiem nie jest nazwą pliku w assets - i nie może
+        // sięgnąć do innego katalogu niż ten jeden.
+        if (name.isEmpty() || name.contains('/')) return null
+        return describe("$notePath/${NoteDocument.ASSETS_DIRECTORY}/$name")?.takeIf { it.isFile }
+    }
+
     fun readAttachment(notePath: String, name: String): ByteArray? {
-        val folder = entry(notePath)?.takeIf { it.isDirectory } ?: return null
-        val assets = folder.findFile(NoteDocument.ASSETS_DIRECTORY) ?: return null
-        val file = assets.findFile(name)?.takeIf { it.isFile } ?: return null
+        val file = attachment(notePath, name) ?: return null
         return runCatching { DiskFiles.readBytes(resolver, file) }.getOrNull()
+    }
+
+    /** Nazwy plików w assets notatki. */
+    internal fun attachmentNames(notePath: String): List<String> {
+        val assets = describe("$notePath/${NoteDocument.ASSETS_DIRECTORY}")?.takeIf { it.isDirectory }
+            ?: return emptyList()
+        return DiskFiles.children(resolver, assets.uri).orEmpty().filter { it.isFile }.map { it.name }
     }
 
     /**
@@ -325,17 +489,15 @@ class LibraryStore(
      * Zwraca, czy coś faktycznie zniknęło z dysku.
      */
     fun deleteAttachment(notePath: String, name: String): Boolean {
-        val folder = entry(notePath)?.takeIf { it.isDirectory } ?: return false
-        val assets = folder.findFile(NoteDocument.ASSETS_DIRECTORY) ?: return false
-        val file = assets.findFile(name)?.takeIf { it.isFile } ?: return false
-        return runCatching { file.delete() }.getOrDefault(false)
+        val file = attachment(notePath, name) ?: return false
+        return runCatching { DiskFiles.deleteDocument(resolver, file.uri) }.getOrDefault(false)
     }
 
     fun writeInlineDrawing(notePath: String, name: String, drawing: DrawingSource) {
-        val folder = entry(notePath)?.takeIf { it.isDirectory }
+        val folder = noteFolder(notePath)
             ?: throw IOException(words.noteGone(notePath))
         val assets = assetsFolder(folder)
-        val file = DiskFiles.fileForWrite(assets, name, DiskFiles.MIME_JSON)
+        val file = DiskFiles.fileForWrite(resolver, assets, name, DiskFiles.MIME_JSON)
         DiskFiles.writeText(resolver, file, NoteCodec.encodeDrawing(drawing))
     }
 
@@ -352,13 +514,13 @@ class LibraryStore(
         val fullName = if (name.endsWith(extension)) name else name + extension
         val nameOnDisk = FileNames.unique(
             name = fullName.substringBeforeLast('.'),
-            occupied = DiskFiles.occupiedNames(parent),
+            occupied = DiskFiles.occupiedNames(resolver, parent),
             extension = extension,
         )
         val file = DiskFiles.createFile(parent, nameOnDisk, DiskFiles.MIME_TEXT)
         DiskFiles.writeText(resolver, file, codeTemplate(language))
 
-        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        val path = childPath(parentPath, nameOnDisk)
         return LibraryItem(
             id = file.uri.toString(),
             path = path,
@@ -379,14 +541,14 @@ class LibraryStore(
         val extension = if (fileName.contains('.')) "." + fileName.substringAfterLast('.') else ""
         val nameOnDisk = FileNames.unique(
             name = fileName.removeSuffix(extension),
-            occupied = DiskFiles.occupiedNames(parent),
+            occupied = DiskFiles.occupiedNames(resolver, parent),
             extension = extension,
         )
         val file = DiskFiles.createFile(parent, nameOnDisk, DiskFiles.MIME_TEXT)
         DiskFiles.writeText(resolver, file, content)
 
         val language = CodeLanguage.fromExtension(nameOnDisk)
-        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        val path = childPath(parentPath, nameOnDisk)
         return LibraryItem(
             id = file.uri.toString(),
             path = path,
@@ -408,7 +570,7 @@ class LibraryStore(
         val extension = if (named.contains('.')) "." + named.substringAfterLast('.') else ""
         val nameOnDisk = FileNames.unique(
             name = named.removeSuffix(extension),
-            occupied = DiskFiles.occupiedNames(parent),
+            occupied = DiskFiles.occupiedNames(resolver, parent),
             extension = extension,
         )
         val type = mime.ifBlank { "application/octet-stream" }
@@ -416,7 +578,7 @@ class LibraryStore(
         DiskFiles.copyUri(resolver, source, file)
 
         val language = CodeLanguage.fromExtension(nameOnDisk)
-        val path = if (parentPath.isEmpty()) nameOnDisk else "$parentPath/$nameOnDisk"
+        val path = childPath(parentPath, nameOnDisk)
         return LibraryItem(
             id = file.uri.toString(),
             path = path,
@@ -429,19 +591,19 @@ class LibraryStore(
     }
 
     fun readText(path: String): String {
-        val file = entry(path)?.takeIf { it.isFile }
+        val file = describe(path)?.takeIf { it.isFile }
             ?: throw IOException(words.fileGone(path))
         return DiskFiles.readText(resolver, file)
     }
 
     fun readTextUpTo(path: String, maxBytes: Int): BoundedTextRead {
-        val file = entry(path)?.takeIf { it.isFile }
+        val file = describe(path)?.takeIf { it.isFile }
             ?: throw IOException(words.fileGone(path))
-        val declared = file.length().coerceAtLeast(0L)
+        val declared = file.size.coerceAtLeast(0L)
         if (declared > maxBytes) {
             return BoundedTextRead.TooLarge(declared, file.uri.toString())
         }
-        val bytes = DiskFiles.readBytesUpTo(resolver, file, maxBytes)
+        val bytes = DiskFiles.readBytesUpTo(resolver, file.uri, file.size, maxBytes, file.name)
             ?: return BoundedTextRead.TooLarge(
                 sizeBytes = maxOf(declared, maxBytes.toLong() + 1L),
                 documentUri = file.uri.toString(),
@@ -450,26 +612,28 @@ class LibraryStore(
     }
 
     fun writeText(path: String, content: String) {
-        val file = entry(path)?.takeIf { it.isFile }
+        val file = describe(path)?.takeIf { it.isFile }
             ?: throw IOException(words.fileGoneUnsaved(path))
-        DiskFiles.writeText(resolver, file, content)
+        DiskFiles.writeText(resolver, file.uri, content, file.name)
     }
 
     // Renaming, moving, copying
 
     fun rename(path: String, newName: String): String {
-        val entry = entry(path) ?: throw IOException(words.entryGone(path))
-        val parent = folder(path.substringBeforeLast('/', ""))
-            ?: throw IOException(words.noParentFolder)
-        val oldName = entry.name.orEmpty()
+        val parentPath = path.substringBeforeLast('/', "")
+        val parent = folder(parentPath) ?: throw IOException(words.entryGone(path))
+        val found = DiskFiles.locate(resolver, parent, path.substringAfterLast('/'))
+            ?: throw IOException(words.entryGone(path))
+        val entry = found.file
+        val oldName = found.entry.name
 
-        val isNote = entry.isDirectory && FileNames.isNote(oldName)
+        val isNote = found.entry.isDirectory && FileNames.isNote(oldName)
         val extension = when {
             isNote -> NoteDocument.EXTENSION
-            entry.isFile && oldName.contains('.') -> "." + oldName.substringAfterLast('.')
+            found.entry.isFile && oldName.contains('.') -> "." + oldName.substringAfterLast('.')
             else -> ""
         }
-        val occupied = DiskFiles.occupiedNames(parent) - oldName
+        val occupied = DiskFiles.occupiedNames(resolver, parent) - oldName
         val target = FileNames.unique(
             name = newName.removeSuffix(extension),
             occupied = occupied,
@@ -491,7 +655,7 @@ class LibraryStore(
         if (isNote) {
             val document = runCatching { readDocument(entry) }.getOrNull()
             if (document != null) writeDocument(entry, document.copy(title = newName.trim()))
-        } else if (entry.isDirectory) {
+        } else if (found.entry.isDirectory) {
             val meta = readFolderMeta(entry)
             if (meta != null) {
                 writeFolderMeta(
@@ -501,25 +665,24 @@ class LibraryStore(
             }
         }
 
-        val parentPath = path.substringBeforeLast('/', "")
-        return if (parentPath.isEmpty()) target else "$parentPath/$target"
+        return childPath(parentPath, target)
     }
 
     fun move(path: String, targetFolder: String): String {
-        val source = entry(path) ?: throw IOException(words.entryGone(path))
+        val source = describe(path) ?: throw IOException(words.entryGone(path))
         val target = requireFolder(targetFolder)
         if (path == targetFolder || targetFolder.startsWith("$path/")) {
             throw IOException(words.cannotMoveIntoItself)
         }
-        val name = source.name ?: throw IOException(words.entryHasNoName)
+        val name = source.name
         val newName = FileNames.unique(
             name = name.substringBeforeLast('.', name),
-            occupied = DiskFiles.occupiedNames(target),
+            occupied = DiskFiles.occupiedNames(resolver, target),
             extension = if (name.contains('.')) "." + name.substringAfterLast('.') else "",
         )
         DiskFiles.copyRecursively(resolver, source, target, newName)
-        DiskFiles.deleteRecursively(source)
-        val newPath = if (targetFolder.isEmpty()) newName else "$targetFolder/$newName"
+        DiskFiles.deleteRecursively(resolver, source)
+        val newPath = childPath(targetFolder, newName)
         // Przeniesiony folder zmienił rodzica - synchronizacja folderów ma
         // wiedzieć, że ta zmiana jest świeższa niż stan serwera.
         if (source.isDirectory && !FileNames.isNote(name)) {
@@ -533,9 +696,9 @@ class LibraryStore(
     }
 
     fun copy(path: String, targetFolder: String): String {
-        val source = entry(path) ?: throw IOException(words.entryGone(path))
+        val source = describe(path) ?: throw IOException(words.entryGone(path))
         val target = requireFolder(targetFolder)
-        val name = source.name ?: throw IOException(words.entryHasNoName)
+        val name = source.name
         val stem = if (FileNames.isNote(name)) {
             FileNames.withoutNoteExtension(name)
         } else {
@@ -548,14 +711,14 @@ class LibraryStore(
         }
         val newName = FileNames.unique(
             name = "$stem ${words.copySuffix}",
-            occupied = DiskFiles.occupiedNames(target),
+            occupied = DiskFiles.occupiedNames(resolver, target),
             extension = extension,
         )
         DiskFiles.copyRecursively(resolver, source, target, newName)
-        val newPath = if (targetFolder.isEmpty()) newName else "$targetFolder/$newName"
+        val newPath = childPath(targetFolder, newName)
         // Kopia nie może nieść tych samych identyfikatorów co oryginał - dwa
         // wpisy o wspólnym numerze biłyby się o jedną notatkę na serwerze.
-        entry(newPath)?.takeIf { it.isDirectory }?.let { copied ->
+        located(newPath)?.takeIf { it.entry.isDirectory }?.let { copied ->
             regenerateIdsAfterCopy(copied, markAsCopy = true)
         }
         return newPath
@@ -569,13 +732,13 @@ class LibraryStore(
      * więc bez tego kopia i pierwowzór stały obok siebie wyglądając identycznie
      * i nie dało się rozpoznać, którą z nich się otwiera.
      */
-    private fun regenerateIdsAfterCopy(entry: DocumentFile, markAsCopy: Boolean = false) {
-        val name = entry.name.orEmpty()
-        if (FileNames.isNote(name)) {
+    private fun regenerateIdsAfterCopy(entry: Located, markAsCopy: Boolean = false) {
+        val folder = entry.file
+        if (FileNames.isNote(entry.entry.name)) {
             runCatching {
-                val document = readDocument(entry)
+                val document = readDocument(folder)
                 writeDocument(
-                    entry,
+                    folder,
                     document.copy(
                         id = UUID.randomUUID().toString(),
                         title = if (markAsCopy) {
@@ -588,9 +751,9 @@ class LibraryStore(
             }
             return
         }
-        readFolderMeta(entry)?.let { meta ->
+        readFolderMeta(folder)?.let { meta ->
             writeFolderMeta(
-                entry,
+                folder,
                 meta.copy(
                     id = UUID.randomUUID().toString(),
                     displayName = if (markAsCopy) {
@@ -602,9 +765,8 @@ class LibraryStore(
                 ),
             )
         }
-        for (child in entry.listFiles()) {
-            val childName = child.name ?: continue
-            if (child.isDirectory && !FileNames.isHidden(childName)) {
+        for (child in DiskFiles.locatedChildren(resolver, folder).orEmpty()) {
+            if (child.entry.isDirectory && !FileNames.isHidden(child.entry.name)) {
                 regenerateIdsAfterCopy(child)
             }
         }
@@ -612,7 +774,16 @@ class LibraryStore(
 
     // The bin
 
-    private fun trashFolder(): DocumentFile = DiskFiles.folderForWrite(root, TrashEntry.DIRECTORY)
+    private fun trashFolder(): DocumentFile =
+        DiskFiles.folderForWrite(resolver, root, TrashEntry.DIRECTORY)
+
+    /** Wpisy kosza. Pusta lista - kosza nie ma; null - magazyn nie odpowiedział. */
+    private fun trashSlots(): List<DiskEntry>? {
+        val top = DiskFiles.children(resolver, root.uri) ?: return null
+        val trash = top.firstOrNull { it.name == TrashEntry.DIRECTORY }?.takeIf { it.isDirectory }
+            ?: return emptyList()
+        return DiskFiles.children(resolver, trash.uri)
+    }
 
     /**
      * Wyrzuca wpis do kosza. [fromServer] zaznacza, że stoi za tym kasowanie
@@ -620,8 +791,8 @@ class LibraryStore(
      * [TrashEntry.fromServer].
      */
     fun moveToTrash(path: String, fromServer: Boolean = false) {
-        val source = entry(path) ?: throw IOException(words.entryGone(path))
-        val name = source.name ?: throw IOException(words.entryHasNoName)
+        val source = describe(path) ?: throw IOException(words.entryGone(path))
+        val name = source.name
         val trash = trashFolder()
         val id = UUID.randomUUID().toString()
         val slot = trash.createDirectory(id)
@@ -635,7 +806,8 @@ class LibraryStore(
         }
         val visibleName = when (type) {
             ItemType.NOTE -> FileNames.withoutNoteExtension(name)
-            ItemType.FOLDER -> readFolderMeta(source)?.displayName ?: name
+            ItemType.FOLDER ->
+                DiskFiles.children(resolver, source.uri)?.let(::folderMetaIn)?.displayName ?: name
             else -> name
         }
 
@@ -648,49 +820,55 @@ class LibraryStore(
             deletedAt = System.currentTimeMillis(),
             fromServer = fromServer,
         )
-        val descriptionFile = DiskFiles.fileForWrite(slot, TrashEntry.DESC_FILE, DiskFiles.MIME_JSON)
+        val descriptionFile = DiskFiles.fileForWrite(resolver, slot, TrashEntry.DESC_FILE, DiskFiles.MIME_JSON)
         DiskFiles.writeText(resolver, descriptionFile, NoteCodec.json.encodeToString(description))
 
         DiskFiles.copyRecursively(resolver, source, slot, name)
-        DiskFiles.deleteRecursively(source)
+        DiskFiles.deleteRecursively(resolver, source)
     }
 
-    fun listTrash(): List<TrashEntry> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
-        return trash.listFiles()
+    fun listTrash(): List<TrashEntry> =
+        trashSlots().orEmpty()
             .mapNotNull { slot -> if (slot.isDirectory) readTrashDescription(slot) else null }
             .sortedByDescending { it.deletedAt }
-    }
 
-    private fun readTrashDescription(slot: DocumentFile): TrashEntry? {
-        val description = slot.findFile(TrashEntry.DESC_FILE) ?: return null
+    private fun readTrashDescription(slot: DiskEntry): TrashEntry? =
+        DiskFiles.children(resolver, slot.uri)?.let(::trashDescriptionIn)
+
+    private fun trashDescriptionIn(inside: List<DiskEntry>): TrashEntry? {
+        val description = inside.firstOrNull { it.name == TrashEntry.DESC_FILE } ?: return null
         return runCatching {
             NoteCodec.json.decodeFromString<TrashEntry>(DiskFiles.readText(resolver, description))
         }.getOrNull()
     }
 
     fun restore(id: String): String {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory }
+        val trash = DiskFiles.children(resolver, root.uri).orEmpty()
+            .firstOrNull { it.name == TrashEntry.DIRECTORY }
+            ?.takeIf { it.isDirectory }
             ?: throw IOException(words.binEmpty)
-        val slot = trash.findFile(id)?.takeIf { it.isDirectory }
+        val slot = DiskFiles.children(resolver, trash.uri)
+            ?.firstOrNull { it.name == id }
+            ?.takeIf { it.isDirectory }
             ?: throw IOException(words.notInBinAnyMore)
-        val descriptionFile = slot.findFile(TrashEntry.DESC_FILE)
+        val inside = DiskFiles.children(resolver, slot.uri).orEmpty()
+        val descriptionFile = inside.firstOrNull { it.name == TrashEntry.DESC_FILE }
             ?: throw IOException(words.binEntryNoDescription)
         val description =
             NoteCodec.json.decodeFromString<TrashEntry>(DiskFiles.readText(resolver, descriptionFile))
 
-        val source = slot.findFile(description.fileName)
+        val source = inside.firstOrNull { it.name == description.fileName }
             ?: throw IOException(words.fileGoneFromBin(description.fileName))
 
         var target = root
         for (part in description.originalParent.split('/')) {
             if (part.isEmpty()) continue
-            target = DiskFiles.folderForWrite(target, part)
+            target = DiskFiles.folderForWrite(resolver, target, part)
         }
 
         val name = FileNames.unique(
             name = description.fileName.substringBeforeLast('.', description.fileName),
-            occupied = DiskFiles.occupiedNames(target),
+            occupied = DiskFiles.occupiedNames(resolver, target),
             extension = if (description.fileName.contains('.')) {
                 "." + description.fileName.substringAfterLast('.')
             } else {
@@ -698,9 +876,10 @@ class LibraryStore(
             },
         )
         DiskFiles.copyRecursively(resolver, source, target, name)
-        DiskFiles.deleteRecursively(slot)
+        slotNoteIds.remove(id)
+        DiskFiles.deleteRecursively(resolver, slot)
 
-        return if (description.originalParent.isEmpty()) name else "${description.originalParent}/$name"
+        return childPath(description.originalParent, name)
     }
 
     /**
@@ -709,25 +888,33 @@ class LibraryStore(
      * go wtedy do [DeleteRetryQueue] zamiast udawać, że go nie ma.
      */
     fun deleteEntry(path: String): Boolean {
-        val target = entry(path) ?: return true
-        return DiskFiles.deleteRecursively(target)
+        // Pusta ścieżka to cała biblioteka - tego nikt nie kasuje jednym wywołaniem.
+        if (path.isBlank()) return false
+        val target = when (val found = lookup(path)) {
+            is PathLookup.Found -> found.entry
+            PathLookup.Missing -> return true
+            // Magazyn nie odpowiedział - nie wiadomo, czy plik jest, więc
+            // kasowanie wraca do kolejki zamiast zostać uznane za zrobione.
+            PathLookup.Unknown -> return false
+        }
+        return DiskFiles.deleteRecursively(resolver, target)
     }
 
     /** Kasuje wpis kosza. Zwraca false, kiedy coś z niego zostało na dysku. */
     fun deletePermanently(id: String): Boolean {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return true
-        val slot = trash.findFile(id) ?: return true
-        return DiskFiles.deleteRecursively(slot)
+        val slots = trashSlots() ?: return false
+        val slot = slots.firstOrNull { it.name == id } ?: return true
+        slotNoteIds.remove(id)
+        return DiskFiles.deleteRecursively(resolver, slot)
     }
 
     /** Opróżnia kosz. Zwraca identyfikatory wpisów, których nie dało się skasować. */
     fun emptyTrash(): List<String> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory }
-            ?: return emptyList()
+        val slots = trashSlots() ?: return emptyList()
         val failed = mutableListOf<String>()
-        for (slot in trash.listFiles()) {
-            val name = slot.name ?: continue
-            if (!DiskFiles.deleteRecursively(slot)) failed += name
+        for (slot in slots) {
+            slotNoteIds.remove(slot.name)
+            if (!DiskFiles.deleteRecursively(resolver, slot)) failed += slot.name
         }
         return failed
     }
@@ -748,44 +935,54 @@ class LibraryStore(
      * razem z notatkami schowanymi w wyrzuconych folderach.
      */
     fun trashedNoteSlots(): List<Pair<String, String>> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
         val found = mutableListOf<Pair<String, String>>()
-        for (slot in trash.listFiles()) {
+        for (slot in trashSlots().orEmpty()) {
             if (!slot.isDirectory) continue
-            val slotId = slot.name ?: continue
-            val ids = mutableListOf<String>()
-            collectNoteIdsIn(slot, ids)
-            for (noteId in ids) found += slotId to noteId
+            for (noteId in noteIdsInSlot(slot)) found += slot.name to noteId
         }
         return found
     }
 
-    /** Jak wyżej, dla plików z kodem: (identyfikator wpisu kosza, pierwotna ścieżka). */
-    fun trashedCodeSlots(): List<Pair<String, String>> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
-        return trash.listFiles()
-            .filter { it.isDirectory }
-            .flatMap { slot ->
-                val slotId = slot.name ?: return@flatMap emptyList()
-                codePathsInSlot(slot).map { path -> slotId to path }
-            }
+    private fun noteIdsInSlot(slot: DiskEntry): List<String> {
+        slotNoteIds[slot.name]?.let { return it }
+        val ids = mutableListOf<String>()
+        // Niepełny odczyt nie trafia do pamięci - następny przebieg spróbuje
+        // jeszcze raz, zamiast na zawsze zgubić notatkę z kosza.
+        if (collectNoteIdsIn(slot.uri, ids)) {
+            if (slotNoteIds.size > MAX_REMEMBERED) slotNoteIds.clear()
+            slotNoteIds[slot.name] = ids
+        }
+        return ids
     }
+
+    /** Jak wyżej, dla plików z kodem: (identyfikator wpisu kosza, pierwotna ścieżka). */
+    fun trashedCodeSlots(): List<Pair<String, String>> =
+        trashSlots().orEmpty()
+            .filter { it.isDirectory }
+            .flatMap { slot -> codePathsInSlot(slot).map { path -> slot.name to path } }
 
     /**
      * Wpisy kosza, z których nic już nie da się przywrócić: bez pliku opisu
      * albo z opisem wskazującym na plik, którego w środku nie ma. Nie widać ich
      * w koszu (listTrash je pomija), więc leżą i zajmują miejsce.
+     *
+     * Wpis, do którego nie dało się zajrzeć, NIE jest zepsuty. Dawniej każdy
+     * chwilowy kłopot z magazynem wyglądał tu jak pusty wpis - a sprzątanie
+     * kasuje zepsute wpisy na stałe, razem z notatką w środku.
      */
     fun brokenTrashSlots(): List<String> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
-        return trash.listFiles().mapNotNull { slot ->
-            val name = slot.name ?: return@mapNotNull null
+        val slots = trashSlots() ?: return emptyList()
+        return slots.mapNotNull { slot ->
+            val name = slot.name
             if (!slot.isDirectory) return@mapNotNull name
-            val descriptionFile = slot.findFile(TrashEntry.DESC_FILE) ?: return@mapNotNull name
-            val description = runCatching {
-                NoteCodec.json.decodeFromString<TrashEntry>(DiskFiles.readText(resolver, descriptionFile))
-            }.getOrNull() ?: return@mapNotNull name
-            if (slot.findFile(description.fileName) == null) name else null
+            val inside = DiskFiles.children(resolver, slot.uri) ?: return@mapNotNull null
+            val descriptionFile = inside.firstOrNull { it.name == TrashEntry.DESC_FILE }
+                ?: return@mapNotNull name
+            val text = runCatching { DiskFiles.readText(resolver, descriptionFile) }.getOrNull()
+                ?: return@mapNotNull null
+            val description = runCatching { NoteCodec.json.decodeFromString<TrashEntry>(text) }.getOrNull()
+                ?: return@mapNotNull name
+            if (inside.none { it.name == description.fileName }) name else null
         }
     }
 
@@ -795,23 +992,25 @@ class LibraryStore(
      * serwerowi, żeby i tam zniknęły.
      */
     fun trashedNoteIds(id: String): List<String> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
-        val slot = trash.findFile(id)?.takeIf { it.isDirectory } ?: return emptyList()
-        val found = mutableListOf<String>()
-        collectNoteIdsIn(slot, found)
-        return found
+        val slot = trashSlots().orEmpty().firstOrNull { it.name == id }?.takeIf { it.isDirectory }
+            ?: return emptyList()
+        return noteIdsInSlot(slot)
     }
 
-    private fun collectNoteIdsIn(folder: DocumentFile, into: MutableList<String>) {
-        for (child in folder.listFiles()) {
+    /** Zwraca false, gdy do któregoś katalogu albo notatki nie dało się zajrzeć. */
+    private fun collectNoteIdsIn(folder: Uri, into: MutableList<String>): Boolean {
+        val inside = DiskFiles.children(resolver, folder) ?: return false
+        var complete = true
+        for (child in inside) {
             if (!child.isDirectory) continue
-            val name = child.name ?: continue
-            if (FileNames.isNote(name)) {
-                runCatching { readDocument(child) }.getOrNull()?.let { into += it.id }
-            } else {
-                collectNoteIdsIn(child, into)
+            if (FileNames.isNote(child.name)) {
+                val noteId = noteIdIn(child.uri)
+                if (noteId != null) into += noteId else complete = false
+            } else if (!collectNoteIdsIn(child.uri, into)) {
+                complete = false
             }
         }
+        return complete
     }
 
     /**
@@ -823,16 +1022,20 @@ class LibraryStore(
      * skopiować.
      */
     fun copyTrashedAssets(noteId: String, targetNotePath: String): Boolean {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return false
-        var source: DocumentFile? = null
-        for (slot in trash.listFiles()) {
+        var source: DiskEntry? = null
+        for (slot in trashSlots().orEmpty()) {
             if (!slot.isDirectory) continue
-            source = findNoteFolderIn(slot, noteId)
+            // Wpis, o którym wiadomo, że tej notatki nie ma, nie wymaga czytania.
+            if (slotNoteIds[slot.name]?.contains(noteId) == false) continue
+            source = findNoteFolderIn(slot.uri, noteId)
             if (source != null) break
         }
-        val assets = source?.findFile(NoteDocument.ASSETS_DIRECTORY)?.takeIf { it.isDirectory }
+        val assets = source
+            ?.let { DiskFiles.children(resolver, it.uri) }
+            ?.firstOrNull { it.name == NoteDocument.ASSETS_DIRECTORY }
+            ?.takeIf { it.isDirectory }
             ?: return false
-        val target = entry(targetNotePath)?.takeIf { it.isDirectory } ?: return false
+        val target = noteFolder(targetNotePath) ?: return false
         DiskFiles.copyRecursively(resolver, assets, target, NoteDocument.ASSETS_DIRECTORY)
         return true
     }
@@ -843,14 +1046,15 @@ class LibraryStore(
      * zgłasza się serwerowi trwałe kasowanie.
      */
     fun trashedCodePaths(id: String): List<String> {
-        val trash = root.findFile(TrashEntry.DIRECTORY)?.takeIf { it.isDirectory } ?: return emptyList()
-        val slot = trash.findFile(id)?.takeIf { it.isDirectory } ?: return emptyList()
+        val slot = trashSlots().orEmpty().firstOrNull { it.name == id }?.takeIf { it.isDirectory }
+            ?: return emptyList()
         return codePathsInSlot(slot)
     }
 
-    private fun codePathsInSlot(slot: DocumentFile): List<String> {
-        val description = readTrashDescription(slot) ?: return emptyList()
-        val source = slot.findFile(description.fileName) ?: return emptyList()
+    private fun codePathsInSlot(slot: DiskEntry): List<String> {
+        val inside = DiskFiles.children(resolver, slot.uri) ?: return emptyList()
+        val description = trashDescriptionIn(inside) ?: return emptyList()
+        val source = inside.firstOrNull { it.name == description.fileName } ?: return emptyList()
         val found = mutableListOf<String>()
         collectCodePathsIn(source, description.originalPath, found)
         return found
@@ -865,46 +1069,44 @@ class LibraryStore(
 
     /** Kasuje z kosza jedną notatkę. Zwraca false, gdy plik został na dysku. */
     fun deleteNoteInsideTrash(slotId: String, noteId: String): Boolean {
-        val slot = trashSlot(slotId) ?: return true
-        val target = findNoteFolderIn(slot, noteId) ?: return true
+        val slots = trashSlots() ?: return false
+        val slot = slots.firstOrNull { it.name == slotId }?.takeIf { it.isDirectory } ?: return true
+        val target = findNoteFolderIn(slot.uri, noteId) ?: return true
         return deleteFromSlot(slot, target)
     }
 
     /** Kasuje z kosza jeden plik z kodem, wskazany pierwotną ścieżką. */
     fun deleteCodeInsideTrash(slotId: String, originalPath: String): Boolean {
-        val slot = trashSlot(slotId) ?: return true
-        val description = readTrashDescription(slot) ?: return true
-        val source = slot.findFile(description.fileName) ?: return true
+        val slots = trashSlots() ?: return false
+        val slot = slots.firstOrNull { it.name == slotId }?.takeIf { it.isDirectory } ?: return true
+        val inside = DiskFiles.children(resolver, slot.uri) ?: return false
+        val description = trashDescriptionIn(inside) ?: return true
+        val source = inside.firstOrNull { it.name == description.fileName } ?: return true
         val target = findByOriginalPath(source, description.originalPath, originalPath) ?: return true
         return deleteFromSlot(slot, target)
     }
-
-    private fun trashSlot(slotId: String): DocumentFile? =
-        root.findFile(TrashEntry.DIRECTORY)
-            ?.takeIf { it.isDirectory }
-            ?.findFile(slotId)
-            ?.takeIf { it.isDirectory }
 
     /**
      * Kasuje [target] leżący w [slot]. Kiedy to jest właśnie ta rzecz, którą
      * wyrzucono do kosza, znika cały wpis razem z opisem - bez pliku i tak nie
      * byłoby czego przywracać, a sam opis zostałby jako wpis nie do ruszenia.
      */
-    private fun deleteFromSlot(slot: DocumentFile, target: DocumentFile): Boolean {
-        val description = readTrashDescription(slot)
-        val wholeSlot = description != null && slot.findFile(description.fileName)?.uri == target.uri
-        return DiskFiles.deleteRecursively(if (wholeSlot) slot else target)
+    private fun deleteFromSlot(slot: DiskEntry, target: DiskEntry): Boolean {
+        val inside = DiskFiles.children(resolver, slot.uri)
+        val description = inside?.let(::trashDescriptionIn)
+        val wholeSlot = description != null &&
+            inside.firstOrNull { it.name == description.fileName }?.uri == target.uri
+        slotNoteIds.remove(slot.name)
+        return DiskFiles.deleteRecursively(resolver, if (wholeSlot) slot else target)
     }
 
-    private fun findNoteFolderIn(folder: DocumentFile, noteId: String): DocumentFile? {
-        for (child in folder.listFiles()) {
+    private fun findNoteFolderIn(folder: Uri, noteId: String): DiskEntry? {
+        for (child in DiskFiles.children(resolver, folder).orEmpty()) {
             if (!child.isDirectory) continue
-            val name = child.name ?: continue
-            if (FileNames.isNote(name)) {
-                val document = runCatching { readDocument(child) }.getOrNull()
-                if (document?.id == noteId) return child
+            if (FileNames.isNote(child.name)) {
+                if (noteIdIn(child.uri) == noteId) return child
             } else {
-                findNoteFolderIn(child, noteId)?.let { return it }
+                findNoteFolderIn(child.uri, noteId)?.let { return it }
             }
         }
         return null
@@ -912,53 +1114,141 @@ class LibraryStore(
 
     /** Szuka w koszu wpisu, który przed wyrzuceniem leżał pod [wanted]. */
     private fun findByOriginalPath(
-        entry: DocumentFile,
+        entry: DiskEntry,
         path: String,
         wanted: String,
-    ): DocumentFile? {
+    ): DiskEntry? {
         if (path == wanted) return entry
         if (entry.isFile) return null
-        val name = entry.name ?: return null
-        if (FileNames.isNote(name)) return null
-        for (child in entry.listFiles()) {
-            val childName = child.name ?: continue
-            findByOriginalPath(child, "$path/$childName", wanted)?.let { return it }
+        if (FileNames.isNote(entry.name)) return null
+        for (child in DiskFiles.children(resolver, entry.uri).orEmpty()) {
+            findByOriginalPath(child, "$path/${child.name}", wanted)?.let { return it }
         }
         return null
     }
 
-    private fun collectCodePathsIn(entry: DocumentFile, path: String, into: MutableList<String>) {
-        val name = entry.name ?: return
+    private fun collectCodePathsIn(entry: DiskEntry, path: String, into: MutableList<String>) {
+        val name = entry.name
         if (entry.isFile) {
             if (CodeLanguage.fromExtension(name) != null) into += path
             return
         }
         if (FileNames.isNote(name)) return
-        for (child in entry.listFiles()) {
-            val childName = child.name ?: continue
-            collectCodePathsIn(child, "$path/$childName", into)
+        for (child in DiskFiles.children(resolver, entry.uri).orEmpty()) {
+            collectCodePathsIn(child, "$path/${child.name}", into)
         }
     }
 
     // Walking the whole tree, needed when building the index
 
     fun walkTree(visit: (LibraryItem) -> Unit) {
-        fun descend(folder: DocumentFile, path: String) {
-            for (child in folder.listFiles()) {
-                val name = child.name ?: continue
-                if (FileNames.isHidden(name)) continue
-                val item = toItem(child, path) ?: continue
-                visit(item)
-                if (item.type == ItemType.FOLDER) {
-                    descend(child, item.path)
+        walk(visit)
+    }
+
+    /**
+     * Całe drzewo biblioteki - jedno zapytanie na folder, bez zaglądania do
+     * wnętrza notatek. Zwraca false, gdy któryś folder nie dał się przeczytać,
+     * czyli spis jest niepełny i nie wolno na jego podstawie niczego kasować.
+     */
+    internal fun walk(visit: (LibraryItem) -> Unit): Boolean {
+        var complete = true
+        fun descend(inside: List<DiskEntry>, path: String) {
+            for (child in inside) {
+                if (FileNames.isHidden(child.name)) continue
+                if (child.isDirectory && !FileNames.isNote(child.name)) {
+                    val nested = DiskFiles.children(resolver, child.uri)
+                    if (nested == null) complete = false
+                    val item = folderItem(child, path, nested)
+                    visit(item)
+                    if (nested != null) descend(nested, item.path)
+                } else {
+                    visit(toItem(child, path) ?: continue)
                 }
             }
         }
-        descend(root, "")
+        val top = DiskFiles.children(resolver, root.uri) ?: return false
+        descend(top, "")
+        return complete
     }
+
+    /**
+     * Wpis pod [path] i wszystko pod nim, jak w spisie folderu. null, gdy
+     * wpisu nie ma albo nie dało się go znaleźć.
+     */
+    internal fun branch(path: String): List<LibraryItem>? {
+        val entry = describe(path) ?: return null
+        val parentPath = path.substringBeforeLast('/', "")
+        if (!entry.isDirectory || FileNames.isNote(entry.name)) {
+            return listOfNotNull(toItem(entry, parentPath))
+        }
+        val inside = DiskFiles.children(resolver, entry.uri)
+        val found = mutableListOf(folderItem(entry, parentPath, inside))
+        if (inside != null) {
+            fun descend(entries: List<DiskEntry>, at: String) {
+                for (child in entries) {
+                    if (FileNames.isHidden(child.name)) continue
+                    if (child.isDirectory && !FileNames.isNote(child.name)) {
+                        val nested = DiskFiles.children(resolver, child.uri)
+                        val item = folderItem(child, at, nested)
+                        found += item
+                        if (nested != null) descend(nested, item.path)
+                    } else {
+                        found += toItem(child, at) ?: continue
+                    }
+                }
+            }
+            descend(inside, path)
+        }
+        return found
+    }
+
+    /**
+     * Opisy wszystkich folderów biblioteki po ścieżkach. [FolderMetas.complete]
+     * fałszywe, gdy któregoś folderu albo jego opisu nie dało się przeczytać.
+     */
+    internal fun allFolderMetas(): FolderMetas {
+        val found = HashMap<String, FolderMeta>()
+        var complete = true
+        fun descend(inside: List<DiskEntry>, path: String) {
+            for (child in inside) {
+                if (!child.isDirectory || FileNames.isHidden(child.name) || FileNames.isNote(child.name)) continue
+                val at = childPath(path, child.name)
+                val nested = DiskFiles.children(resolver, child.uri)
+                if (nested == null) {
+                    complete = false
+                    continue
+                }
+                val meta = folderMetaIn(nested)
+                if (meta != null) {
+                    found[at] = meta
+                } else if (nested.any { it.name == FolderMeta.FILE }) {
+                    complete = false
+                }
+                descend(nested, at)
+            }
+        }
+        val top = DiskFiles.children(resolver, root.uri) ?: return FolderMetas(emptyMap(), complete = false)
+        descend(top, "")
+        return FolderMetas(found, complete)
+    }
+
+    /** Opis folderu pod ścieżką (folder.json) albo null. */
+    internal fun folderMetaAt(path: String): FolderMeta? {
+        val folder = describe(path)?.takeIf { it.isDirectory } ?: return null
+        return DiskFiles.children(resolver, folder.uri)?.let(::folderMetaIn)
+    }
+
+    private fun childPath(parentPath: String, name: String): String =
+        if (parentPath.isEmpty()) name else "$parentPath/$name"
 
     companion object {
         const val BACKUP_FILE = "content.bak.json"
+
+        /** Gdzie szukać treści notatki: najpierw plik główny, potem jego kopia. */
+        private val CONTENT_FILES = listOf(NoteDocument.CONTENT_FILE, BACKUP_FILE)
+
+        /** Ile opisów folderów i wpisów kosza trzymamy w pamięci, zanim zaczniemy od zera. */
+        private const val MAX_REMEMBERED = 4096
 
         /** Foldery alfabetycznie na górze, notatki i pliki pod nimi od najnowszej zmiany. */
         val libraryOrder: Comparator<LibraryItem> = Comparator { a, b ->

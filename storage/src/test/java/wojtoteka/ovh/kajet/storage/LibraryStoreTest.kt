@@ -20,19 +20,24 @@ import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
-class LibraryStoreTest {
+open class LibraryStoreTest {
 
     @get:Rule
     val temporaryFolder = TemporaryFolder()
 
-    private lateinit var root: File
-    private lateinit var store: LibraryStore
+    protected lateinit var root: File
+    protected lateinit var store: LibraryStore
 
     @Before
     fun setUp() {
         root = temporaryFolder.newFolder("library")
+        store = storeFor(root)
+    }
+
+    /** Katalog biblioteki jako zwykły plik. [LibraryStoreSafTest] podstawia tu magazyn przez SAF. */
+    protected open fun storeFor(root: File): LibraryStore {
         val context = RuntimeEnvironment.getApplication()
-        store = LibraryStore(context.contentResolver, DocumentFile.fromFile(root))
+        return LibraryStore(context.contentResolver, DocumentFile.fromFile(root))
     }
 
     @Test

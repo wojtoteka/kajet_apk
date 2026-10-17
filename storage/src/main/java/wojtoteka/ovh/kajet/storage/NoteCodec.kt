@@ -1,5 +1,6 @@
 package wojtoteka.ovh.kajet.storage
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import wojtoteka.ovh.kajet.core.model.DrawingSource
@@ -45,6 +46,34 @@ object NoteCodec {
             )
         }
         return document
+    }
+
+    /*
+      Sam początek notatki: wersja formatu i identyfikator. Reszta pliku jest
+      tylko przeskakiwana, bez budowania kresek, stron i akapitów - kosz pyta
+      o identyfikatory przy każdej synchronizacji i nic więcej z treści nie
+      potrzebuje.
+    */
+    @Serializable
+    private class NoteHeader(
+        val format: Int = NoteDocument.FORMAT_CURRENT,
+        val id: String,
+    )
+
+    /** Identyfikator notatki z content.json - te same błędy co [decodeNote]. */
+    fun decodeNoteId(content: String): String {
+        if (content.isBlank()) {
+            throw FormatException(words.emptyNoteFile)
+        }
+        val header = try {
+            json.decodeFromString<NoteHeader>(content)
+        } catch (e: SerializationException) {
+            throw FormatException(words.brokenContentFile, e)
+        }
+        if (header.format > NoteDocument.FORMAT_CURRENT) {
+            throw FormatException(words.newerKajet)
+        }
+        return header.id
     }
 
     fun encodeDrawing(drawing: DrawingSource): String = json.encodeToString(drawing)

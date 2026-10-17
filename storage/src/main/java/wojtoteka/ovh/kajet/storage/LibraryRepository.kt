@@ -383,25 +383,21 @@ class LibraryRepository(
             onSharedSaved?.invoke(noteId)
             return@withContext
         }
-        val store = requireStore()
-        store.writeNote(path, document)
-        val entry = store.entry(path)
-        if (entry != null) {
-            writeToIndex(
-                LibraryItem(
-                    id = document.id,
-                    path = path,
-                    name = document.title,
-                    type = ItemType.NOTE,
-                    documentUri = entry.uri.toString(),
-                    updatedAt = document.updatedAt,
-                    noteKind = document.kind,
-                    favorite = document.favorite,
-                    tags = document.tags,
-                ),
-                document,
-            )
-        }
+        val saved = requireStore().writeNote(path, document)
+        writeToIndex(
+            LibraryItem(
+                id = document.id,
+                path = path,
+                name = document.title,
+                type = ItemType.NOTE,
+                documentUri = saved.documentUri,
+                updatedAt = document.updatedAt,
+                noteKind = document.kind,
+                favorite = document.favorite,
+                tags = document.tags,
+            ),
+            document,
+        )
         onNoteSaved?.invoke(path, document.id)
     }
 
@@ -493,7 +489,9 @@ class LibraryRepository(
         if (path.isBlank()) return@withContext false
         if (shared.isShared(path)) return@withContext !shared.exists(shared.noteIdOf(path))
         val store = store() ?: return@withContext false
-        runCatching { store.entry(path) == null }.getOrDefault(false)
+        // Tylko pewne „nie ma". Magazyn, który chwilowo nie odpowiada, to
+        // jeszcze nie skasowana notatka.
+        runCatching { store.lookup(path) == PathLookup.Missing }.getOrDefault(false)
     }
 
     /**
@@ -622,13 +620,7 @@ class LibraryRepository(
 
     override suspend fun attachmentNames(notePath: String): List<String> = withContext(io) {
         if (shared.isShared(notePath)) return@withContext shared.attachmentNames(shared.noteIdOf(notePath))
-        val folder = store()?.entry(notePath)?.takeIf { it.isDirectory }
-            ?: return@withContext emptyList()
-        folder.findFile(NoteDocument.ASSETS_DIRECTORY)
-            ?.listFiles()
-            ?.filter { it.isFile }
-            ?.mapNotNull { it.name }
-            .orEmpty()
+        store()?.attachmentNames(notePath).orEmpty()
     }
 
     override suspend fun writeNoteFromCloud(
@@ -640,14 +632,20 @@ class LibraryRepository(
         // Zwietrzały wiersz spisu - plik zniknął z dysku, a wiersz został -
         // robił przy każdym pobraniu nową kopię notatki, zostawiając siebie
         // na miejscu, i tak w kółko. Sprzątamy, zanim cokolwiek utworzymy.
+        //
+        // Tylko wiersz, którego pliku na pewno nie ma. Gdy magazyn chwilowo nie
+        // odpowiada, zapis idzie pod znaną ścieżkę i najwyżej się nie uda -
+        // synchronizacja spróbuje jeszcze raz, zamiast zakładać drugą kopię.
         var existing = dao.findById(document.id)
+        var where = existing?.let { store.lookup(it.path) }
         var guard = 0
-        while (existing != null && store.entry(existing.path) == null && guard < 10) {
+        while (existing != null && where == PathLookup.Missing && guard < 10) {
             dao.deleteBranch(existing.path)
             existing = dao.findById(document.id)
+            where = existing?.let { store.lookup(it.path) }
             guard += 1
         }
-        if (existing != null && store.entry(existing.path) != null) {
+        if (existing != null && where != PathLookup.Missing) {
             store.writeNote(existing.path, document)
             writeToIndex(
                 LibraryItem(
@@ -757,9 +755,7 @@ class LibraryRepository(
         // z kosza już się do nich nie dostaniemy.
         val store = requireStore()
         val folderIds = runCatching {
-            dao.folderPathsUnder(path).mapNotNull { folderPath ->
-                store.entry(folderPath)?.let { store.readFolderMeta(it)?.id }
-            }
+            dao.folderPathsUnder(path).mapNotNull { folderPath -> store.folderMetaAt(folderPath)?.id }
         }.getOrDefault(emptyList())
         store.moveToTrash(path)
         dao.deleteBranchWithContent(path)
@@ -893,7 +889,7 @@ class LibraryRepository(
         // Kopia widoczna w bibliotece.
         val indexed = runCatching { dao.findById(noteId) }.getOrNull()
         if (indexed != null) {
-            if (store.entry(indexed.path) != null) {
+            if (store.lookup(indexed.path) != PathLookup.Missing) {
                 if (store.deleteEntry(indexed.path)) erased = true else retries.addPath(indexed.path)
             }
             runCatching { dao.deleteBranchWithContent(indexed.path) }
@@ -932,7 +928,7 @@ class LibraryRepository(
         val store = store() ?: return@withContext false
         var erased = false
 
-        if (store.entry(path) != null) {
+        if (store.lookup(path) != PathLookup.Missing) {
             if (store.deleteEntry(path)) erased = true else retries.addPath(path)
         }
         runCatching { dao.deleteBranchWithContent(path) }
@@ -970,7 +966,7 @@ class LibraryRepository(
     override suspend fun trashNoteFromCloud(noteId: String): Boolean = withContext(io) {
         val entry = dao.findById(noteId) ?: return@withContext false
         val store = store() ?: return@withContext false
-        if (store.entry(entry.path) == null) {
+        if (store.lookup(entry.path) == PathLookup.Missing) {
             dao.deleteBranchWithContent(entry.path)
             reportRemotelyRemoved(entry.path)
             return@withContext false
@@ -985,7 +981,7 @@ class LibraryRepository(
     /** Jak wyżej, ale dla pliku z kodem wskazanego ścieżką. */
     override suspend fun trashFileFromCloud(path: String): Boolean = withContext(io) {
         val store = store() ?: return@withContext false
-        if (store.entry(path) == null) {
+        if (store.lookup(path) == PathLookup.Missing) {
             dao.deleteBranchWithContent(path)
             reportRemotelyRemoved(path)
             return@withContext false
@@ -1171,22 +1167,33 @@ class LibraryRepository(
         val store = store() ?: return@withContext 0
         var cleaned = 0
 
-        // Sprawdzenie wiersza to zejście po katalogach przez SAF, a ono przy
-        // dużej bibliotece nie jest darmowe. Bierzemy więc porcję na przebieg;
-        // reszta doczeka jutra. Ile zostało - widać w dzienniku, żeby nie
-        // wyglądało to na „przejrzano wszystko".
+        // Jedno przejście po drzewie - jedno zapytanie na folder - zamiast
+        // schodzenia po katalogach osobno dla każdego wiersza spisu.
         val entries = runCatching { dao.allEntries() }.getOrDefault(emptyList())
-        val portion = entries.take(MAX_ORPHAN_CHECKS)
-        for (entry in portion) {
-            if (runCatching { store.entry(entry.path) }.getOrNull() != null) continue
-            runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
-        }
-        if (entries.size > portion.size) {
-            Log.i(
-                "Kajet",
-                "Sprzątanie spisu: sprawdzono ${portion.size} z ${entries.size} wpisów, " +
-                    "reszta przy następnym przebiegu",
-            )
+        val onDisk = HashSet<String>()
+        val complete = runCatching { store.walk { onDisk += it.path } }.getOrDefault(false)
+        if (complete) {
+            for (entry in entries) {
+                if (entry.path in onDisk) continue
+                runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
+            }
+        } else {
+            // Część drzewa nie odpowiedziała. Wiersz spoza przejścia może więc
+            // wskazywać plik, który jest - sprawdzamy go osobno i kasujemy tylko
+            // przy pewnym „nie ma". Porcja na przebieg, reszta doczeka jutra.
+            val unsure = entries.filter { it.path !in onDisk }
+            val portion = unsure.take(MAX_ORPHAN_CHECKS)
+            for (entry in portion) {
+                if (runCatching { store.lookup(entry.path) }.getOrNull() != PathLookup.Missing) continue
+                runCatching { dao.deleteBranchWithContent(entry.path) }.onSuccess { cleaned += 1 }
+            }
+            if (unsure.size > portion.size) {
+                Log.i(
+                    "Kajet",
+                    "Sprzątanie spisu: sprawdzono ${portion.size} z ${unsure.size} wpisów, " +
+                        "reszta przy następnym przebiegu",
+                )
+            }
         }
 
         for (slotId in runCatching { store.brokenTrashSlots() }.getOrDefault(emptyList())) {
@@ -1229,9 +1236,15 @@ class LibraryRepository(
      */
     override suspend fun allCloudFolders(): List<CloudFolder> = withContext(io) {
         val store = store() ?: return@withContext emptyList()
+        // Opisy wszystkich folderów jednym przejściem po drzewie. Gdy któryś
+        // folder nie odpowiedział, jego opis czytamy jeszcze raz osobno - bez
+        // niego synchronizacja wzięłaby folder za nieistniejący i założyłaby
+        // drugi z tym samym identyfikatorem.
+        val onDisk = store.allFolderMetas()
         dao.allFolderPaths().mapNotNull { path ->
-            val entry = store.entry(path) ?: return@mapNotNull null
-            val meta = store.readFolderMeta(entry) ?: return@mapNotNull null
+            val meta = onDisk.byPath[path]
+                ?: (if (onDisk.complete) null else store.folderMetaAt(path))
+                ?: return@mapNotNull null
             CloudFolder(
                 id = meta.id,
                 path = path,
@@ -1291,7 +1304,7 @@ class LibraryRepository(
         val currentParent = entry.path.substringBeforeLast('/', "")
         if (currentParent == targetFolder) return@withContext entry.path
         val store = store() ?: return@withContext null
-        if (store.entry(entry.path) == null) return@withContext null
+        if (store.lookup(entry.path) == PathLookup.Missing) return@withContext null
         val newPath = store.move(entry.path, targetFolder)
         dao.deleteBranch(entry.path)
         reindexBranch(newPath)
@@ -1328,7 +1341,7 @@ class LibraryRepository(
 
         items.forEachIndexed { number, item ->
             if (item.type == ItemType.NOTE) {
-                val document = runCatching { store.readNote(item.path) }.getOrNull()
+                val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
                 if (document != null) {
                     writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
                 } else {
@@ -1344,40 +1357,31 @@ class LibraryRepository(
         refresh()
     }
 
-    private suspend fun reindexBranch(path: String, starred: Set<String>? = null) {
+    private suspend fun reindexBranch(path: String) {
         val store = store() ?: return
-        val entry = store.entry(path) ?: return
-        if (entry.isDirectory && FileNames.isNote(entry.name.orEmpty())) {
-            val document = runCatching { store.readDocument(entry) }.getOrNull()
-            val item = LibraryItem(
-                id = document?.id ?: entry.uri.toString(),
-                path = path,
-                name = document?.title ?: FileNames.withoutNoteExtension(entry.name.orEmpty()),
-                type = ItemType.NOTE,
-                documentUri = entry.uri.toString(),
-                updatedAt = entry.lastModified(),
-                noteKind = document?.kind,
-                favorite = document?.favorite ?: false,
-                tags = document?.tags.orEmpty(),
-            )
-            if (document != null) {
-                writeToIndex(item, document)
-            } else {
-                dao.upsertKeepingOpened(item.toIndexEntry())
-            }
-            return
-        }
-        // A folder or a plain file: we walk the branch again.
-        val parentPath = path.substringBeforeLast('/', "")
-        val onDisk = store.list(parentPath).firstOrNull { it.path == path } ?: return
+        // Wpis i wszystko pod nim jednym przejściem - jedno zapytanie na folder.
+        val items = store.branch(path) ?: return
         // Zbiór czytamy raz na całą gałąź, a nie raz na plik w środku.
-        val starredFiles = starred ?: starredFiles()
-        dao.upsertKeepingOpened(
-            onDisk.toIndexEntry().copy(favorite = onDisk.path in starredFiles),
-        )
-        if (onDisk.type == ItemType.FOLDER) {
-            for (child in store.list(path)) {
-                reindexBranch(child.path, starredFiles)
+        val starredFiles = starredFiles()
+        for (item in items) {
+            if (item.type == ItemType.NOTE) {
+                val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
+                if (document != null) {
+                    writeToIndex(
+                        item.copy(
+                            id = document.id,
+                            name = document.title,
+                            noteKind = document.kind,
+                            favorite = document.favorite,
+                            tags = document.tags,
+                        ),
+                        document,
+                    )
+                } else {
+                    dao.upsertKeepingOpened(item.toIndexEntry())
+                }
+            } else {
+                dao.upsertKeepingOpened(item.toIndexEntry().copy(favorite = item.path in starredFiles))
             }
         }
     }
