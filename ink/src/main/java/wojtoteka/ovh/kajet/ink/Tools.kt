@@ -30,10 +30,10 @@ enum class EditorTool {
             PEN -> "Kreska idzie tak, jak prowadzisz rysik."
             HIGHLIGHTER -> "Szeroka, jasna kreska. Rysuje się pod tekstem, więc go nie zasłania."
             ERASER_PARTIAL -> "Wyciera tylko to, po czym przejedziesz."
-            ERASER_STROKE -> "Kasuje całą kreskę, której dotkniesz."
-            LASSO -> "Obrysuj fragment, żeby go przesunąć albo skasować."
+            ERASER_STROKE -> "Usuwa całą kreskę, której dotkniesz."
+            LASSO -> "Obrysuj fragment, żeby go przesunąć albo usunąć."
             RULER -> "Prostuje kreskę w linię albo łamaną, a zamkniętą zamienia w koło, owal, trójkąt albo prostokąt."
-            SHAPES -> "Przeciągnij rysik, żeby wstawić kształt. Stuknięcie bierze kształt do poprawek."
+            SHAPES -> "Przeciągnij rysik, żeby wstawić kształt. Stuknięcie w kształt pozwala go poprawić."
         }
 
     fun label(words: Strings): String = if (!words.english) labelPl else when (this) {
@@ -51,9 +51,9 @@ enum class EditorTool {
         HIGHLIGHTER -> "A wide, pale stroke that sits under the text."
         ERASER_PARTIAL -> "Rubs out only what you run over."
         ERASER_STROKE -> "Removes the whole stroke you touch."
-        LASSO -> "Draw around a piece to move it or delete it."
-        RULER -> "Straightens a stroke into a line or straight segments, and turns a closed one into a circle, oval, triangle, or rectangle."
-        SHAPES -> "Drag the stylus to place a shape. A tap picks a shape up for changes."
+        LASSO -> "Draw around an area to move or delete it."
+        RULER -> "Straightens a stroke into a line or straight segments, and turns a closed one into a circle, oval, triangle or rectangle."
+        SHAPES -> "Drag the stylus to place a shape. Tap a shape to edit it."
     }
 
     val writes: Boolean get() = this == PEN || this == HIGHLIGHTER || this == RULER

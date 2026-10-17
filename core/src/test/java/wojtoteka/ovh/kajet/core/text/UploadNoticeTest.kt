@@ -27,7 +27,7 @@ class UploadNoticeTest {
             errorCode = "unsupported-extension",
         )
 
-        assertThat(notice).isEqualTo("zdjęcie.jpg — to nie plik tekstowy ani z kodem")
+        assertThat(notice).isEqualTo("zdjęcie.jpg – to nie plik tekstowy ani z kodem")
         assertThat(notice.length).isLessThan(serverRefusal.length)
     }
 
@@ -41,7 +41,7 @@ class UploadNoticeTest {
             errorCode = "cos-nowego-na-serwerze",
         )
 
-        assertThat(notice).isEqualTo("notatki.txt — Kajet nie obsługuje tego rozszerzenia.")
+        assertThat(notice).isEqualTo("notatki.txt – Kajet nie obsługuje tego rozszerzenia.")
     }
 
     @Test
@@ -56,7 +56,7 @@ class UploadNoticeTest {
         )
 
         assertThat(notice).endsWith("…")
-        assertThat(notice.length).isAtMost("plik.py — ".length + 120)
+        assertThat(notice.length).isAtMost("plik.py – ".length + 120)
     }
 
     @Test
@@ -69,7 +69,7 @@ class UploadNoticeTest {
             errorCode = null,
         )
 
-        assertThat(notice).isEqualTo("plik.py — wysyłanie się nie udało, Kajet spróbuje jeszcze raz")
+        assertThat(notice).isEqualTo("plik.py – nie udało się wysłać, Kajet spróbuje jeszcze raz")
     }
 
     @Test
@@ -82,7 +82,7 @@ class UploadNoticeTest {
             errorCode = "unsupported-extension",
         )
 
-        assertThat(notice).isEqualTo("photo.jpg — not a text or source-code file")
+        assertThat(notice).isEqualTo("photo.jpg – not a text or source-code file")
     }
 
     @Test
@@ -97,9 +97,9 @@ class UploadNoticeTest {
     fun `wgrany plik nadal mowi wprost, ze sie udalo`() {
         assertThat(
             PolishStrings.uploadStatusText("plik.py", "SYNCED", 100, null, null),
-        ).isEqualTo("plik.py — wgrany pomyślnie")
+        ).isEqualTo("plik.py – wgrany pomyślnie")
         assertThat(
             PolishStrings.uploadStatusText("plik.py", "UPLOADING", 40, null, null),
-        ).isEqualTo("plik.py — wysyłanie (40%)")
+        ).isEqualTo("plik.py – wysyłanie (40%)")
     }
 }

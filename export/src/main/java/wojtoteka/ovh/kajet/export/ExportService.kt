@@ -70,8 +70,8 @@ enum class ExportFormat(
 
     fun description(words: Strings): String = when (this) {
         PDF -> words.exportPdfAbout
-        DOCX -> if (!words.english) descriptionPl else "Text to keep working on. No pictures, no handwriting."
-        MARKDOWN -> if (!words.english) descriptionPl else "Plain text with markers. Opens in any editor."
+        DOCX -> if (!words.english) descriptionPl else "Text for further editing. No photos and no handwriting."
+        MARKDOWN -> if (!words.english) descriptionPl else "Plain text with Markdown markup. Opens in any editor."
         PNG -> if (!words.english) descriptionPl else "The first page as a picture. Good for pasting into a message."
     }
 }
