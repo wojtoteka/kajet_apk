@@ -160,4 +160,54 @@ class LibraryFolderContentTest {
         assertThat(folder.colorId).isEqualTo("morski")
         assertThat(folder.childCount).isEqualTo(1)
     }
+
+    @Test
+    fun `a saved note shows the time it was saved, not the time it was opened`() {
+        val item = runBlocking { repository.createNote("", "Poprawiana", NoteKind.TEXT) }
+        val opened = runBlocking { repository.readNote(item.path) }
+        Thread.sleep(5)
+
+        runBlocking { repository.writeNote(item.path, opened.copy(text = TextContent(markdown = "poprawka"))) }
+
+        val listed = runBlocking { repository.indexedFolder("") }.single()
+        assertThat(listed.updatedAt).isGreaterThan(opened.updatedAt)
+    }
+
+    @Test
+    fun `a star set from the list does not move the note to the top`() {
+        val item = runBlocking { repository.createNote("", "Z gwiazdką", NoteKind.TEXT) }
+        val before = runBlocking { repository.indexedFolder("") }.single().updatedAt
+        Thread.sleep(5)
+
+        runBlocking { repository.toggleFavorite(item.path) }
+
+        val listed = runBlocking { repository.indexedFolder("") }.single()
+        assertThat(listed.favorite).isTrue()
+        assertThat(listed.updatedAt).isEqualTo(before)
+    }
+
+    @Test
+    fun `the thumbnail of a saved handwritten note does not read the note again`() {
+        val item = runBlocking { repository.createNote("", "Odręczna", NoteKind.HANDWRITTEN) }
+        val document = runBlocking { repository.readNote(item.path) }
+        val page = document.handwriting!!.pages.first()
+        val stroke = wojtoteka.ovh.kajet.core.model.InkStroke(
+            id = "k",
+            color = 0,
+            size = 2f,
+            points = listOf(10f, 10f, 0f, 1f, 0f, 0f, 80f, 40f, 5f, 1f, 0f, 0f),
+        )
+        val drawn = document.copy(
+            handwriting = document.handwriting!!.copy(pages = listOf(page.copy(strokes = listOf(stroke)))),
+        )
+        runBlocking { repository.writeNote(item.path, drawn) }
+        val listed = runBlocking { repository.indexedFolder("") }.single()
+        // Bez pliku na dysku - miniatura musi przyjść z pamięci, a nie z odczytu.
+        File(root, "${item.path}/content.json").delete()
+        File(root, "${item.path}/${LibraryStore.BACKUP_FILE}").delete()
+
+        val thumbnail = runBlocking { repository.thumbnail(listed) }
+
+        assertThat(thumbnail?.lines?.single()?.toList()).containsExactly(10, 10, 80, 40).inOrder()
+    }
 }

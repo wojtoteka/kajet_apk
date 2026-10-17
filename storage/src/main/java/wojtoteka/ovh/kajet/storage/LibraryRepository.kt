@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
 import wojtoteka.ovh.kajet.core.model.CodeLanguage
@@ -196,6 +198,10 @@ class LibraryRepository(
     )
 
     private var cache: Pair<String, LibraryStore>? = null
+
+    private val thumbnails = NoteThumbnails(java.io.File(context.cacheDir, NoteThumbnails.DIRECTORY))
+
+    private val coldThumbnails = Semaphore(2)
 
     val folderSelected: Flow<Boolean> = settings.settings.map { current ->
         hasPersistedAccess(current.libraryFolder)
@@ -553,7 +559,12 @@ class LibraryRepository(
         } ?: runCatching { readNote(path).kind }.getOrNull()
     }
 
-    suspend fun writeNote(path: String, document: NoteDocument) = withContext(io) {
+    /**
+     * [touch] - czy to zmiana treści, która ma przesunąć notatkę na górę
+     * listy jako świeżo zmienioną. Sama gwiazdka postawiona na liście nią nie
+     * jest: notatka uciekałaby spod palca na samą górę.
+     */
+    suspend fun writeNote(path: String, document: NoteDocument, touch: Boolean = true) = withContext(io) {
         if (shared.isShared(path)) {
             // Cudza notatka nie trafia do spisu ani do kolejki synchronizacji
             // biblioteki - na serwer jedzie przez edycję na żywo.
@@ -563,6 +574,14 @@ class LibraryRepository(
             return@withContext
         }
         val saved = requireStore().writeNote(path, document)
+        /*
+          Do spisu idzie data, która właśnie trafiła na dysk. Edytor nie
+          zmienia daty w swojej kopii treści, więc dawniej spis zostawał przy
+          dacie sprzed otwarcia notatki: lista mówiła „2 dni temu" o notatce
+          poprawionej przed chwilą i nie przesuwała jej na górę. Ta sama data
+          pilnuje świeżości miniatury.
+        */
+        val indexed = if (touch) saved.document else document
         writeToIndex(
             LibraryItem(
                 id = document.id,
@@ -570,12 +589,12 @@ class LibraryRepository(
                 name = document.title,
                 type = ItemType.NOTE,
                 documentUri = saved.documentUri,
-                updatedAt = document.updatedAt,
+                updatedAt = indexed.updatedAt,
                 noteKind = document.kind,
                 favorite = document.favorite,
                 tags = document.tags,
             ),
-            document,
+            indexed,
         )
         onNoteSaved?.invoke(path, document.id)
     }
@@ -596,7 +615,7 @@ class LibraryRepository(
         }
         val document = requireStore().readNote(path)
         val after = document.copy(favorite = !document.favorite)
-        writeNote(path, after)
+        writeNote(path, after, touch = false)
         refresh()
         after.favorite
     }
@@ -1569,22 +1588,49 @@ class LibraryRepository(
     }
 
     private suspend fun writeToIndex(item: LibraryItem, document: NoteDocument) {
+        val entry = item.toIndexEntry().copy(
+            // The identifier comes from the content rather than the listing
+            // entry: when read from disk the entry carries the file address,
+            // not the note's number.
+            documentId = document.id,
+            name = document.title,
+            noteKind = document.kind.name,
+            favorite = document.favorite,
+            tags = document.tags.joinToString("|"),
+            updatedAt = document.updatedAt,
+            preview = IndexText.preview(document),
+        )
         dao.save(
-            entry = item.toIndexEntry().copy(
-                // The identifier comes from the content rather than the listing
-                // entry: when read from disk the entry carries the file address,
-                // not the note's number.
-                documentId = document.id,
-                name = document.title,
-                noteKind = document.kind.name,
-                favorite = document.favorite,
-                tags = document.tags.joinToString("|"),
-                updatedAt = document.updatedAt,
-                preview = IndexText.preview(document),
-            ),
+            entry = entry,
             title = document.title,
             content = IndexText.content(document),
         )
+        // Treść jest właśnie w pamięci - miniatura powstaje teraz, a nie przy
+        // przewijaniu listy z ponownym odczytem całej notatki z dysku.
+        if (document.kind == NoteKind.HANDWRITTEN) {
+            runCatching { thumbnails.put(entry.documentUri, PageThumbnail.of(document, entry.updatedAt)) }
+        }
+    }
+
+    /**
+     * Miniatura notatki odręcznej z listy. Zwykle gotowa w pamięci albo w
+     * pliku; gdy jej nie ma (notatka spoza aplikacji, wyczyszczona pamięć
+     * podręczna), czyta notatkę raz - najwyżej dwie naraz, żeby przewinięcie
+     * długiej listy nie zaczęło kilkudziesięciu odczytów jednocześnie.
+     */
+    suspend fun thumbnail(item: LibraryItem): PageThumbnail? = withContext(io) {
+        thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withContext it }
+        coldThumbnails.withPermit {
+            thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withPermit it }
+            val document = runCatching {
+                if (shared.isShared(item.path)) {
+                    readNote(item.path)
+                } else {
+                    store()?.readNoteAt(item.documentUri)
+                }
+            }.getOrNull() ?: return@withPermit null
+            PageThumbnail.of(document, item.updatedAt).also { thumbnails.put(item.documentUri, it) }
+        }
     }
 }
 

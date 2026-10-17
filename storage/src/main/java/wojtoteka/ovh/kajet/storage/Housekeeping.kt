@@ -19,7 +19,10 @@ import java.io.File
  *     przywrócenia,
  *  4. stary podręczny materiał: zdjęcia z aparatu i pliki eksportu. Te nie są
  *     przypisane do żadnej notatki - nazwa nie niesie jej identyfikatora -
- *     więc jedyne, co da się o nich powiedzieć, to jak długo leżą.
+ *     więc jedyne, co da się o nich powiedzieć, to jak długo leżą. Tak samo
+ *     miniatury notatek odręcznych, tyle że z dłuższym terminem: każde
+ *     pokazanie odświeża ich datę, więc znikają tylko te po notatkach,
+ *     których dawno nikt nie oglądał albo których już nie ma.
  *
  * Nic tutaj nie jest pilne i nic nie może przerwać pracy. Awaria jednego kroku
  * nie zatrzymuje pozostałych, a nieudany przebieg powtórzy się nazajutrz.
@@ -68,17 +71,22 @@ class Housekeeping(
         true
     }
 
-    /** Zdjęcia z aparatu i pliki eksportu starsze niż [CACHE_DAYS] dni. */
+    /**
+     * Zdjęcia z aparatu i pliki eksportu starsze niż [CACHE_DAYS] dni,
+     * miniatury nieużywane od [THUMBNAIL_DAYS] dni.
+     */
     private fun sweepCache(now: Long): Int {
         var removed = 0
-        for (name in CACHE_DIRECTORIES) {
+        val directories = CACHE_DIRECTORIES.map { it to CACHE_DAYS } +
+            (NoteThumbnails.DIRECTORY to THUMBNAIL_DAYS)
+        for ((name, days) in directories) {
             val directory = File(app.cacheDir, name)
             if (!directory.isDirectory) continue
             val files = directory.listFiles() ?: continue
             for (file in files) {
                 if (!file.isFile) continue
                 val age = now - file.lastModified()
-                if (age < CACHE_DAYS * DAY) continue
+                if (age < days * DAY) continue
                 if (file.delete()) removed += 1
             }
         }
@@ -124,6 +132,9 @@ class Housekeeping(
          * tylko zajęte miejsce.
          */
         private const val CACHE_DAYS = 7
+
+        /** Miniatura powstaje od nowa z notatki, więc wystarczy miesiąc bez oglądania. */
+        private const val THUMBNAIL_DAYS = 30
 
         private val CACHE_DIRECTORIES = listOf("aparat", "eksport")
     }
