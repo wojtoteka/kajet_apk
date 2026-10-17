@@ -1232,9 +1232,9 @@ fun Strings.pausedWaiting(count: Int): String = if (english) {
     }
 } else {
     val noun = when {
-        count == 1 -> "notatka czeka i pójdzie"
-        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i pójdą"
-        else -> "notatek czeka i pójdzie"
+        count == 1 -> "notatka czeka i trafi do chmury"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i trafią do chmury"
+        else -> "notatek czeka i trafi do chmury"
     }
     "Synchronizacja wstrzymana. $count $noun po wznowieniu."
 }
@@ -1247,9 +1247,9 @@ fun Strings.offlineWaiting(count: Int): String = if (english) {
     }
 } else {
     val noun = when {
-        count == 1 -> "notatka czeka i pójdzie"
-        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i pójdą"
-        else -> "notatek czeka i pójdzie"
+        count == 1 -> "notatka czeka i trafi do chmury"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "notatki czekają i trafią do chmury"
+        else -> "notatek czeka i trafi do chmury"
     }
     "Brak internetu. $count $noun, gdy sieć wróci."
 }
@@ -2293,10 +2293,10 @@ object PolishStrings : Strings {
     override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest – także notatki dodane później."
     override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury – zsynchronizuj bibliotekę i spróbuj jeszcze raz."
     override val syncPauseSection = "Wstrzymanie synchronizacji"
-    override val syncPauseAbout = "Na jakiś czas notatki nie jadą do chmury ani z niej, nawet gdy jest internet. " +
+    override val syncPauseAbout = "Na jakiś czas notatki nie trafiają do chmury ani z niej, nawet gdy jest internet. " +
         "Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline” i szarą chmurę. " +
         "KajetAI działa dalej, ale jego zmiany i rozmowa też czekają na urządzeniu. Po " +
-        "końcu pauzy zaległe zmiany pojadą same."
+        "końcu pauzy zaległe zmiany trafią do chmury same."
     override val syncPausedNow = "Synchronizacja wstrzymana."
     override val syncPauseHour = "Na 1 godzinę"
     override val syncPauseDay = "Na 1 dzień"
