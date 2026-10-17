@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import wojtoteka.ovh.kajet.core.awaria.failureHandler
@@ -114,8 +115,6 @@ class LibraryViewModel(
     private val _expanded = MutableStateFlow(
         saved.get<ArrayList<String>>(KEY_EXPANDED)?.toSet() ?: setOf(""),
     )
-    private val _tree = MutableStateFlow<List<TreeNode>>(emptyList())
-    val tree: StateFlow<List<TreeNode>> = _tree.asStateFlow()
 
     private val _trash = MutableStateFlow<List<TrashEntry>>(emptyList())
     val trash: StateFlow<List<TrashEntry>> = _trash.asStateFlow()
@@ -150,6 +149,22 @@ class LibraryViewModel(
 
     val content: StateFlow<List<LibraryItem>> = folderContent
         .map { it?.items.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /*
+      Drzewo folderów po lewej, składane od nowa przy każdej zmianie folderu.
+
+      Tylko dopóki ktoś na nie patrzy. Dawniej zbierała je korutyna żyjąca
+      tyle, co model - a ona trzymała przy życiu także spis oglądanego
+      folderu. W czasie pisania w notatce każda synchronizacja robiła więc
+      w tle przebieg po dysku dla biblioteki, której nikt nie widział.
+
+      Wyjątek kończy składanie i zostawia drzewo takim, jakie było - dawniej
+      jeden nieczytelny folder zabierał ze sobą całą aplikację.
+    */
+    val tree: StateFlow<List<TreeNode>> = combine(_expanded, content) { expanded, _ -> expanded }
+        .mapLatest { expanded -> buildTree(expanded) }
+        .catch { failure -> _error.value = failure.message }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val favorites: StateFlow<List<LibraryItem>> = repo.favorites()
@@ -209,15 +224,6 @@ class LibraryViewModel(
     }
 
     init {
-        // Drzewo folderów po lewej. Bez handlera jeden nieczytelny folder
-        // przewracał tę korutynę, a wyjątek szedł dalej i zabierał ze sobą całą
-        // aplikację - zamiast po prostu zostawić drzewo takim, jakie było.
-        viewModelScope.launch(failureHandler("drzewo folderów") { _error.value = it.message }) {
-            combine(_expanded, content) { expanded, _ -> expanded }.collect { expanded ->
-                _tree.value = buildTree(expanded)
-            }
-        }
-
         // Po aktualizacji, która zmieniła budowę spisu, jest on pusty.
         // Odbudowujemy go sami, żeby favorites i ostatnio otwarte nie zniknęły
         // człowiekowi z oczu bez żadnego wyjaśnienia.

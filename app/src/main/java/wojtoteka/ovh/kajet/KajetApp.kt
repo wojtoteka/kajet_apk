@@ -175,6 +175,12 @@ class KajetApp : Application() {
 
         container = AppContainer(this)
 
+        // Spis notatek i wybrany katalog wstają w tle, zanim biblioteka o nie
+        // poprosi - pierwszy widok listy nie czeka wtedy na otwarcie bazy.
+        Thread {
+            runCatching { kotlinx.coroutines.runBlocking { container.library.warmUp() } }
+        }.start()
+
         // Rozgrzewka chmury poza wątkiem głównym: magazyn kluczy i WorkManager
         // zdążą wstać, zanim MainActivity.onResume poprosi o synchronizację.
         Thread {

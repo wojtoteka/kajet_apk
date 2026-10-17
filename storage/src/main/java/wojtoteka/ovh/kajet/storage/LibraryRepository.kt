@@ -237,6 +237,18 @@ class LibraryRepository(
 
     override suspend fun hasStore(): Boolean = store() != null
 
+    /**
+     * Otwiera spis i katalog notatek zawczasu, poza wątkiem rysowania.
+     *
+     * Pierwsze otwarcie bazy i pierwsze pytanie o wybrany katalog trwają na
+     * telefonie zauważalną chwilę, a biblioteka pyta o jedno i drugie zaraz
+     * po starcie. Gdy już są otwarte, pierwszy widok przychodzi od razu.
+     */
+    suspend fun warmUp() {
+        runCatching { dao.count() }
+        runCatching { store() }
+    }
+
     suspend fun store(): LibraryStore? = withContext(io) {
         fixedStore?.let { return@withContext it }
         val uri = settings.settings.first().libraryFolder ?: return@withContext null
