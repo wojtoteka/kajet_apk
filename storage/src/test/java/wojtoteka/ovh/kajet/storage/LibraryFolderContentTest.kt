@@ -236,4 +236,16 @@ class LibraryFolderContentTest {
         assertThat(shown[1].items.map { it.name }).containsExactly("Tytuł 0", "Tytuł 1", "Tytuł 2")
         assertThat(arrivals[1]).isAtLeast(3_000)
     }
+
+    @Test
+    fun `a note that cannot be read is shown from the disk and not written into the index empty`() {
+        runBlocking { repository.createNote("", "Dobra", NoteKind.TEXT) }
+        File(root, "Zepsuta.note").mkdirs()
+        File(root, "Zepsuta.note/content.json").writeText("{ to nie jest notatka")
+
+        val shown = contents(2)
+
+        assertThat(shown[1].items.map { it.name }).containsExactly("Dobra", "Zepsuta")
+        assertThat(runBlocking { repository.allNoteIds() }.map { it.first }).containsExactly("Dobra.note")
+    }
 }

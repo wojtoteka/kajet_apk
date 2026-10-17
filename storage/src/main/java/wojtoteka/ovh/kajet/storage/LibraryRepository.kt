@@ -199,7 +199,20 @@ class LibraryRepository(
 
     private val thumbnails = NoteThumbnails(java.io.File(context.cacheDir, NoteThumbnails.DIRECTORY))
 
-    private val coldThumbnails = Semaphore(2)
+    /*
+      Pełne odczyty notatek w tle - miniatury i uzupełnianie spisu - idą
+      najwyżej po dwa naraz. Notatka odręczna to potrafi być kilka megabajtów
+      punktów kreski; kilka takich odczytów jednocześnie kończyło się na
+      telefonie brakiem pamięci i notatkami, których nie udało się przeczytać.
+    */
+    private val fullReads = Semaphore(2)
+
+    /**
+     * Notatki, których nie udało się przeczytać przy uzupełnianiu spisu w tym
+     * uruchomieniu. Następne wejście do folderu ich nie męczy; spróbuje znowu
+     * dopiero kolejne uruchomienie aplikacji.
+     */
+    private val unreadable: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     val folderSelected: Flow<Boolean> = settings.settings.map { current ->
         hasPersistedAccess(current.libraryFolder)
@@ -462,21 +475,28 @@ class LibraryRepository(
             changed = true
         }
 
-        // Notatki, których spis nie zna - każdą trzeba przeczytać, a to trwa.
-        // Idą po kolei i każda trafia do spisu od razu: przebieg przerwany
-        // zmianą albo zamknięciem aplikacji nie traci tego, co już przeczytał,
-        // a następny zaczyna od reszty.
+        // Notatki, których spis nie zna - albo zna bez treści, bo kiedyś nie
+        // dało się ich przeczytać. Każdą trzeba przeczytać, a to trwa. Idą po
+        // kolei i każda trafia do spisu od razu: przebieg przerwany zmianą albo
+        // zamknięciem aplikacji nie traci tego, co już przeczytał, a następny
+        // zaczyna od reszty. Nieudany odczyt nie zostawia w spisie pustego
+        // wiersza - lista pokazuje wtedy notatkę z dysku, tak jak przed odczytem.
         var sinceShown = 0
         for (item in listing.items) {
-            if (item.type != ItemType.NOTE || item.documentUri in knownByUri) continue
+            if (item.type != ItemType.NOTE) continue
+            val row = knownByUri[item.documentUri]
+            if (row != null && row.noteKind != null) continue
+            if (item.documentUri in unreadable) continue
             if (refreshTick.value != tick) break
-            val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
-            if (refreshTick.value != tick) break
-            if (document != null) {
-                writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
-            } else {
-                dao.upsertKeepingOpened(item.toIndexEntry())
+            val document = fullReads.withPermit {
+                runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
             }
+            if (refreshTick.value != tick) break
+            if (document == null) {
+                unreadable += item.documentUri
+                continue
+            }
+            writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
             changed = true
             sinceShown += 1
             if (sinceShown >= NOTES_PER_UPDATE) {
@@ -1656,7 +1676,7 @@ class LibraryRepository(
      */
     suspend fun thumbnail(item: LibraryItem): PageThumbnail? = withContext(io) {
         thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withContext it }
-        coldThumbnails.withPermit {
+        fullReads.withPermit {
             thumbnails.get(item.documentUri, item.updatedAt)?.let { return@withPermit it }
             val document = runCatching {
                 if (shared.isShared(item.path)) {
