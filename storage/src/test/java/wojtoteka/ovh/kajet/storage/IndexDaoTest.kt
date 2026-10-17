@@ -88,4 +88,44 @@ class IndexDaoTest {
 
         assertThat(dao.allEntries().map { it.path }).containsExactly("Szkoła 2", "Szkoła 2/Obok.note")
     }
+
+    @Test
+    fun `a folder from the index holds only what lies directly in it`() = runTest {
+        folder("Szkoła")
+        folder("Szkoła/Fizyka")
+        note("Szkoła/Fizyka/Ruch.note")
+        note("Szkoła/Lektury.note")
+        note("Luzem.note")
+        note("Szkoła 2.note")
+
+        assertThat(dao.childrenOf("").map { it.path }).containsExactly("Szkoła", "Luzem.note", "Szkoła 2.note")
+        assertThat(dao.childrenOf("Szkoła").map { it.path }).containsExactly("Szkoła/Fizyka", "Szkoła/Lektury.note")
+        assertThat(dao.childrenOf("Szkoła/Fizyka").map { it.path }).containsExactly("Szkoła/Fizyka/Ruch.note")
+    }
+
+    @Test
+    fun `parent paths work for names with dots, spaces and Polish letters`() = runTest {
+        folder("Zażółć gęślą")
+        note("Zażółć gęślą/a.b.c (2).note")
+        folder("Zażółć gęślą/ąę")
+        note("Zażółć gęślą/ąę/ź.note")
+
+        assertThat(dao.childrenOf("Zażółć gęślą").map { it.path })
+            .containsExactly("Zażółć gęślą/a.b.c (2).note", "Zażółć gęślą/ąę")
+        assertThat(dao.childrenOf("Zażółć gęślą/ąę").map { it.path }).containsExactly("Zażółć gęślą/ąę/ź.note")
+    }
+
+    @Test
+    fun `child counts match what lies directly in each folder`() = runTest {
+        folder("A")
+        folder("A/B")
+        note("A/B/1.note")
+        note("A/B/2.note")
+        note("A/3.note")
+        folder("Pusty")
+
+        val counts = dao.childCounts(listOf("A", "A/B", "Pusty")).associate { it.parent to it.count }
+
+        assertThat(counts).containsExactly("A", 2, "A/B", 2)
+    }
 }

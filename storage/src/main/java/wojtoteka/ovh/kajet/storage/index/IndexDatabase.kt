@@ -38,6 +38,12 @@ data class IndexEntry(
     val parentPath: String get() = path.substringBeforeLast('/', "")
 }
 
+/** Licznik wpisów w folderze, patrz [IndexDao.childCounts]. */
+data class ChildCount(
+    val parent: String,
+    val count: Int,
+)
+
 @Entity(tableName = "content_fts")
 @Fts4(tokenizer = FtsOptions.TOKENIZER_UNICODE61)
 data class ContentFts(
@@ -144,6 +150,30 @@ interface IndexDao {
 
     @Query("SELECT * FROM entries WHERE documentUri = :uri")
     suspend fun find(uri: String): IndexEntry?
+
+    /*
+      Folder ze spisu, bez dysku - to, co biblioteka pokazuje od razu po
+      wejściu, zanim magazyn odpowie.
+
+      Rodzic liczy się z samej ścieżki: wewnętrzny rtrim zdejmuje z prawej
+      wszystkie znaki ostatniego członu (każdy z nich występuje w ścieżce
+      bez ukośników), a zatrzymuje się na ostatnim ukośniku, który zdejmuje
+      zewnętrzny rtrim. Z „a/b/c" zostaje „a/b", z „a" pusty tekst - korzeń.
+    */
+    @Query("SELECT * FROM entries WHERE rtrim(rtrim(path, replace(path, '/', '')), '/') = :parent")
+    suspend fun childrenOf(parent: String): List<IndexEntry>
+
+    /** Ile wpisów leży wprost w każdym z [folders] - tak samo jak licznik z dysku. */
+    @Query(
+        """
+        SELECT parent, COUNT(*) AS count FROM (
+            SELECT rtrim(rtrim(path, replace(path, '/', '')), '/') AS parent FROM entries
+        )
+        WHERE parent IN (:folders)
+        GROUP BY parent
+        """,
+    )
+    suspend fun childCounts(folders: List<String>): List<ChildCount>
 
     @Query("SELECT * FROM entries WHERE path = :path LIMIT 1")
     suspend fun findByPath(path: String): IndexEntry?

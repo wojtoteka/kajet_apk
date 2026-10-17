@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -50,6 +49,7 @@ import wojtoteka.ovh.kajet.export.ExportFormat
 import wojtoteka.ovh.kajet.export.ExportService
 import wojtoteka.ovh.kajet.share.IncomingShare
 import wojtoteka.ovh.kajet.share.ShareImport
+import wojtoteka.ovh.kajet.storage.FolderContent
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.TrashEntry
 import wojtoteka.ovh.kajet.cloud.FileUploader
@@ -135,9 +135,21 @@ class LibraryViewModel(
     // Każdy z tych spisów ma własne .catch. Bez niego jeden nieczytelny plik
     // w katalogu przewraca korutynę, a człowiek widzi czarny ekran zamiast
     // biblioteki i nie wie, co się stało.
-    val content: StateFlow<List<LibraryItem>> = _path
-        .flatMapLatest { repo.folder(it) }
-        .catch { failure -> reportAndEmpty(failure, words.readingFolderFailed) }
+    //
+    // Zawartość niesie ścieżkę, do której należy. Po przejściu do innego
+    // folderu przez ułamek sekundy w stanie siedzi jeszcze poprzedni - ekran
+    // nie może go wtedy pokazać jako zawartości nowego.
+    val folderContent: StateFlow<FolderContent?> = _path
+        .flatMapLatest { path ->
+            repo.folderContent(path).catch { failure ->
+                _error.value = failure.message?.takeIf { it.isNotBlank() } ?: words.readingFolderFailed
+                emit(FolderContent(path, emptyList(), fromDisk = true))
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val content: StateFlow<List<LibraryItem>> = folderContent
+        .map { it?.items.orEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val favorites: StateFlow<List<LibraryItem>> = repo.favorites()
@@ -232,11 +244,18 @@ class LibraryViewModel(
       kilkudziesięciu notatkach luzem drzewo zamieniłoby się w drugi spis
       i foldery trzeba by w nim wyszukiwać.
     */
+    /*
+      Drzewo składa się ze spisu, nie z dysku: przy każdej zmianie budowało
+      się od nowa, a każdy rozwinięty folder to był osobny spis z dysku. Spis
+      dla oglądanego folderu poprawia się sam po każdym przebiegu po dysku,
+      więc drzewo idzie za nim bez własnych odczytów.
+    */
     private suspend fun buildTree(expanded: Set<String>): List<TreeNode> {
         val result = mutableListOf<TreeNode>()
         suspend fun descend(path: String, level: Int) {
             val inside = runCatching {
-                if (path.isEmpty()) repo.foldersIn(path) else repo.folder(path).first()
+                val items = repo.indexedFolder(path)
+                if (path.isEmpty()) items.filter { it.type == ItemType.FOLDER } else items
             }.getOrDefault(emptyList())
             for (item in inside) {
                 if (item.type != ItemType.FOLDER) {
@@ -625,5 +644,3 @@ class LibraryViewModel(
     }
 }
 
-private suspend fun LibraryRepository.foldersIn(path: String): List<LibraryItem> =
-    store()?.list(path)?.filter { it.type == ItemType.FOLDER } ?: emptyList()
