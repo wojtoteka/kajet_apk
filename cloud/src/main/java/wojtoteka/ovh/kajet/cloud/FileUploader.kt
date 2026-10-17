@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
+import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.storage.FileUploadStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.index.FileUploadEntry
@@ -70,7 +71,7 @@ class FileUploader(
         for (entry in store.ready()) {
             val file = File(entry.localPath)
             if (!file.isFile) {
-                val message = "Brakuje prywatnej kopii pliku oczekującego na upload."
+                val message = words.uploadLocalCopyMissing
                 store.markFailed(entry.id, retryable = false, message, "local-file-missing")
                 firstError = firstError ?: message
                 continue

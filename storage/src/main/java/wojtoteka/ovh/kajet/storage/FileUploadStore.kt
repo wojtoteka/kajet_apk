@@ -56,7 +56,7 @@ class FileUploadStore(
         var copied = 0L
         try {
             val input = app.contentResolver.openInputStream(uri)
-                ?: throw IOException("Nie udało się otworzyć wybranego pliku.")
+                ?: throw IOException(words.uploadFileOpenFailed)
             input.use { source ->
                 target.outputStream().buffered().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)

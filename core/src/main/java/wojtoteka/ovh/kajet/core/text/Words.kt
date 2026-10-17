@@ -64,6 +64,8 @@ interface Strings {
     val newNote: String
     val newCodeFile: String
     val uploadFile: String
+    val uploadFileOpenFailed: String
+    val uploadLocalCopyMissing: String
     val folderName: String
     val folderColour: String
     val folderIcon: String
@@ -783,7 +785,7 @@ fun Strings.shareLastOpened(date: String): String =
     if (english) "Last opened $date" else "Ostatnio otwarte $date"
 
 fun Strings.shareMailWent(address: String): String =
-    if (english) "The message went to $address." else "Wiadomość poszła na $address."
+    if (english) "The message was sent to $address." else "Wiadomość została wysłana na $address."
 
 /**
  * Plik jest dłuższy, niż serwer przyjmuje do uruchomienia.
@@ -812,9 +814,9 @@ fun Strings.codeConsoleAtLine(line: Int): String =
  * z console.log wypisuje tysiące wierszy szybciej, niż da się je narysować.
  */
 fun Strings.codeConsoleFull(limit: Int): String = if (english) {
-    "$limit lines collected, and that is where it stops. Clear it to collect again."
+    "The console is full ($limit lines). Clear it to collect new output."
 } else {
-    "Zebrane $limit wierszy i na tym koniec. Wyczyść, żeby zbierać od nowa."
+    "Konsola jest pełna ($limit wierszy). Wyczyść ją, żeby zbierać dalej."
 }
 
 fun Strings.cannotRunLanguage(language: String): String = if (english) {
@@ -855,15 +857,15 @@ fun Strings.actionsFor(name: String): String =
     if (english) "Actions for $name" else "Działania dla $name"
 
 fun Strings.emptyTrashWarning(count: Int): String = if (english) {
-    "All $count notes in the bin will be gone for good. This cannot be undone."
+    "All notes in the bin ($count) will be permanently deleted. This cannot be undone."
 } else {
-    "Wszystkie notatki z kosza ($count) znikną na dobre. Tego nie da się cofnąć."
+    "Wszystkie notatki z kosza ($count) zostaną trwale usunięte. Tej operacji nie można cofnąć."
 }
 
 fun Strings.trashedAt(whenText: String, where: String): String = if (english) {
-    "Binned $whenText · was in: $where"
+    "Moved to bin $whenText · was in: $where"
 } else {
-    "Wyrzucono $whenText · było w: $where"
+    "Przeniesiono do kosza $whenText · było w: $where"
 }
 
 /**
@@ -878,7 +880,7 @@ fun Strings.disappearsIn(days: Int): String = when {
 }
 
 fun Strings.deleteForeverOf(name: String): String =
-    if (english) "Delete $name for good" else "Skasuj $name na dobre"
+    if (english) "Delete $name permanently" else "Usuń $name na stałe"
 
 /**
  * Nazwa katalogu na dysku, gdy różni się od wpisanej. Dwukropka ani ukośnika
@@ -909,9 +911,9 @@ fun Strings.selectedCount(count: Int): String = if (english) {
 
 fun Strings.trashManyWarning(count: Int): String = if (english) {
     if (count == 1) {
-        "One item goes to the bin. You can take it out of there."
+        "One item goes to the bin. You can restore it from there."
     } else {
-        "$count items go to the bin. You can take them out of there."
+        "$count items go to the bin. You can restore them from there."
     }
 } else {
     val noun = when {
@@ -919,7 +921,7 @@ fun Strings.trashManyWarning(count: Int): String = if (english) {
         count % 10 in 2..4 && count % 100 !in 12..14 -> "$count wpisy trafią"
         else -> "$count wpisów trafi"
     }
-    "$noun do kosza. Da się je stamtąd wyjąć."
+    "$noun do kosza. Możesz je stamtąd przywrócić."
 }
 
 fun Strings.moveManyTitle(count: Int): String = if (english) {
@@ -937,7 +939,7 @@ fun Strings.moveManyTitle(count: Int): String = if (english) {
 // a nie tylko przy którym wpisie stanęło.
 
 fun Strings.trashingProgress(done: Int, total: Int): String =
-    if (english) "Moving to the bin: $done of $total" else "Wyrzucam do kosza: $done z $total"
+    if (english) "Moving to the bin: $done of $total" else "Przenoszę do kosza: $done z $total"
 
 fun Strings.movingProgress(done: Int, total: Int): String =
     if (english) "Moving: $done of $total" else "Przenoszę: $done z $total"
@@ -948,22 +950,22 @@ fun Strings.movingProgress(done: Int, total: Int): String =
   znikało naraz i wyglądało to, jakby przycisk nie zadziałał.
 */
 fun Strings.deletingProgress(done: Int, total: Int): String =
-    if (english) "Deleting for good: $done of $total" else "Kasuję na dobre: $done z $total"
+    if (english) "Deleting permanently: $done of $total" else "Usuwam na stałe: $done z $total"
 
 fun Strings.deletingOne(name: String): String =
-    if (english) "Deleting for good: $name" else "Kasuję na dobre: $name"
+    if (english) "Deleting permanently: $name" else "Usuwam na stałe: $name"
 
 /**
  * Ile wpisów nie dało się ruszyć. Reszta poszła - dlatego zdanie mówi
  * o niepowodzeniu części, a nie o niepowodzeniu całości.
  */
 fun Strings.bulkPartlyFailed(count: Int): String = if (english) {
-    if (count == 1) "One item could not be done." else "$count items could not be done."
+    if (count == 1) "1 item could not be processed." else "$count items could not be processed."
 } else {
-    // Po polsku przeczenie bierze dopełniacz przy każdej liczbie, więc tu
+    // Po polsku „dla" bierze dopełniacz przy każdej liczbie, więc tu
     // trzech postaci liczby mnogiej nie ma - jest „wpisów" i już.
-    val noun = if (count == 1) "Jednego wpisu" else "$count wpisów"
-    "$noun nie udało się ruszyć."
+    val noun = if (count == 1) "jednego wpisu" else "$count wpisów"
+    "Nie udało się wykonać operacji dla $noun."
 }
 
 fun Strings.folderLookTitle(name: String): String =
@@ -990,7 +992,7 @@ fun Strings.savedAt(hour: Int, minute: Int): String =
 fun Strings.photoNotFound(file: String): String = if (english) {
     "Kajet could not find $file. The photo may have been deleted from the note's folder."
 } else {
-    "Nie ma pliku $file. Zdjęcie mogło zostać skasowane z katalogu notatki."
+    "Nie ma pliku $file. Zdjęcie mogło zostać usunięte z folderu notatki."
 }
 
 fun Strings.photoOfMany(number: Int, total: Int): String = if (english) {
@@ -1000,7 +1002,7 @@ fun Strings.photoOfMany(number: Int, total: Int): String = if (english) {
 }
 
 fun Strings.selectedStrokes(count: Int): String = if (english) {
-    "$count strokes selected"
+    if (count == 1) "1 stroke selected" else "$count strokes selected"
 } else {
     val noun = when {
         count == 1 -> "kreskę"
@@ -1011,7 +1013,7 @@ fun Strings.selectedStrokes(count: Int): String = if (english) {
 }
 
 fun Strings.pagesCount(count: Int): String = if (english) {
-    "This note has $count pages."
+    if (count == 1) "This note has 1 page." else "This note has $count pages."
 } else {
     "Notatka ma $count ${pageNoun(count)}."
 }
@@ -1039,7 +1041,11 @@ fun Strings.thisNode(): String = if (english) "this node" else "tym węzłem"
 fun Strings.colourNamedHex(hex: String): String = "$colourNamed $hex"
 
 fun Strings.conflictsNoted(count: Int): String = if (english) {
-    "$count notes changed in two places at once. $serverCopiesKept"
+    if (count == 1) {
+        "1 note changed in two places at once. $serverCopiesKept"
+    } else {
+        "$count notes changed in two places at once. $serverCopiesKept"
+    }
 } else {
     val noun = when {
         count == 1 -> "notatka zmieniła się"
@@ -1050,7 +1056,8 @@ fun Strings.conflictsNoted(count: Int): String = if (english) {
 }
 
 fun Strings.mapTally(nodes: Int, edges: Int): String = if (english) {
-    "$nodes nodes · $edges connections"
+    "$nodes ${if (nodes == 1) "node" else "nodes"} · " +
+        "$edges ${if (edges == 1) "connection" else "connections"}"
 } else {
     val nodeWord = when {
         nodes == 1 -> "węzeł"
@@ -1113,17 +1120,17 @@ fun Strings.cannotSaveFile(name: String?): String =
 fun Strings.cannotCreateFile(name: String, folder: String?): String = if (english) {
     "Kajet cannot create $name in the folder $folder."
 } else {
-    "Nie można utworzyć pliku $name w katalogu $folder."
+    "Nie można utworzyć pliku $name w folderze $folder."
 }
 
 fun Strings.diskRenamedFile(saved: String?, wanted: String): String = if (english) {
     "The disk saved the file as $saved instead of $wanted. Pick another folder for your notes."
 } else {
-    "Dysk zapisał plik pod nazwą $saved zamiast $wanted. Wybierz inny katalog na notatki."
+    "Dysk zapisał plik pod nazwą $saved zamiast $wanted. Wybierz inny folder na notatki."
 }
 
 fun Strings.cannotCreateFolder(name: String?): String =
-    if (english) "Kajet cannot create the folder $name." else "Nie można utworzyć katalogu $name."
+    if (english) "Kajet cannot create the folder $name." else "Nie można utworzyć folderu $name."
 
 fun Strings.cannotReadFile(name: String?): String =
     if (english) "Kajet cannot read $name." else "Nie można odczytać pliku $name."
@@ -1135,9 +1142,9 @@ fun Strings.fileVanishedWhileCopying(name: String?): String = if (english) {
 }
 
 fun Strings.folderGone(path: String): String = if (english) {
-    "The folder $path is gone. Someone may have moved it outside Kajet."
+    "The folder $path is gone. It may have been moved outside Kajet."
 } else {
-    "Nie ma już folderu $path. Ktoś mógł go przenieść poza aplikacją."
+    "Nie ma już folderu $path. Mógł zostać przeniesiony poza Kajetem."
 }
 
 fun Strings.folderCreateFailed(name: String): String = if (english) {
@@ -1156,9 +1163,9 @@ fun Strings.noteGoneUnsaved(path: String): String = if (english) {
 }
 
 fun Strings.noteUnreadable(name: String?): String = if (english) {
-    "The note $name cannot be read - its file is damaged."
+    "The note $name cannot be read – its file is damaged."
 } else {
-    "Nie da się odczytać notatki $name - jej plik jest uszkodzony."
+    "Nie da się odczytać notatki $name – jej plik jest uszkodzony."
 }
 
 fun Strings.fileGone(path: String): String =
@@ -1174,7 +1181,7 @@ fun Strings.entryGone(path: String): String =
     if (english) "The entry $path is gone." else "Nie ma już wpisu $path."
 
 fun Strings.renameFailed(name: String): String =
-    if (english) "Renaming to $name did not work." else "Nie udało się zmienić nazwy na $name."
+    if (english) "Kajet could not rename it to $name." else "Nie udało się zmienić nazwy na $name."
 
 fun Strings.fileGoneFromBin(name: String): String = if (english) {
     "The file $name is no longer in the bin."
@@ -1204,7 +1211,7 @@ fun Strings.notesStuck(count: Int): String = if (english) {
 }
 
 fun Strings.notesWaiting(count: Int): String = if (english) {
-    "$count notes waiting to upload"
+    if (count == 1) "1 note waiting to upload" else "$count notes waiting to upload"
 } else {
     val noun = when {
         count == 1 -> "notatka czeka"
@@ -1218,7 +1225,11 @@ fun Strings.syncPausedUntil(moment: String): String =
     if (english) "Sync is paused until $moment." else "Synchronizacja wstrzymana do $moment."
 
 fun Strings.pausedWaiting(count: Int): String = if (english) {
-    "Sync is paused. $count notes are waiting and will upload when it resumes."
+    if (count == 1) {
+        "Sync is paused. 1 note is waiting and will upload when it resumes."
+    } else {
+        "Sync is paused. $count notes are waiting and will upload when it resumes."
+    }
 } else {
     val noun = when {
         count == 1 -> "notatka czeka i pójdzie"
@@ -1229,7 +1240,11 @@ fun Strings.pausedWaiting(count: Int): String = if (english) {
 }
 
 fun Strings.offlineWaiting(count: Int): String = if (english) {
-    "No internet. $count notes are waiting and will upload when the network is back."
+    if (count == 1) {
+        "No internet. 1 note is waiting and will upload when the network is back."
+    } else {
+        "No internet. $count notes are waiting and will upload when the network is back."
+    }
 } else {
     val noun = when {
         count == 1 -> "notatka czeka i pójdzie"
@@ -1244,8 +1259,8 @@ fun Strings.signedInAs(login: String): String =
 
 fun Strings.syncSummary(sent: Int, fetched: Int): String = buildString {
     if (english) {
-        if (sent > 0) append("$sent sent. ")
-        if (fetched > 0) append("$fetched fetched. ")
+        if (sent > 0) append("$sent uploaded. ")
+        if (fetched > 0) append("$fetched downloaded. ")
     } else {
         if (sent > 0) append("Wysłano $sent. ")
         if (fetched > 0) append("Pobrano $fetched. ")
@@ -1258,19 +1273,19 @@ fun Strings.syncSummary(sent: Int, fetched: Int): String = buildString {
  */
 @Suppress("UNUSED_PARAMETER")
 fun Strings.serverError(status: Int): String = if (english) {
-    "The server is not answering properly right now. Try again in a moment."
+    "The server returned an unexpected response. Try again in a moment."
 } else {
-    "Serwer nie odpowiada tak, jak powinien. Spróbuj za chwilę."
+    "Serwer odpowiedział w nieoczekiwany sposób. Spróbuj za chwilę."
 }
 
 fun Strings.noteSaveOnDeviceFailed(title: String): String = if (english) {
-    "The note \u201c$title\u201d would not save on this device."
+    "Kajet could not save the note \u201c$title\u201d on this device."
 } else {
     "Nie udało się zapisać notatki \u201e$title\u201d na urządzeniu."
 }
 
 fun Strings.codeNoteUnknownShape(title: String): String = if (english) {
-    "The code note \u201c$title\u201d is saved in a way Kajet does not know."
+    "Kajet does not recognise the format of the code note \u201c$title\u201d."
 } else {
     "Notatka z kodem \u201e$title\u201d ma nieznany format."
 }
@@ -1295,7 +1310,7 @@ fun Strings.codeFileTooLargeAbout(sizeBytes: Long, limitBytes: Int): String {
 }
 
 /**
- * Ileś megabajtów zamiast siedmiu cyfr. Bajty są dokładne, ale žeby
+ * Ileś megabajtów zamiast siedmiu cyfr. Bajty są dokładne, ale żeby
  * zrozumieć „41 943 040 B", trzeba je najpierw policzyć na palcach.
  *
  * Zaokrąglenie idzie w górę do jednej dziesiątej: plik odrobinę większy od
@@ -1344,11 +1359,11 @@ fun Strings.uploadStatusText(
     error: String?,
     errorCode: String? = null,
 ): String = when (status) {
-    "PENDING" -> if (english) "$name — waiting for a connection" else "$name — oczekuje na połączenie"
-    "UPLOADING" -> if (english) "$name — uploading ($progress%)" else "$name — wysyłanie ($progress%)"
-    "SYNCED" -> if (english) "$name — uploaded successfully" else "$name — wgrany pomyślnie"
-    "FAILED_RETRYABLE" -> "$name — " + uploadProblem(error, errorCode, temporary = true)
-    else -> "$name — " + uploadProblem(error, errorCode, temporary = false)
+    "PENDING" -> if (english) "$name – waiting for a connection" else "$name – oczekuje na połączenie"
+    "UPLOADING" -> if (english) "$name – uploading ($progress%)" else "$name – wysyłanie ($progress%)"
+    "SYNCED" -> if (english) "$name – uploaded successfully" else "$name – wgrany pomyślnie"
+    "FAILED_RETRYABLE" -> "$name – " + uploadProblem(error, errorCode, temporary = true)
+    else -> "$name – " + uploadProblem(error, errorCode, temporary = false)
 }
 
 /** Krótki powód odmowy. Kody są te same, którymi odpowiada serwer. */
@@ -1365,9 +1380,9 @@ fun Strings.uploadProblem(error: String?, errorCode: String?, temporary: Boolean
         if (english) "this folder is not in the cloud yet" else "tego folderu nie ma jeszcze w chmurze"
 
     else -> firstSentence(error) ?: if (temporary) {
-        if (english) "sending did not work, Kajet will try again" else "wysyłanie się nie udało, Kajet spróbuje jeszcze raz"
+        if (english) "upload failed, Kajet will try again" else "nie udało się wysłać, Kajet spróbuje jeszcze raz"
     } else {
-        if (english) "sending did not work" else "wysyłanie się nie udało"
+        if (english) "upload failed" else "nie udało się wysłać"
     }
 }
 
@@ -1531,6 +1546,8 @@ object PolishStrings : Strings {
     override val newNote = "Nowa notatka"
     override val newCodeFile = "Nowy plik z kodem"
     override val uploadFile = "Wgraj plik"
+    override val uploadFileOpenFailed = "Nie udało się otworzyć wybranego pliku."
+    override val uploadLocalCopyMissing = "Brakuje lokalnej kopii pliku oczekującego na wysłanie."
     override val folderName = "Nazwa folderu"
     override val folderColour = "Kolor folderu"
     override val folderIcon = "Ikona folderu"
@@ -1539,8 +1556,8 @@ object PolishStrings : Strings {
     override val emptyTrash = "Opróżnij kosz"
     override val emptyingTrash = "Opróżniam kosz"
     override val restore = "Przywróć"
-    override val deleteForever = "Skasuj na dobre"
-    override val moveToTrash = "Wyrzuć do kosza"
+    override val deleteForever = "Usuń na stałe"
+    override val moveToTrash = "Przenieś do kosza"
     override val addToFavorites = "Dodaj do ulubionych"
     override val removeFromFavorites = "Usuń z ulubionych"
     override val rebuildIndex = "Odbuduj spis notatek"
@@ -1548,7 +1565,7 @@ object PolishStrings : Strings {
     override val selectMany = "Zaznacz"
     override val selectAll = "Zaznacz wszystko"
     override val selectionDone = "Zakończ zaznaczanie"
-    override val trashManyQuestion = "Wyrzucić zaznaczone do kosza?"
+    override val trashManyQuestion = "Przenieść zaznaczone do kosza?"
 
     override val noteText = "Tekstowa"
     override val noteHandwritten = "Odręczna"
@@ -1558,22 +1575,22 @@ object PolishStrings : Strings {
     override val saving = "Zapisuję…"
     override val loading = "Wczytuję"
     override val changesWaiting = "Zmiany czekają"
-    override val saveFailed = "Zapis się nie udał"
+    override val saveFailed = "Nie udało się zapisać"
     override val noteInCloud = "Notatka jest w chmurze"
     override val noteWaitingForCloud = "Notatka czeka na wysłanie do chmury"
     override val noteOpenFailed = "Nie udało się otworzyć notatki."
     override val noteSaveFailed = "Nie udało się zapisać notatki."
     override val noteDeletedElsewhere = "Usunięta na innym urządzeniu"
     override val noteDeletedElsewhereAbout = "Ta notatka została usunięta na innym urządzeniu. " +
-        "Twoja wersja jest wciąż tutaj - możesz zapisać ją jako nową notatkę " +
+        "Twoja wersja jest wciąż tutaj – możesz zapisać ją jako nową notatkę " +
         "albo odrzucić zmiany."
     override val fileDeletedElsewhereAbout = "Ten plik został usunięty na innym urządzeniu. " +
-        "Twoja wersja jest wciąż tutaj - możesz zapisać ją jako nowy plik " +
+        "Twoja wersja jest wciąż tutaj – możesz zapisać ją jako nowy plik " +
         "albo odrzucić zmiany."
     override val saveAsNewNote = "Zapisz jako nową"
     override val saveAsNewFile = "Zapisz jako nowy plik"
     override val discardChanges = "Odrzuć zmiany"
-    override val saveAsNewFailed = "Nie udało się zapisać nowej kopii. Treść zostaje na ekranie - " +
+    override val saveAsNewFailed = "Nie udało się zapisać nowej kopii. Treść zostaje na ekranie – " +
         "spróbuj jeszcze raz."
     override val placeholderWord = "tekst"
     override val savingPhoto = "Zapisuję zdjęcie…"
@@ -1587,13 +1604,13 @@ object PolishStrings : Strings {
         "ekranie; w tekście i na mapie myśli zostaje formatowanie i zdjęcia."
     override val exportSave = "Zapisz plik"
     override val shareLink = "Udostępnij odnośnikiem"
-    override val shareLinkBusy = "Robię odnośnik…"
+    override val shareLinkBusy = "Tworzę odnośnik…"
 
     override val sharePanelTitle = "Udostępnianie"
     override val shareWhatMayDo = "Co wolno z odnośnikiem"
     override val shareRightRead = "Tylko czytać"
     override val shareRightEdit = "Czytać i poprawiać"
-    override val shareEmailLabel = "Adres e-mail odbiorcy - możesz zostawić puste"
+    override val shareEmailLabel = "Adres e-mail odbiorcy – możesz zostawić puste"
     override val shareEmailAbout =
         "Puste pole daje zwykły odnośnik. Z adresem udostępnienie jest imienne: " +
         "otworzy je tylko osoba zalogowana tym adresem, a wiadomość wysyła serwer."
@@ -1670,7 +1687,7 @@ object PolishStrings : Strings {
     override val languageEnglish = "English"
     override val settingsToolbarSide = "Pasek narzędzi"
     override val settingsToolbarSideAbout = "Po której stronie ekranu stoi pasek z narzędziami " +
-        "w edytorach. Leworęczni zwykle wolą prawą - dłoń nie zasłania wtedy przycisków " +
+        "w edytorach. Leworęczni zwykle wolą prawą – dłoń nie zasłania wtedy przycisków " +
         "i nic nie klika się samo."
     override val toolbarLeft = "Po lewej"
     override val toolbarRight = "Po prawej"
@@ -1698,8 +1715,8 @@ object PolishStrings : Strings {
     override val libAllNotes = "Wszystkie notatki"
     override val libFolderUp = "Folder wyżej"
     override val libFolderEmpty = "Ten folder jest pusty"
-    override val libFolderEmptyHint = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze " +
-        "się w katalogu wybranym na tym urządzeniu."
+    override val libFolderEmptyHint = "Utwórz notatkę albo folder na przedmiot. Wszystko zapisze się w folderze " +
+        "wybranym na tym urządzeniu."
     override val libNothingHere = "Pusto"
     override val libSearchAbout = "Szukam w tytułach i w treści. Pismo odręczne znajdę wtedy, kiedy " +
         "zamienisz je na tekst."
@@ -1719,16 +1736,17 @@ object PolishStrings : Strings {
     override val libSearchNothingAbout = "Sprawdź pisownię albo odbuduj spis notatek w ustawieniach, " +
         "jeśli notatki trafiły tu spoza Kajetu."
     override val emptyTrashQuestion = "Opróżnić kosz?"
-    override val trashAbout = "Wyrzucone notatki leżą w ukrytym katalogu obok biblioteki. Nic nie ginie, " +
-        "dopóki nie opróżnisz kosza."
+    override val trashAbout = "Notatki z kosza leżą w ukrytym folderze obok biblioteki. Nic nie ginie, dopóki " +
+        "nie opróżnisz kosza."
     override val trashEmptyTitle = "Kosz jest pusty"
-    override val trashEmptyAbout = "Wyrzucone notatki znajdziesz tutaj i przywrócisz je dokładnie " +
+    override val trashEmptyAbout = "Notatki przeniesione do kosza znajdziesz tutaj i przywrócisz je dokładnie " +
         "tam, skąd zniknęły."
     override val menuMoveToFolder = "Przenieś do innego folderu"
     override val menuCopy = "Zrób kopię"
     override val copySuffix = "(kopia)"
-    override val deleteForeverQuestion = "Skasować na dobre?"
-    override val deleteForeverWarning = "Tego się nie cofnie. Wpis zniknie z kosza, z dysku i z konta w chmurze."
+    override val deleteForeverQuestion = "Usunąć na stałe?"
+    override val deleteForeverWarning = "Tej operacji nie można cofnąć. Wpis zostanie usunięty z kosza, z urządzenia i " +
+        "z konta w chmurze."
     override val menuLook = "Zmień kolor i ikonę"
     override val exportFolderPdf = "Zapisz cały folder jako PDF"
     override val exportFolderMarkdown = "Zapisz cały folder jako Markdown"
@@ -1786,8 +1804,8 @@ object PolishStrings : Strings {
 
     override val codeConsole = "Konsola"
     override val codeConsoleClear = "Wyczyść"
-    override val codeConsoleEmpty = "Tu staje to, co strona wypisze przez console.log, " +
-        "razem z błędami skryptów."
+    override val codeConsoleEmpty = "Tu pojawi się to, co strona wypisze przez console.log, razem z błędami " +
+        "skryptów."
 
     override val insertPhotoFromGallery = "Wstaw zdjęcie z galerii"
     override val takePhoto = "Zrób zdjęcie"
@@ -1914,11 +1932,11 @@ object PolishStrings : Strings {
     override val newNode = "Nowy węzeł"
     override val addBranch = "Dodaj gałąź do wybranego węzła"
     override val addSibling = "Dodaj węzeł obok wybranego"
-    override val finishConnecting = "Skończ łączenie"
+    override val finishConnecting = "Zakończ łączenie"
     override val connectToOthers = "Połącz ten węzeł z innymi"
     override val inkLabel = "Podpis rysikiem"
-    override val arrangeBranches = "Rozłóż gałęzie automatycznie"
-    override val fitWholeMap = "Zmieść całą mapę w oknie"
+    override val arrangeBranches = "Rozmieść gałęzie automatycznie"
+    override val fitWholeMap = "Dopasuj całą mapę do okna"
     override val exportMap = "Zapisz mapę do pliku"
     override val releaseToConnect = "Puść, żeby połączyć."
     override val releaseOnEmpty = "Puść na pustym miejscu, żeby dołożyć tam nowy węzeł."
@@ -1930,11 +1948,11 @@ object PolishStrings : Strings {
     override val zoomOut = "Oddal"
     override val zoomIn = "Przybliż"
     override val emptyMap = "Pusta mapa"
-    override val emptyMapAbout = "Dodaj pierwszy węzeł przyciskiem po lewej stronie albo dotknij planszę " +
-        "dwa razy, a potem doczepiaj gałęzie."
+    override val emptyMapAbout = "Dodaj pierwszy węzeł przyciskiem po lewej stronie albo dotknij planszy dwa " +
+        "razy, a potem dodawaj gałęzie."
     override val tapTwiceToType = "Dotknij dwa razy, aby wpisać"
-    override val dragToConnect = "Pociągnij, żeby połączyć z innym węzłem"
-    override val dragToResize = "Pociągnij, żeby zmienić rozmiar węzła"
+    override val dragToConnect = "Przeciągnij, żeby połączyć z innym węzłem"
+    override val dragToResize = "Przeciągnij, żeby zmienić rozmiar węzła"
     override val expandBranch = "Rozwiń gałąź"
     override val collapseBranch = "Zwiń gałąź"
     override val selectedNode = "Wybrany węzeł"
@@ -1955,19 +1973,19 @@ object PolishStrings : Strings {
 
     override val fileReady = "Plik jest gotowy"
     override val savingFile = "Zapisuję…"
-    override val exportFailed = "Zapis się nie udał. Spróbuj innego formatu."
+    override val exportFailed = "Nie udało się zapisać. Spróbuj innego formatu."
     override val openFile = "Otwórz"
-    override val linkFailed = "Nie udało się zrobić odnośnika."
+    override val linkFailed = "Nie udało się utworzyć odnośnika."
     override val exportNoHandwriting = "Pismo odręczne nie wejdzie do tego pliku."
     override val exportNoPhotos = "Zdjęcia nie wejdą do tego pliku."
     override val exportHandwrittenOnly = "Ten format zapisuje tylko notatki odręczne."
     override val exportTextOnly = "Zapisze się tylko tekst, bez pisma."
     override val hue = "Odcień"
-    override val presetColours = "Gotowe"
+    override val presetColours = "Gotowe kolory"
     override val recentColours = "Ostatnio używane"
     override val done = "Gotowe"
     override val libraryFolderName = "Biblioteka"
-    override val noNotesFolderPicked = "Nie wybrano katalogu na notatki."
+    override val noNotesFolderPicked = "Nie wybrano folderu na notatki."
     override val sendLink = "Wyślij odnośnik"
     override val sendFile = "Wyślij"
     override val shareWindowFailed = "Nie udało się otworzyć okna udostępniania. Skopiuj odnośnik ręcznie:"
@@ -1977,7 +1995,7 @@ object PolishStrings : Strings {
     override val printFailed = "Nie udało się uruchomić drukowania. Spróbuj jeszcze raz " +
         "albo zapisz notatkę do pliku PDF."
     override val printOpenFailed = "Nie udało się otworzyć pliku do wydruku."
-    override val printGaveUp = "Wydruk się nie udał."
+    override val printGaveUp = "Nie udało się wydrukować."
     override val unknownError = "nieznany błąd"
     override val emptyNoteInExport = "Ta notatka jest jeszcze pusta."
     override val mapNodes = "Węzły mapy"
@@ -1990,14 +2008,14 @@ object PolishStrings : Strings {
         "jeszcze raz."
 
     override val cloudAccount = "Konto w chmurze"
-    override val cloudAccountAbout = "Kajet działa bez konta. Notatki leżą wtedy tylko w katalogu " +
-        "wybranym na tym urządzeniu. Konto przydaje się, żeby otworzyć je na komputerze " +
-        "i odzyskać po zmianie telefonu albo tabletu."
+    override val cloudAccountAbout = "Kajet działa bez konta. Notatki leżą wtedy tylko w folderze wybranym na tym " +
+        "urządzeniu. Konto przydaje się, żeby otworzyć je na komputerze i odzyskać po " +
+        "zmianie telefonu albo tabletu."
     override val waitingForApproval = "Czekam, aż zatwierdzisz logowanie na stronie. Możesz wrócić do " +
         "aplikacji sam albo przyciskiem „Otwórz aplikację” po zatwierdzeniu."
     override val cancelWaiting = "Anuluj oczekiwanie"
     override val opening = "Otwieram…"
-    override val signInWithGoogle = "Zaloguj przez Google"
+    override val signInWithGoogle = "Zaloguj się przez Google"
     override val signInWithGoogleAbout = "Otworzy stronę logowania w aplikacji. Wybierzesz tam " +
         "swoje konto Google."
     override val orAddressAndPassword = "Albo adres i hasło"
@@ -2022,8 +2040,8 @@ object PolishStrings : Strings {
     override val syncing = "Synchronizuję…"
     override val syncNow = "Synchronizuj teraz"
     override val signOut = "Wyloguj się"
-    override val signOutAbout = "Wylogowanie odcina chmurę, ale nie kasuje niczego z urządzenia. " +
-        "Notatki zostają w wybranym katalogu."
+    override val signOutAbout = "Wylogowanie odcina chmurę, ale nie usuwa niczego z urządzenia. Notatki " +
+        "zostają w wybranym folderze."
     override val everythingSynced = "Wszystko zsynchronizowane"
     override val noInternet = "Brak internetu"
     override val sessionExpired = "Logowanie straciło ważność. Zaloguj się jeszcze raz."
@@ -2058,22 +2076,21 @@ object PolishStrings : Strings {
     override val noteChangedElsewhere = "Ta notatka zmieniła się także gdzie indziej."
     override val outOfSpace = "Brakuje miejsca na koncie."
     override val serverTrouble = "Serwer ma kłopot. Kajet spróbuje jeszcze raz później."
-    override val noNotesDirToSend = "Nie ma katalogu z notatkami, więc nie można wykonać synchronizacji. " +
-        "Otwórz ustawienia i wskaż folder na urządzeniu."
-    override val noNotesDirToSave = "Nie wskazano katalogu na notatki, więc nie ma dokąd ich zapisać. " +
-        "Otwórz ustawienia i wybierz folder na urządzeniu."
+    override val noNotesDirToSend = "Nie ma folderu z notatkami, więc nie można wykonać synchronizacji. Otwórz " +
+        "ustawienia i wskaż folder na urządzeniu."
+    override val noNotesDirToSave = "Nie wskazano folderu na notatki, więc nie ma dokąd ich zapisać. Otwórz " +
+        "ustawienia i wybierz folder na urządzeniu."
     override val runOnServerNeedsAccount = "Uruchamianie na serwerze wymaga konta. Zaloguj się " +
         "w ustawieniach, w sekcji „Konto w chmurze”."
     override val runOnServerNeedsInternet = "Nie ma internetu, a ten język uruchamia się przez sieć. " +
-        "Kod jest zapisany - uruchomisz go, gdy sieć wróci."
+        "Kod jest zapisany – uruchomisz go, gdy sieć wróci."
     override val codeWord = "kod"
 
     override val cloudAccountOn = "Notatki trafiają też na serwer i otworzysz je na komputerze."
     override val cloudAccountOff = "Bez konta Kajet działa normalnie, a notatki leżą tylko na tym " +
         "urządzeniu. Z kontem trafiają też na serwer i otworzysz je na komputerze."
-    override val notesFolder = "Katalog na notatki"
-    override val notesFolderAbout = "Tu leżą wszystkie Twoje pliki. Po zmianie katalogu Kajet przeczyta " +
-        "go od nowa."
+    override val notesFolder = "Folder na notatki"
+    override val notesFolderAbout = "Tu leżą wszystkie Twoje pliki. Po zmianie folderu Kajet przeczyta go od nowa."
     override val noFolderPicked = "Jeszcze nie wybrano folderu."
     override val changeFolder = "Zmień folder"
     override val rebuildIndexAbout = "Odbuduj spis wtedy, gdy notatki trafiły tu z komputera albo " +
@@ -2086,7 +2103,7 @@ object PolishStrings : Strings {
     override val stuckAbout = "Te notatki zostały na urządzeniu. Zajrzyj do nich albo spróbuj wysłać jeszcze raz."
     override val notUploadedTag = "nie wysłano"
     override val notUploadedAbout = "Nie udało się wysłać do chmury."
-    override val stuckNothingLost = "Nic nie ginie - zmiany czekają na urządzeniu."
+    override val stuckNothingLost = "Nic nie ginie – zmiany czekają na urządzeniu."
     override val stylusAndFinger = "Rysik i palec"
     override val stylusAndFingerAbout = "Kiedy rysik dotyka ekranu, dłoń nie rysuje. Dzieje się tak " +
         "niezależnie od ustawienia poniżej."
@@ -2110,8 +2127,8 @@ object PolishStrings : Strings {
         "ją otworzyć."
     override val brokenInlineDrawing = "Nie da się odczytać rysunku wstawionego w tekst."
     override val brokenFolderDescription = "Nie da się odczytać opisu folderu."
-    override val noNotesFolderChosen = "Nie wybrano katalogu na notatki. Otwórz ustawienia i wskaż folder " +
-        "na urządzeniu."
+    override val noNotesFolderChosen = "Nie wybrano folderu na notatki. Otwórz ustawienia i wskaż folder na " +
+        "urządzeniu."
     override val binEmpty = "Kosz jest pusty."
     override val notInBinAnyMore = "Tego wpisu nie ma już w koszu."
     override val binEntryNoDescription = "Wpis w koszu nie ma opisu, więc nie wiadomo, gdzie go odłożyć."
@@ -2131,9 +2148,9 @@ object PolishStrings : Strings {
     override val pickNotesFolderAbout = "Otworzy się okno systemu Android. Wybierz folder i naciśnij " +
         "przycisk potwierdzenia. Możesz zmienić to później w ustawieniach."
     override val folderAccessLost = "Wskaż folder z notatkami jeszcze raz"
-    override val folderAccessLostAbout = "Notatki leżą tam, gdzie były. Po reinstalacji albo kopii " +
-        "zapasowej Android nie oddaje dostępu do folderu sam - trzeba go wskazać ponownie. " +
-        "Plików to nie kasuje."
+    override val folderAccessLostAbout = "Notatki leżą tam, gdzie były. Po reinstalacji albo kopii zapasowej Android " +
+        "nie oddaje dostępu do folderu sam – trzeba go wskazać ponownie. Plików to nie " +
+        "usuwa."
     override val couldNotKeepFolderAccess = "Android nie zapisał dostępu do folderu. Wskaż go jeszcze raz."
 
     override val starting = "Kajet się otwiera…"
@@ -2148,15 +2165,15 @@ object PolishStrings : Strings {
     override val errorSendTitle = "Zgłoszenie błędu Kajetu"
     override val errorNoDetails = "Brak zapisanych szczegółów błędu."
     override val screenBrokeTitle = "Ten widok się nie otworzył"
-    override val screenBrokeAbout = "Kajet potknął się przy otwieraniu tego widoku. Reszta aplikacji " +
-        "działa, a notatki są bezpieczne na dysku. Spróbuj otworzyć go jeszcze raz."
+    override val screenBrokeAbout = "Kajet napotkał błąd przy otwieraniu tego widoku. Reszta aplikacji działa, a " +
+        "notatki są bezpieczne na dysku. Spróbuj otworzyć go jeszcze raz."
     override val screenBrokeReload = "Spróbuj jeszcze raz"
     override val noteNotOpened = "Notatka się nie otworzyła"
     override val noteNotOpenedAbout = "Nie udało się otworzyć notatki. Sprawdź, czy plik nadal jest " +
         "w folderze."
     override val noteOpening = "Otwieram notatkę"
     override val noEditorYet = "Kajet nie umie otworzyć tej notatki"
-    override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Zaktualizuj Kajet - nowsza " +
+    override val noEditorYetAbout = "Notatka jest bezpieczna na dysku. Zaktualizuj Kajet – nowsza " +
         "wersja może już ją znać."
     override val cannotEditAsText = "Tego pliku nie da się edytować jako tekst"
     override val cannotEditAsTextAbout =
@@ -2164,7 +2181,7 @@ object PolishStrings : Strings {
     override val fileDidNotOpen = "Plik się nie otworzył"
     override val fileDidNotOpenAbout =
         "Nie udało się odczytać tego pliku. Sprawdź, czy nadal jest w folderze."
-    override val couldNotImportShare = "Nie udało się wziąć tej treści do Kajetu."
+    override val couldNotImportShare = "Nie udało się zaimportować tej treści do Kajetu."
     override val openInOtherApp = "Otwórz w innej aplikacji"
     override val previousPage = "Poprzednia"
     override val nextPage = "Następna"
@@ -2190,7 +2207,7 @@ object PolishStrings : Strings {
     override val documentNoBrowser = "Na tym urządzeniu nie ma przeglądarki, która otworzyłaby tę " +
         "stronę."
     override val aboutSection = "O aplikacji"
-    override val aboutSectionAbout = "Kajet - notatnik na pismo odręczne, tekst, mapy myśli i kod."
+    override val aboutSectionAbout = "Kajet – notatnik na pismo odręczne, tekst, mapy myśli i kod."
     override val appVersionWord = "Wersja"
 
     override val updateTitle = "Nowa wersja"
@@ -2226,7 +2243,7 @@ object PolishStrings : Strings {
     override val aiOffline = "KajetAI potrzebuje internetu."
     override val aiConsentTitle = "Zanim poprosisz KajetAI"
     override val aiConsentWhatHappens =
-        "Treść tej notatki - cały tekst, kod albo napisy w węzłach mapy - zostanie wysłana " +
+        "Treść tej notatki – cały tekst, kod albo napisy w węzłach mapy – zostanie wysłana " +
             "do Google, bo to jego model wprowadza zmiany. Pismo odręczne i zdjęcia nie są wysyłane."
     override val aiConsentTraining =
         "Model jest darmowy, więc Google może wykorzystać wysłaną treść do uczenia swoich " +
@@ -2243,7 +2260,7 @@ object PolishStrings : Strings {
     override val aiConsentMissing = "Bez zgody KajetAI nie działa. Poprosi o nią, gdy pierwszy raz " +
         "go użyjesz."
     override val aiConsentWithdraw = "Wycofaj zgodę"
-    override val aiConsentWithdrawn = "Zgoda wycofana. Rozmowy z KajetAI zostały skasowane."
+    override val aiConsentWithdrawn = "Zgoda wycofana. Rozmowy z KajetAI zostały usunięte."
     override val aiConsentFailed =
         "Nie udało się zapisać zgody. Sprawdź internet i spróbuj jeszcze raz."
     override val aiPullFailed =
@@ -2254,7 +2271,7 @@ object PolishStrings : Strings {
     override val liveNow = "Połączono"
     override val liveConnecting = "Łączę…"
     override val liveOffline = "Offline"
-    override val liveOfflineAbout = "Offline - zmiany pojadą, gdy wróci sieć"
+    override val liveOfflineAbout = "Offline – zmiany pojadą, gdy wróci sieć"
     override val liveReadOnly = "Tylko do czytania"
     override val liveGone = "Brak dostępu"
     override val liveGoneAbout = "Tej notatki już nie ma albo odebrano Ci do niej dostęp. Zmiany tutaj nigdzie nie pojadą."
@@ -2269,17 +2286,17 @@ object PolishStrings : Strings {
     override val sharedNeedsInternet = "Udostępnione foldery otwierają się przez internet."
     override val sharedRemove = "Usuń z moich udostępnionych"
     override val sharedAccepted = "Udostępnienie trafiło do Twojej biblioteki."
-    override val sharedTemporary = "Otwarte z odnośnika - po wyjściu nie zostanie na liście."
+    override val sharedTemporary = "Otwarte z odnośnika – po wyjściu nie zostanie na liście."
     override val sharedDeleteNote = "Usuń notatkę (trafi do kosza właściciela)"
     override val sharedNewFolder = "Nowy podfolder"
     override val shareFolderTitle = "Udostępnij folder"
-    override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest - także notatki dodane później."
-    override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury - zsynchronizuj bibliotekę i spróbuj jeszcze raz."
+    override val shareFolderAbout = "Odbiorca zobaczy folder z podfolderami i wszystkim, co w nim jest – także notatki dodane później."
+    override val shareFolderNeedsSync = "Folder musi najpierw trafić do chmury – zsynchronizuj bibliotekę i spróbuj jeszcze raz."
     override val syncPauseSection = "Wstrzymanie synchronizacji"
-    override val syncPauseAbout = "Na jakiś czas notatki nie jadą do chmury ani z niej, nawet gdy " +
-        "jest internet. Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline\" i szarą chmurę. " +
-        "KajetAI działa dalej, ale jego zmiany i rozmowa też czekają na urządzeniu. " +
-        "Po końcu pauzy zaległe zmiany pojadą same."
+    override val syncPauseAbout = "Na jakiś czas notatki nie jadą do chmury ani z niej, nawet gdy jest internet. " +
+        "Wszystko zostaje na urządzeniu, a notatka pokazuje „Offline” i szarą chmurę. " +
+        "KajetAI działa dalej, ale jego zmiany i rozmowa też czekają na urządzeniu. Po " +
+        "końcu pauzy zaległe zmiany pojadą same."
     override val syncPausedNow = "Synchronizacja wstrzymana."
     override val syncPauseHour = "Na 1 godzinę"
     override val syncPauseDay = "Na 1 dzień"
@@ -2288,8 +2305,8 @@ object PolishStrings : Strings {
     override val syncPauseForever = "Do odwołania"
     override val syncPausedForever = "Synchronizacja wstrzymana do odwołania."
     override val syncResume = "Wznów synchronizację"
-    override val syncPauseNeedsAccount = "Synchronizacja działa po zalogowaniu do chmury - bez konta nie ma czego wstrzymywać."
-    override val syncPausePastTime = "Ta chwila już minęła - wybierz późniejszą."
+    override val syncPauseNeedsAccount = "Synchronizacja działa po zalogowaniu do chmury – bez konta nie ma czego wstrzymywać."
+    override val syncPausePastTime = "Ta chwila już minęła – wybierz późniejszą."
     override val aiDetachedSaveFailed = "KajetAI odpowiedział, ale zmiany nie udało się zapisać na urządzeniu. Notatka zostaje bez zmian."
 }
 
@@ -2325,6 +2342,8 @@ object EnglishStrings : Strings {
     override val newNote = "New note"
     override val newCodeFile = "New code file"
     override val uploadFile = "Upload file"
+    override val uploadFileOpenFailed = "Kajet could not open the selected file."
+    override val uploadLocalCopyMissing = "The local copy of the file waiting to be uploaded is missing."
     override val folderName = "Folder name"
     override val folderColour = "Folder colour"
     override val folderIcon = "Folder icon"
@@ -2333,7 +2352,7 @@ object EnglishStrings : Strings {
     override val emptyTrash = "Empty the bin"
     override val emptyingTrash = "Emptying the bin"
     override val restore = "Restore"
-    override val deleteForever = "Delete for good"
+    override val deleteForever = "Delete permanently"
     override val moveToTrash = "Move to bin"
     override val addToFavorites = "Add to favourites"
     override val removeFromFavorites = "Remove from favourites"
@@ -2352,42 +2371,42 @@ object EnglishStrings : Strings {
     override val saving = "Saving…"
     override val loading = "Loading"
     override val changesWaiting = "Changes waiting"
-    override val saveFailed = "Saving did not work"
+    override val saveFailed = "Could not save"
     override val noteInCloud = "The note is in the cloud"
     override val noteWaitingForCloud = "The note is waiting to go to the cloud"
     override val noteOpenFailed = "Kajet could not open the note."
     override val noteSaveFailed = "Kajet could not save the note."
     override val noteDeletedElsewhere = "Deleted on another device"
     override val noteDeletedElsewhereAbout = "This note has been deleted on another device. " +
-        "Your version is still here - you can save it as a new note " +
+        "Your version is still here – you can save it as a new note " +
         "or discard the changes."
     override val fileDeletedElsewhereAbout = "This file has been deleted on another device. " +
-        "Your version is still here - you can save it as a new file " +
+        "Your version is still here – you can save it as a new file " +
         "or discard the changes."
     override val saveAsNewNote = "Save as a new note"
     override val saveAsNewFile = "Save as a new file"
     override val discardChanges = "Discard the changes"
     override val saveAsNewFailed = "Kajet could not save the new copy. Your content stays on " +
-        "screen - try again."
+        "screen – try again."
     override val placeholderWord = "text"
     override val savingPhoto = "Saving the photo…"
     override val savingDrawing = "Saving the drawing…"
     override val savingDrawingChanges = "Saving the edited drawing…"
-    override val photoSaveFailed = "The photo would not save into the note."
-    override val drawingSaveFailed = "The drawing would not save into the note."
+    override val photoSaveFailed = "Kajet could not save the photo in the note."
+    override val drawingSaveFailed = "Kajet could not save the drawing in the note."
     override val exportTitle = "Save the note to a file"
     override val exportFormat = "Format"
     override val exportPdfAbout = "A page for printing and sending. Handwriting matches the screen; " +
         "text notes and mind maps keep formatting and pictures."
     override val exportSave = "Save file"
     override val shareLink = "Share a link"
-    override val shareLinkBusy = "Making a link…"
+    override val shareLinkBusy = "Creating the link…"
 
     override val sharePanelTitle = "Sharing"
     override val shareWhatMayDo = "What the link allows"
     override val shareRightRead = "Read only"
     override val shareRightEdit = "Read and edit"
-    override val shareEmailLabel = "Recipient’s e-mail - you can leave it empty"
+    override val shareEmailLabel = "Recipient’s email – you can leave it empty"
     override val shareEmailAbout =
         "Leave it empty for a plain link. With an address the share is personal: " +
         "only the person signed in with it can open the note, and the server sends the message."
@@ -2410,10 +2429,10 @@ object EnglishStrings : Strings {
     override val shareNotOpenedYet = "Not opened yet"
     override val shareRevoke = "Revoke"
     override val shareRevokeSure = "Are you sure?"
-    override val shareMailNotSent =
-        "The message did not leave the server. Copy the link and hand it over another way."
+    override val shareMailNotSent = "The server could not send the message. Copy the link and pass it on another " +
+        "way."
     override val shareTryAgain = "Try again"
-    override val shareEmailWrong = "This e-mail address looks incomplete."
+    override val shareEmailWrong = "This email address looks incomplete."
     override val shareOfflineNow =
         "There is no internet connection. Shares live on the server, so without a " +
         "connection they cannot be seen or changed."
@@ -2435,10 +2454,10 @@ object EnglishStrings : Strings {
     override val calculator = "Calculator"
     override val calculatorClose = "Close calculator"
     override val calculatorCopyResult = "Copy result"
-    override val calculatorError = "Can't calculate that"
+    override val calculatorError = "Cannot calculate that"
     override val calculatorBackspace = "Delete last character"
     override val calculatorClear = "Clear"
-    override val calculatorParens = "Bracket"
+    override val calculatorParens = "Brackets"
     override val calculatorRoot = "Square root"
     override val calculatorResize = "Resize calculator"
     override val calculatorBigger = "Larger calculator"
@@ -2464,7 +2483,7 @@ object EnglishStrings : Strings {
     override val languageEnglish = "English"
     override val settingsToolbarSide = "Toolbar"
     override val settingsToolbarSideAbout = "Which side of the screen the editor toolbar " +
-        "sits on. Left-handed people usually prefer the right - the hand no longer covers " +
+        "sits on. Left-handed people usually prefer the right – the hand no longer covers " +
         "the buttons or taps them by accident."
     override val toolbarLeft = "On the left"
     override val toolbarRight = "On the right"
@@ -2513,16 +2532,17 @@ object EnglishStrings : Strings {
     override val libSearchNothingAbout = "Check the spelling, or rebuild the list of notes in settings " +
         "if you copied files in from outside Kajet."
     override val emptyTrashQuestion = "Empty the bin?"
-    override val trashAbout = "Binned notes sit in a hidden folder next to your library. Nothing is lost " +
-        "until you empty the bin."
+    override val trashAbout = "Notes in the bin are kept in a hidden folder next to your library. Nothing is " +
+        "lost until you empty the bin."
     override val trashEmptyTitle = "The bin is empty"
-    override val trashEmptyAbout = "Binned notes turn up here, and you can put them back exactly where they " +
-        "came from."
+    override val trashEmptyAbout = "Notes you move to the bin appear here, and you can restore them to exactly " +
+        "where they came from."
     override val menuMoveToFolder = "Move to another folder"
     override val menuCopy = "Make a copy"
     override val copySuffix = "(copy)"
-    override val deleteForeverQuestion = "Delete for good?"
-    override val deleteForeverWarning = "There is no way back. It goes from the bin, from the disk and from the cloud account."
+    override val deleteForeverQuestion = "Delete permanently?"
+    override val deleteForeverWarning = "This cannot be undone. It will be removed from the bin, from the device and " +
+        "from your cloud account."
     override val menuLook = "Change the colour and icon"
     override val exportFolderPdf = "Save the whole folder as PDF"
     override val exportFolderMarkdown = "Save the whole folder as Markdown"
@@ -2539,8 +2559,8 @@ object EnglishStrings : Strings {
     override val fileName = "File name"
     override val defaultFileName = "program"
     override val noteKindLabel = "Kind"
-    override val kindHandwrittenAbout = "You write with the stylus, and can drop in a text box too."
-    override val kindTextAbout = "You type it, and can add a picture or a small drawing."
+    override val kindHandwrittenAbout = "You write with the stylus and can also add a text box."
+    override val kindTextAbout = "You type with the keyboard and can add a photo or a small drawing."
     override val kindMindMapAbout = "Nodes joined by lines, labelled by keyboard or by stylus."
     override val pageLabel = "Page"
     override val pageA4About = "Just like an exercise book. Prints without anything cut off."
@@ -2573,15 +2593,15 @@ object EnglishStrings : Strings {
         "shows up here."
     override val codeNoErrors = "No errors."
     override val codeInputLabel = "What the program will read"
-    override val codeOpenFailed = "The file would not open."
-    override val codeSaveFailed = "The file would not save."
-    override val codeRunFailed = "Running it did not work."
+    override val codeOpenFailed = "Kajet could not open the file."
+    override val codeSaveFailed = "Kajet could not save the file."
+    override val codeRunFailed = "Kajet could not run the program."
     override val codeFileTooLargeTitle = "This file is too large to edit"
 
     override val codeConsole = "Console"
     override val codeConsoleClear = "Clear"
-    override val codeConsoleEmpty = "Whatever the page prints with console.log stands here, " +
-        "along with script errors."
+    override val codeConsoleEmpty = "Anything the page prints with console.log shows up here, along with script " +
+        "errors."
 
     override val insertPhotoFromGallery = "Insert a photo from the gallery"
     override val takePhoto = "Take a photo"
@@ -2602,22 +2622,22 @@ object EnglishStrings : Strings {
     override val smallerText = "Smaller text"
     override val largerText = "Larger text"
     override val colourWholeNote = "Text colour for the whole note"
-    override val colourSelection = "Colour of the selected piece"
-    override val highlightSelection = "Highlight the selected piece"
+    override val colourSelection = "Colour of the selection"
+    override val highlightSelection = "Highlight the selection"
     override val bold = "Bold"
     override val italic = "Italic"
     override val underline = "Underline"
     override val strike = "Strikethrough"
     override val superscript = "Superscript (x²)"
     override val subscript = "Subscript (H₂O)"
-    override val heading1 = "Biggest heading"
+    override val heading1 = "Largest heading"
     override val heading2 = "Medium heading"
     override val heading3 = "Small heading"
     override val bulletList = "List"
     override val numberedList = "Numbered list"
-    override val taskList = "Tick list"
+    override val taskList = "Task list"
     override val quote = "Quote"
-    override val inlineCode = "Code inside the text"
+    override val inlineCode = "Inline code"
     override val codeBlock = "Code block"
     override val table = "Table"
     override val formula = "Maths formula"
@@ -2630,10 +2650,10 @@ object EnglishStrings : Strings {
     override val showRawMarkdown = "Show the raw Markdown"
     override val backToContentView = "Back to the content view"
     override val colourWholeNoteTitle = "Text colour for the whole note"
-    override val colourSelectionTitle = "Colour of the selected piece"
+    override val colourSelectionTitle = "Colour of the selection"
     override val tableColumn = "Column"
-    override val untickTask = "Untick the task"
-    override val tickTask = "Tick the task"
+    override val untickTask = "Mark the task as not done"
+    override val tickTask = "Mark the task as done"
     override val photoInNote = "Photo in the note"
     override val noCaption = "No caption"
     override val photoSize = "Photo size"
@@ -2662,12 +2682,12 @@ object EnglishStrings : Strings {
     override val deselect = "Deselect"
     override val penTool = "Pen"
     override val highlighterTool = "Highlighter"
-    override val shapeKindLabel = "Which shape"
+    override val shapeKindLabel = "Shape"
     override val shapeOutlineColourTitle = "Outline colour"
     override val shapeFillLabel = "Fill"
     override val shapeNoFill = "No fill"
     override val shapeFillColourTitle = "Fill colour"
-    override val shapeSquareLock = "Equal sides"
+    override val shapeSquareLock = "1:1 ratio"
     override val shapeSquareAbout =
         "With the lock on you get a circle and a square, and a line keeps to 45 degree steps. " +
             "Shift, or a second finger on the screen while drawing, does the same."
@@ -2677,7 +2697,7 @@ object EnglishStrings : Strings {
     override val eraserSize = "Eraser size"
     override val widthLabel = "Width"
     override val highlighterColourTitle = "Highlighter colour"
-    override val whatYouWriteWith = "What you write with"
+    override val whatYouWriteWith = "Pen type"
     override val inkColourTitle = "Ink colour"
     override val penAboutPen = "The stroke thickens where you press harder with the stylus."
     override val penAboutFineliner = "An even stroke of constant width."
@@ -2697,8 +2717,7 @@ object EnglishStrings : Strings {
     override val addPage = "Add one"
     override val removeLastPage = "Delete the last one"
     override val fingerLabel = "Finger"
-    override val palmRejectionAbout = "While the stylus is on the screen, your palm never draws. That " +
-        "always holds."
+    override val palmRejectionAbout = "While the stylus is on the screen, your palm never draws. This always applies."
     override val fitWidth = "Fit to width"
     override val textBox = "Text box"
     override val moveTextBox = "Move the text box"
@@ -2711,11 +2730,11 @@ object EnglishStrings : Strings {
     override val finishConnecting = "Finish connecting"
     override val connectToOthers = "Connect this node to others"
     override val inkLabel = "Label with the stylus"
-    override val arrangeBranches = "Lay the branches out automatically"
+    override val arrangeBranches = "Arrange the branches automatically"
     override val fitWholeMap = "Fit the whole map in the window"
     override val exportMap = "Save the map to a file"
-    override val releaseToConnect = "Let go to connect."
-    override val releaseOnEmpty = "Let go on empty space to put a new node there."
+    override val releaseToConnect = "Release to connect."
+    override val releaseOnEmpty = "Release on empty space to add a new node there."
     override val tapNodesToConnect = "Tap the nodes you want joined to the selected one. The same " +
         "button finishes."
     override val nodeWithoutName = "unnamed node"
@@ -2724,8 +2743,8 @@ object EnglishStrings : Strings {
     override val zoomOut = "Zoom out"
     override val zoomIn = "Zoom in"
     override val emptyMap = "Empty map"
-    override val emptyMapAbout = "Add the first node with the button on the left, or double-tap the " +
-        "board, then hang branches off it."
+    override val emptyMapAbout = "Add the first node with the button on the left, or double-tap the board, then " +
+        "add branches."
     override val tapTwiceToType = "Double-tap to type"
     override val dragToConnect = "Drag to connect to another node"
     override val dragToResize = "Drag to resize the node"
@@ -2749,28 +2768,27 @@ object EnglishStrings : Strings {
 
     override val fileReady = "The file is ready"
     override val savingFile = "Saving…"
-    override val exportFailed = "Saving did not work. Try another format."
+    override val exportFailed = "Could not save. Try another format."
     override val openFile = "Open"
-    override val linkFailed = "Kajet could not make a link."
+    override val linkFailed = "Kajet could not create the link."
     override val exportNoHandwriting = "Handwriting will not go into this file."
     override val exportNoPhotos = "Photos will not go into this file."
     override val exportHandwrittenOnly = "This format only saves handwritten notes."
     override val exportTextOnly = "Only the text will be saved, not the handwriting."
     override val hue = "Hue"
-    override val presetColours = "Ready-made"
+    override val presetColours = "Presets"
     override val recentColours = "Recently used"
     override val done = "Done"
     override val libraryFolderName = "Library"
     override val noNotesFolderPicked = "No folder has been picked for your notes."
     override val sendLink = "Send the link"
     override val sendFile = "Send"
-    override val shareWindowFailed = "The sharing window would not open. Copy the link by hand:"
-    override val shareWindowFailedFile = "The sharing window would not open. The file is in Kajet’s own " +
-        "storage."
+    override val shareWindowFailed = "Kajet could not open the sharing window. Copy the link by hand:"
+    override val shareWindowFailedFile = "Kajet could not open the sharing window. The file is in Kajet’s own storage."
     override val noSystemPrinting = "This device does not offer system printing."
-    override val printFailed = "Printing would not start. Try again, or save the note to a PDF file."
-    override val printOpenFailed = "The file for printing would not open."
-    override val printGaveUp = "Printing did not work."
+    override val printFailed = "Kajet could not start printing. Try again, or save the note to a PDF file."
+    override val printOpenFailed = "Kajet could not open the file for printing."
+    override val printGaveUp = "Printing failed."
     override val unknownError = "unknown error"
     override val emptyNoteInExport = "This note is still empty."
     override val mapNodes = "Map nodes"
@@ -2785,7 +2803,7 @@ object EnglishStrings : Strings {
     override val cloudAccountAbout = "Kajet works without an account. Your notes then live only on this " +
         "device, in the folder you picked. An account is for opening them on a computer and " +
         "getting them back after you change phone or tablet."
-    override val waitingForApproval = "Waiting for you to approve the sign-in on the website. Come back " +
+    override val waitingForApproval = "Waiting for you to approve the sign-in on the website. Return to the app " +
         "yourself, or use the “Open the app” button once you have approved it."
     override val cancelWaiting = "Stop waiting"
     override val opening = "Opening…"
@@ -2793,36 +2811,36 @@ object EnglishStrings : Strings {
     override val signInWithGoogleAbout = "Opens the sign-in page inside the app, where you pick " +
         "your Google account."
     override val orAddressAndPassword = "Or an address and password"
-    override val emailAddress = "E-mail address"
+    override val emailAddress = "Email address"
     override val password = "Password"
     override val signIn = "Sign in"
     override val signingIn = "Signing in…"
     override val tokenFromBrowser = "Code from the website"
-    override val tokenAbout = "Instead of a password you can copy a code from the Kajet website. On " +
-        "your account page pick this device and you get a code to paste here. It is the way " +
-        "in when signing in through the website does not work."
+    override val tokenAbout = "Instead of a password you can copy a code from the Kajet website. On your " +
+        "account page pick this device and you get a code to paste here. It is useful " +
+        "when signing in through the website does not work."
     override val tokenFromSite = "Paste the code"
     override val checking = "Checking…"
     override val connect = "Connect"
     override val signedIn = "Signed in"
-    override val spaceLabel = "Space"
+    override val spaceLabel = "Storage"
     override val takenNoLimit = "used, no limit"
-    override val syncSection = "Cloud synchronisation"
-    override val syncAbout = "Kajet sends changes from this device and fetches changes from the website. " +
-        "It also reconciles folders and the latest file locations. A manual sync retries work " +
-        "that got stuck earlier."
-    override val syncing = "Synchronising…"
-    override val syncNow = "Synchronise now"
+    override val syncSection = "Cloud sync"
+    override val syncAbout = "Kajet sends changes from this device and fetches changes from the website. It " +
+        "also reconciles folders and the latest file locations. A manual sync also " +
+        "retries anything that got stuck earlier."
+    override val syncing = "Syncing…"
+    override val syncNow = "Sync now"
     override val signOut = "Sign out"
     override val signOutAbout = "Signing out cuts off the cloud but deletes nothing from the device. " +
         "Your notes stay in the folder you picked."
-    override val everythingSynced = "Everything is synchronised"
+    override val everythingSynced = "Everything is synced"
     override val noInternet = "No internet"
     override val sessionExpired = "Your sign-in is no longer valid. Sign in again."
     override val closeMessage = "Close this message"
     override val closePanel = "Close the panel"
     override val deviceFallbackName = "Device"
-    override val giveEmailAndPassword = "Enter an e-mail address and a password."
+    override val giveEmailAndPassword = "Enter an email address and a password."
     override val serverUnreachable = "Kajet could not reach the server."
     override val approveOnSite = "Sign in on the website (Google or password) and approve this device. " +
         "Kajet is waiting in the background."
@@ -2831,32 +2849,32 @@ object EnglishStrings : Strings {
     override val pasteTokenFromSite = "Paste the code from your account page."
     override val sessionExpiredServer = "This sign-in no longer works. Sign in again."
     override val signedOutNotesStay = "Signed out. Your notes stayed on the device."
-    override val syncFailedSafe = "Synchronisation did not work. Your notes are safe on the device."
-    override val alreadyInSync = "This device and the cloud are already synchronised."
+    override val syncFailedSafe = "Kajet could not sync your notes. They are safe on the device."
+    override val alreadyInSync = "This device and the cloud are already in sync."
     override val serverCopiesKept = "Both versions are saved side by side, so nothing is lost."
-    override val incompleteSignInAnswer = "The sign-in did not finish. Try again."
+    override val incompleteSignInAnswer = "Sign-in was not completed. Try again."
     override val approvalTimedOut = "The time to approve ran out. Try again."
     override val notSignedIn = "You are not signed in."
     override val serverGibberish = "Something went wrong at the other end. Try again in a moment."
-    override val offlineNoteQueued = "There is no internet. The note is saved on the device and will go " +
-        "up when the network is back."
+    override val offlineNoteQueued = "There is no internet connection. The note is saved on the device and will " +
+        "upload when the network is back."
     override val cannotReachServer = "Kajet cannot reach the server. Check your internet connection."
-    override val serverTimedOut = "The server did not answer in time. Kajet will try again later."
+    override val serverTimedOut = "The server did not respond in time. Kajet will try again later."
     override val connectionDropped = "The connection to the server dropped. Kajet will try again later."
-    override val fileDownloadFailed = "The file would not download. Kajet will try later."
+    override val fileDownloadFailed = "Kajet could not download the file. It will try again later."
     override val serverRefused = "The server refused access."
     override val notOnServer = "That is not on the server."
     override val noteChangedElsewhere = "This note has also changed somewhere else."
     override val outOfSpace = "Your account is out of space."
     override val serverTrouble = "The server is having trouble. Kajet will try again later."
-    override val noNotesDirToSend = "Kajet cannot see the notes folder, so it cannot synchronise. " +
-        "Open settings and point it at a folder on this device."
+    override val noNotesDirToSend = "Kajet cannot see the notes folder, so it cannot sync. Open settings and point " +
+        "it at a folder on this device."
     override val noNotesDirToSave = "No notes folder has been picked, so there is nowhere to save them. " +
         "Open settings and choose a folder on this device."
     override val runOnServerNeedsAccount = "Running on the server needs an account. Sign in under " +
         "settings, in the “Cloud account” section."
     override val runOnServerNeedsInternet = "There is no internet, and this language runs over the " +
-        "network. Your code is saved - you can run it once the network is back."
+        "network. Your code is saved – you can run it once the network is back."
     override val codeWord = "code"
 
     override val cloudAccountOn = "Your notes also go to the server, so you can open them on a computer."
@@ -2878,12 +2896,11 @@ object EnglishStrings : Strings {
     override val stuckAbout = "These notes stayed on the device. Have a look at them or try uploading again."
     override val notUploadedTag = "not uploaded"
     override val notUploadedAbout = "Could not be uploaded to the cloud."
-    override val stuckNothingLost = "Nothing is lost - the changes wait on the device."
+    override val stuckNothingLost = "Nothing is lost – the changes wait on the device."
     override val stylusAndFinger = "Stylus and finger"
-    override val stylusAndFingerAbout = "While the stylus is on the screen, your palm never draws. That " +
-        "always holds."
-    override val fingerScrollsAbout = "Your finger moves the page, the stylus writes. That is the " +
-        "comfortable way round."
+    override val stylusAndFingerAbout = "While the stylus is on the screen, your palm never draws. This always applies."
+    override val fingerScrollsAbout = "Your finger moves the page, the stylus writes. That is the most comfortable " +
+        "way to work."
     override val fingerDrawsAbout = "Your finger draws too. Handy when you have no stylus with you."
     override val appearanceAbout = "Choose whether Kajet is light or dark."
     override val newHandwrittenNote = "New handwritten note"
@@ -2925,9 +2942,9 @@ object EnglishStrings : Strings {
         "confirm button. You can change this later in settings."
     override val folderAccessLost = "Pick the notes folder again"
     override val folderAccessLostAbout = "Your notes are still where they were. After a reinstall or " +
-        "a backup restore, Android does not give folder access back on its own - you have to " +
+        "a backup restore, Android does not give folder access back on its own – you have to " +
         "point at the folder again. That does not delete any files."
-    override val couldNotKeepFolderAccess = "Android did not keep access to the folder. Pick it again."
+    override val couldNotKeepFolderAccess = "Android could not keep access to the folder. Pick it again."
 
     override val starting = "Kajet is opening…"
     override val startingSlow = "This is taking longer than usual. Your notes are safe on the " +
@@ -2940,24 +2957,24 @@ object EnglishStrings : Strings {
     override val errorSendDetails = "Send the error report"
     override val errorSendTitle = "Kajet error report"
     override val errorNoDetails = "No saved error details."
-    override val screenBrokeTitle = "This view did not open"
-    override val screenBrokeAbout = "Kajet tripped up while opening this view. The rest of the app " +
-        "works and your notes are safe on disk. Try opening it again."
+    override val screenBrokeTitle = "This view could not be opened"
+    override val screenBrokeAbout = "Kajet ran into a problem while opening this view. The rest of the app works " +
+        "and your notes are safe on disk. Try opening it again."
     override val screenBrokeReload = "Try again"
-    override val noteNotOpened = "The note did not open"
+    override val noteNotOpened = "The note could not be opened"
     override val noteNotOpenedAbout = "Kajet could not open the note. Check that the file is still in " +
         "its folder."
     override val noteOpening = "Opening the note"
     override val noEditorYet = "Kajet cannot open this note"
-    override val noEditorYetAbout = "The note is safe on disk. Update Kajet - a newer version may " +
+    override val noEditorYetAbout = "The note is safe on disk. Update Kajet – a newer version may " +
         "know it."
     override val cannotEditAsText = "This file cannot be edited as text"
     override val cannotEditAsTextAbout =
         "Kajet opens notes and code files here. This file stays untouched in the library."
-    override val fileDidNotOpen = "The file did not open"
+    override val fileDidNotOpen = "The file could not be opened"
     override val fileDidNotOpenAbout =
         "Kajet could not read this file. Check that it is still in its folder."
-    override val couldNotImportShare = "Kajet could not take this content into the library."
+    override val couldNotImportShare = "Kajet could not import this content."
     override val openInOtherApp = "Open in another app"
     override val previousPage = "Previous"
     override val nextPage = "Next"
@@ -2967,11 +2984,10 @@ object EnglishStrings : Strings {
     override val readingFavoritesFailed = "Kajet could not read your favourites."
     override val readingRecentFailed = "Kajet could not read the recently opened notes."
     override val walkingLibrary = "Going through the library…"
-    override val actionFailed = "That did not work out."
+    override val actionFailed = "Kajet could not do that."
     override val pythonOnTablet = "on the tablet"
     override val codeOnServer = "on the Kajet server"
-    override val pythonStartFailed = "Python would not start on the tablet. Close Kajet and open it " +
-        "again."
+    override val pythonStartFailed = "Python could not start on the tablet. Close Kajet and open it again."
 
     override val legalSection = "Legal"
     override val legalSectionAbout = "The terms of service and the privacy policy open on the Kajet " +
@@ -2982,7 +2998,7 @@ object EnglishStrings : Strings {
         "document. Connect to a network and try again."
     override val documentNoBrowser = "There is no browser on this device that could open the page."
     override val aboutSection = "About"
-    override val aboutSectionAbout = "Kajet - a notebook for handwriting, text, mind maps and code."
+    override val aboutSectionAbout = "Kajet – a notebook for handwriting, text, mind maps and code."
     override val appVersionWord = "Version"
 
     override val updateTitle = "New version"
@@ -3018,7 +3034,7 @@ object EnglishStrings : Strings {
     override val aiOffline = "KajetAI needs an internet connection."
     override val aiConsentTitle = "Before you ask KajetAI"
     override val aiConsentWhatHappens =
-        "The content of this note - all the text, the code, or the labels in the map nodes - " +
+        "The content of this note – all the text, the code, or the labels in the map nodes – " +
             "will be sent to Google, because it is their model that makes the change. " +
             "Handwriting and photographs are not sent."
     override val aiConsentTraining =
@@ -3046,10 +3062,11 @@ object EnglishStrings : Strings {
     override val liveNow = "Connected"
     override val liveConnecting = "Connecting…"
     override val liveOffline = "Offline"
-    override val liveOfflineAbout = "Offline - changes will go when the network is back"
+    override val liveOfflineAbout = "Offline – changes will sync when you are back online"
     override val liveReadOnly = "Read only"
     override val liveGone = "No access"
-    override val liveGoneAbout = "This note is gone or your access was taken back. Changes made here will not go anywhere."
+    override val liveGoneAbout = "This note no longer exists or your access was removed. Changes made here will " +
+        "not be saved."
     override val liveChangeFrom = "Change from:"
     override val liveOthersHere = "Also in this note:"
     override val sharedSection = "Shared with me"
@@ -3059,19 +3076,19 @@ object EnglishStrings : Strings {
     override val sharedNotHere = "This shared note is no longer on the device."
     override val sharedFolderEmpty = "There is nothing in this folder yet."
     override val sharedNeedsInternet = "Shared folders open over the internet."
-    override val sharedRemove = "Remove from my shared"
+    override val sharedRemove = "Remove from Shared with me"
     override val sharedAccepted = "This is now in your library."
-    override val sharedTemporary = "Opened from a link - it will not stay on your list after you leave."
-    override val sharedDeleteNote = "Delete note (it goes to the owner's bin)"
+    override val sharedTemporary = "Opened from a link – it will not stay on your list after you leave."
+    override val sharedDeleteNote = "Delete note (it goes to the owner’s bin)"
     override val sharedNewFolder = "New subfolder"
     override val shareFolderTitle = "Share folder"
-    override val shareFolderAbout = "They will see the folder with its subfolders and everything in it - including notes added later."
-    override val shareFolderNeedsSync = "The folder has to reach the cloud first - sync the library and try again."
+    override val shareFolderAbout = "They will see the folder with its subfolders and everything in it – including notes added later."
+    override val shareFolderNeedsSync = "The folder has to reach the cloud first – sync the library and try again."
     override val syncPauseSection = "Pause sync"
-    override val syncPauseAbout = "For a while notes do not go to or come from the cloud, even with " +
-        "internet. Everything stays on the device and the note shows \"Offline\" and a grey cloud. " +
-        "KajetAI keeps working, but its changes and the conversation wait on the device too. " +
-        "When the pause ends, waiting changes go up by themselves."
+    override val syncPauseAbout = "For a while notes do not go to or come from the cloud, even with internet. " +
+        "Everything stays on the device and the note shows “Offline” and a grey cloud. " +
+        "KajetAI keeps working, but its changes and the conversation wait on the " +
+        "device too. When the pause ends, waiting changes go up by themselves."
     override val syncPausedNow = "Sync is paused."
     override val syncPauseHour = "For 1 hour"
     override val syncPauseDay = "For 1 day"
@@ -3080,7 +3097,7 @@ object EnglishStrings : Strings {
     override val syncPauseForever = "Until I resume it"
     override val syncPausedForever = "Sync is paused until you resume it."
     override val syncResume = "Resume sync"
-    override val syncPauseNeedsAccount = "Sync works once you sign in to the cloud - without an account there is nothing to pause."
-    override val syncPausePastTime = "That time has already passed - pick a later one."
+    override val syncPauseNeedsAccount = "Sync works once you sign in to the cloud – without an account there is nothing to pause."
+    override val syncPausePastTime = "That time has already passed – pick a later one."
     override val aiDetachedSaveFailed = "KajetAI answered, but the change could not be saved on the device. The note stays as it was."
 }
