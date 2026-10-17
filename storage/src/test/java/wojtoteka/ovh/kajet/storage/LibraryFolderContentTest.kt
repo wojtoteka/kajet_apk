@@ -4,6 +4,7 @@ import androidx.room.Room
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -209,5 +210,30 @@ class LibraryFolderContentTest {
         val thumbnail = runBlocking { repository.thumbnail(listed) }
 
         assertThat(thumbnail?.lines?.single()?.toList()).containsExactly(10, 10, 80, 40).inOrder()
+    }
+
+    @Test
+    fun `the disk list shows up before unknown notes are read`() {
+        repeat(3) { number -> noteFromOutside("Z zewnątrz $number", "Tytuł $number") }
+        FakeDocumentsProvider.openDelayMs = 1_000
+        val started = System.nanoTime()
+        val arrivals = mutableListOf<Long>()
+
+        val shown = runBlocking {
+            withTimeout(20_000) {
+                repository.folderContent("")
+                    .onEach { arrivals += (System.nanoTime() - started) / 1_000_000 }
+                    .take(2)
+                    .toList()
+            }
+        }
+
+        FakeDocumentsProvider.openDelayMs = 0
+        // Lista z dysku nie czeka na odczyt żadnej notatki...
+        assertThat(shown[0].items.map { it.name }).containsExactly("Z zewnątrz 0", "Z zewnątrz 1", "Z zewnątrz 2")
+        assertThat(arrivals[0]).isLessThan(1_000)
+        // ...a tytuły ze środka przychodzą, gdy notatki zostaną przeczytane.
+        assertThat(shown[1].items.map { it.name }).containsExactly("Tytuł 0", "Tytuł 1", "Tytuł 2")
+        assertThat(arrivals[1]).isAtLeast(3_000)
     }
 }

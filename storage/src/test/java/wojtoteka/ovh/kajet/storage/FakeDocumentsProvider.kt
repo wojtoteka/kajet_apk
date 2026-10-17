@@ -142,6 +142,7 @@ class FakeDocumentsProvider : ContentProvider() {
     ): ParcelFileDescriptor {
         val file = fileOf(documentId)
         if (!file.isFile) throw FileNotFoundException(documentId)
+        if (openDelayMs > 0) Thread.sleep(openDelayMs)
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.parseMode(mode))
     }
 
@@ -190,6 +191,10 @@ class FakeDocumentsProvider : ContentProvider() {
         @Volatile
         var queries = 0
 
+        /** Tyle trwa otwarcie każdego pliku - jak wolny magazyn na telefonie. */
+        @Volatile
+        var openDelayMs = 0L
+
         /** Katalogi, których spisu magazyn „nie odda" - jak przy chwilowej awarii. */
         @Volatile
         var failListing: ((File) -> Boolean)? = null
@@ -199,6 +204,7 @@ class FakeDocumentsProvider : ContentProvider() {
             base = directory
             queries = 0
             failListing = null
+            openDelayMs = 0L
             val info = ProviderInfo().apply {
                 authority = AUTHORITY
                 exported = true

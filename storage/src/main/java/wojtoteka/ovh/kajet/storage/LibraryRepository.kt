@@ -12,16 +12,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -289,25 +287,25 @@ class LibraryRepository(
       Odświeżenia zbijają się w jedno: synchronizacja potrafi zgłosić zmianę
       kilkadziesiąt razy na sekundę, a każdy przebieg to spis z dysku.
     */
-    fun folderContent(path: String): Flow<FolderContent> = flow {
+    fun folderContent(path: String): Flow<FolderContent> = channelFlow {
         val remembered = withContext(io) {
             runCatching { indexedFolder(path, starredFiles()) }.getOrDefault(emptyList())
         }
-        if (remembered.isNotEmpty()) emit(FolderContent(path, remembered, fromDisk = false))
+        if (remembered.isNotEmpty()) send(FolderContent(path, remembered, fromDisk = false))
         var shown = remembered
-        emitAll(
-            combine(refreshTick, settings.settings.map { it.favoriteFiles }.distinctUntilChanged()) { _, starred ->
-                starred
-            }
-                .conflate()
-                .transform { starred ->
-                    for (content in withContext(io) { fromDisk(path, starred, shown) }) {
+        combine(refreshTick, settings.settings.map { it.favoriteFiles }.distinctUntilChanged()) { _, starred ->
+            starred
+        }
+            .conflate()
+            .collect { starred ->
+                withContext(io) {
+                    diskPass(path, starred, shown) { content ->
                         shown = content.items
-                        emit(content)
+                        send(content)
                     }
-                    delay(REFRESH_GAP_MS)
-                },
-        )
+                }
+                delay(REFRESH_GAP_MS)
+            }
     }
 
     fun folder(path: String): Flow<List<LibraryItem>> = folderContent(path).map { it.items }
@@ -337,38 +335,37 @@ class LibraryRepository(
         }
 
     /**
-     * Przebieg po dysku: spis folderu, a gdy spis czegoś nie znał - jeszcze
-     * raz po uzupełnieniu. Gdy magazyn nie odpowiada, zostaje to, co widać.
+     * Przebieg po dysku. Lista z dysku idzie na ekran od razu, a dopiero potem
+     * spis dogania dysk - notatki, których nie znał, czyta się po kolei i co
+     * kilka z nich lista dostaje tytuły i podglądy. Gdy magazyn nie odpowiada,
+     * zostaje to, co już widać.
      */
-    private suspend fun fromDisk(
+    private suspend fun diskPass(
         path: String,
         starred: Set<String>,
         shown: List<LibraryItem>,
-    ): List<FolderContent> {
-        val store = store() ?: return listOf(FolderContent(path, emptyList(), fromDisk = true))
+        show: suspend (FolderContent) -> Unit,
+    ) {
+        val store = store() ?: return show(FolderContent(path, emptyList(), fromDisk = true))
         // Znacznik i spis bierzemy PRZED dyskiem. Zmiana zrobiona w trakcie
         // (zapis, kasowanie, synchronizacja) przesuwa znacznik - wtedy spisu
         // nie poprawiamy, bo obraz z dysku mógł się już zestarzeć, a następny
         // przebieg i tak zaraz przyjdzie.
         val tick = refreshTick.value
         val before = runCatching { dao.childrenOf(path) }.getOrDefault(emptyList())
-        val listing = runCatching { store.listing(path) }.getOrDefault(FolderListing.Unknown)
-        val found = when (listing) {
+        val found = when (val listing = runCatching { store.listing(path) }.getOrDefault(FolderListing.Unknown)) {
             is FolderListing.Found -> listing
-            FolderListing.Missing -> return listOf(FolderContent(path, emptyList(), fromDisk = true))
+            FolderListing.Missing -> return show(FolderContent(path, emptyList(), fromDisk = true))
             // Magazyn milczy - zostaje to, co widać, tylko już nie „w drodze".
-            FolderListing.Unknown -> return listOf(FolderContent(path, shown, fromDisk = true))
+            FolderListing.Unknown -> return show(FolderContent(path, shown, fromDisk = true))
         }
-
-        val first = FolderContent(path, merged(found.items, before, starred), fromDisk = true)
-        val known = before.mapTo(HashSet()) { it.documentUri }
-        val unknownNotes = found.items.any { it.type == ItemType.NOTE && it.documentUri !in known }
-        val changed = runCatching { reconcileFolder(store, found, before, starred, tick) }.getOrDefault(false)
-        // Notatki, których spis nie znał, dostały właśnie tytuł i podgląd -
-        // wtedy idzie druga, pełna wersja listy.
-        if (!unknownNotes || !changed) return listOf(first)
-        val after = runCatching { dao.childrenOf(path) }.getOrDefault(before)
-        return listOf(first, FolderContent(path, merged(found.items, after, starred), fromDisk = true))
+        show(FolderContent(path, merged(found.items, before, starred), fromDisk = true))
+        runCatching {
+            reconcileFolder(store, found, before, starred, tick) {
+                val now = runCatching { dao.childrenOf(path) }.getOrDefault(before)
+                show(FolderContent(path, merged(found.items, now, starred), fromDisk = true))
+            }
+        }
     }
 
     /** Wpisy z dysku uzupełnione o to, co wie spis: tytuł, rodzaj, podgląd, datę. */
@@ -413,16 +410,11 @@ class LibraryRepository(
         before: List<IndexEntry>,
         starred: Set<String>,
         tick: Int,
-    ): Boolean {
+        refreshed: suspend () -> Unit,
+    ) {
+        if (refreshTick.value != tick) return
         val onDiskByPath = listing.items.associateBy { it.path }
         val knownByUri = before.associateBy { it.documentUri }
-
-        // Najpierw odczyty (to one trwają), dopiero potem zapisy - i to tylko
-        // wtedy, gdy w międzyczasie nikt niczego nie zmienił.
-        val newNotes = listing.items
-            .filter { it.type == ItemType.NOTE && it.documentUri !in knownByUri }
-            .map { item -> item to runCatching { store.readNoteAt(item.documentUri) }.getOrNull() }
-        if (refreshTick.value != tick) return false
 
         var changed = false
         for (row in before) {
@@ -440,14 +432,6 @@ class LibraryRepository(
                 }
             }
         }
-        for ((item, document) in newNotes) {
-            if (document != null) {
-                writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
-            } else {
-                dao.upsertKeepingOpened(item.toIndexEntry())
-            }
-            changed = true
-        }
         for (item in listing.items) {
             if (item.type == ItemType.NOTE) continue
             val row = knownByUri[item.documentUri]
@@ -463,7 +447,30 @@ class LibraryRepository(
             dao.upsertKeepingOpened(item.toIndexEntry().copy(favorite = item.path in starred))
             changed = true
         }
-        return changed
+
+        // Notatki, których spis nie zna - każdą trzeba przeczytać, a to trwa.
+        // Idą po kolei i każda trafia do spisu od razu: przebieg przerwany
+        // zmianą albo zamknięciem aplikacji nie traci tego, co już przeczytał,
+        // a następny zaczyna od reszty.
+        var sinceShown = 0
+        for (item in listing.items) {
+            if (item.type != ItemType.NOTE || item.documentUri in knownByUri) continue
+            if (refreshTick.value != tick) break
+            val document = runCatching { store.readNoteAt(item.documentUri) }.getOrNull()
+            if (refreshTick.value != tick) break
+            if (document != null) {
+                writeToIndex(item.copy(name = document.title, noteKind = document.kind), document)
+            } else {
+                dao.upsertKeepingOpened(item.toIndexEntry())
+            }
+            changed = true
+            sinceShown += 1
+            if (sinceShown >= NOTES_PER_UPDATE) {
+                sinceShown = 0
+                refreshed()
+            }
+        }
+        if (changed) refreshed()
     }
 
     fun favorites(): Flow<List<LibraryItem>> =
@@ -1424,6 +1431,9 @@ class LibraryRepository(
 
         /** Najkrótsza przerwa między dwoma przebiegami po dysku dla jednego folderu. */
         const val REFRESH_GAP_MS = 250L
+
+        /** Co tyle przeczytanych notatek lista dostaje ich tytuły i podglądy. */
+        const val NOTES_PER_UPDATE = 8
 
         const val DAY = 24 * 60 * 60 * 1000L
     }
