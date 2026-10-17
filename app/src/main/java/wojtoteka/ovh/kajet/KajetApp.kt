@@ -210,7 +210,14 @@ class KajetApp : Application() {
         */
         Thread {
             runCatching {
-                kotlinx.coroutines.runBlocking { container.housekeeping.runIfDue() }
+                kotlinx.coroutines.runBlocking {
+                    container.housekeeping.runIfDue()
+                    // Zdjęcia i rysunki z notatek znikają z galerii - raz na
+                    // bibliotekę i dopiero po chwili, żeby nie spowalniać
+                    // pierwszego widoku listy.
+                    kotlinx.coroutines.delay(10_000)
+                    container.housekeeping.keepNoteImagesOutOfGallery()
+                }
             }
         }.start()
     }

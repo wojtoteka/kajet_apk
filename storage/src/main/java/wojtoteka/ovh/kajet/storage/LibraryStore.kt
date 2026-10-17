@@ -445,6 +445,7 @@ class LibraryStore(
     fun writeAttachment(notePath: String, name: String, data: ByteArray, mime: String): String {
         val folder = noteFolder(notePath)
             ?: throw IOException(words.noteGone(notePath))
+        keepOutOfGallery(folder.uri)
         val assets = assetsFolder(folder)
         val nameOnDisk = FileNames.unique(
             name = name.substringBeforeLast('.'),
@@ -460,10 +461,64 @@ class LibraryStore(
     fun putAttachment(notePath: String, name: String, data: ByteArray, mime: String) {
         val folder = noteFolder(notePath)
             ?: throw IOException(words.noteGone(notePath))
+        keepOutOfGallery(folder.uri)
         val assets = assetsFolder(folder)
         val file = DiskFiles.fileForWrite(resolver, assets, name, mime)
         DiskFiles.writeBytes(resolver, file, data)
     }
+
+    /*
+      Galeria Androida pokazuje każdy obrazek z folderu z dokumentami - także
+      zdjęcia i rysunki z notatek, które leżą jako zwykłe pliki w `assets`.
+      Plik `.nomedia` w katalogu notatki każe systemowi pominąć ten katalog
+      razem z wnętrzem. Zakładany PRZED zapisem obrazka, więc nowy obrazek
+      w galerii w ogóle się nie pojawia. Pliki zostają nietknięte i działają
+      w aplikacji jak dotąd; kropka na początku nazwy chowa go też w spisie.
+    */
+    private fun keepOutOfGallery(noteFolder: Uri, inside: List<DiskEntry>? = null) {
+        val listed = inside ?: DiskFiles.children(resolver, noteFolder) ?: return
+        if (listed.any { it.name == NO_MEDIA }) return
+        runCatching { DiskFiles.createEmptyFile(resolver, noteFolder, NO_MEDIA) }
+    }
+
+    /** Wynik przejścia, które chowa obrazki notatek przed galerią. */
+    internal class GalleryPass(
+        /** Obrazki, które galeria mogła już wcześniej zaindeksować. */
+        val images: List<Uri>,
+        val complete: Boolean,
+    )
+
+    /**
+     * Dokłada `.nomedia` każdej notatce, która ma zdjęcia albo rysunki - dla
+     * notatek sprzed tej zmiany. Galeria zapomina ich obrazki dopiero po
+     * ponownym skanie, więc wraca też ich lista.
+     */
+    internal fun keepNotesOutOfGallery(): GalleryPass {
+        val notes = mutableListOf<Uri>()
+        var complete = walk { item -> if (item.type == ItemType.NOTE) notes += Uri.parse(item.documentUri) }
+        val images = mutableListOf<Uri>()
+        for (note in notes) {
+            val inside = DiskFiles.children(resolver, note)
+            if (inside == null) {
+                complete = false
+                continue
+            }
+            val assets = inside.firstOrNull { it.name == NoteDocument.ASSETS_DIRECTORY && it.isDirectory } ?: continue
+            keepOutOfGallery(note, inside)
+            val files = DiskFiles.children(resolver, assets.uri)
+            if (files == null) {
+                complete = false
+                continue
+            }
+            files.filter { it.isFile && isImage(it) }.mapTo(images) { it.uri }
+        }
+        return GalleryPass(images, complete)
+    }
+
+    // Po typie, a gdy magazyn go nie podaje - po rozszerzeniu.
+    private fun isImage(file: DiskEntry): Boolean =
+        file.mime.orEmpty().startsWith("image/") ||
+            file.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
 
     private fun attachment(notePath: String, name: String): DiskEntry? {
         // Nazwa z ukośnikiem nie jest nazwą pliku w assets - i nie może
@@ -1248,6 +1303,11 @@ class LibraryStore(
 
     companion object {
         const val BACKUP_FILE = "content.bak.json"
+
+        /** Plik, przez który galeria Androida pomija katalog notatki. */
+        const val NO_MEDIA = ".nomedia"
+
+        private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif")
 
         /** Gdzie szukać treści notatki: najpierw plik główny, potem jego kopia. */
         private val CONTENT_FILES = listOf(NoteDocument.CONTENT_FILE, BACKUP_FILE)

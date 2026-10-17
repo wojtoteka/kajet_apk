@@ -1,6 +1,7 @@
 package wojtoteka.ovh.kajet.storage
 
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,27 @@ class Housekeeping(
     }
 
     /**
+     * Chowa przed galerią zdjęcia i rysunki z notatek - raz na bibliotekę.
+     *
+     * Nowe obrazki trafiają do katalogu, który ma już `.nomedia`, więc
+     * galeria ich nie widzi. Tu chodzi o notatki zapisane wcześniej: dostają
+     * `.nomedia`, a ich obrazki idą do ponownego skanu, po którym znikają
+     * z galerii. Znacznik pada dopiero po pełnym przejściu - przerwane albo
+     * niepełne powtórzy się przy następnym uruchomieniu.
+     */
+    suspend fun keepNoteImagesOutOfGallery(): Int = withContext(io) {
+        val library = repository.libraryUri() ?: return@withContext 0
+        val key = KEY_GALLERY_PREFIX + library
+        if (marks.getBoolean(key, false)) return@withContext 0
+        val (paths, complete) = repository.keepNotesOutOfGallery() ?: return@withContext 0
+        if (paths.isNotEmpty()) {
+            runCatching { MediaScannerConnection.scanFile(app, paths.toTypedArray(), null, null) }
+        }
+        if (complete) marks.edit().putBoolean(key, true).apply()
+        paths.size
+    }
+
+    /**
      * Zdjęcia z aparatu i pliki eksportu starsze niż [CACHE_DAYS] dni,
      * miniatury nieużywane od [THUMBNAIL_DAYS] dni.
      */
@@ -122,6 +144,7 @@ class Housekeeping(
 
         private const val FILE_NAME = "kajet-sprzatanie"
         private const val KEY_LAST_RUN = "ostatni_przebieg"
+        private const val KEY_GALLERY_PREFIX = "galeria_ukryta:"
 
         private const val DAY = 24 * 60 * 60 * 1000L
 

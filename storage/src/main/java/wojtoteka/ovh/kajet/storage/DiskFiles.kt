@@ -60,6 +60,8 @@ internal object DiskFiles {
 
     private const val MAX_SIZE_HINT = 64L * 1024 * 1024
 
+    private const val EXTERNAL_STORAGE = "com.android.externalstorage.documents"
+
     private val COLUMNS = arrayOf(
         DocumentsContract.Document.COLUMN_DOCUMENT_ID,
         DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -348,6 +350,35 @@ internal object DiskFiles {
             }
         }
         return file
+    }
+
+    /**
+     * Pusty plik w katalogu wskazanym samym adresem - bez obiektu
+     * DocumentFile, którego przy przejściu po drzewie nie ma pod ręką.
+     */
+    fun createEmptyFile(resolver: ContentResolver, folder: Uri, name: String): Boolean {
+        plainFile(folder)?.let { directory -> return File(directory, name).createNewFile() }
+        return try {
+            DocumentsContract.createDocument(resolver, folder, MIME_BINARY, name) != null
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Prawdziwa ścieżka pliku z magazynu Androida - dla skanera multimediów,
+     * który zna tylko ścieżki. Inny magazyn (np. w chmurze) nie ma ścieżki
+     * i galeria go nie przegląda, więc wtedy null.
+     */
+    fun filePathOf(uri: Uri): String? {
+        if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path
+        if (uri.authority != EXTERNAL_STORAGE) return null
+        val id = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() ?: return null
+        val volume = id.substringBefore(':', "")
+        val relative = id.substringAfter(':', "")
+        if (volume.isEmpty()) return null
+        val base = if (volume == "primary") "/storage/emulated/0" else "/storage/$volume"
+        return if (relative.isEmpty()) base else "$base/$relative"
     }
 
     fun folderForWrite(resolver: ContentResolver, parent: DocumentFile, name: String): DocumentFile {

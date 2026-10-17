@@ -563,4 +563,36 @@ open class LibraryStoreTest {
         assertThat(item.iconId).isEqualTo("kolba")
         assertThat(item.name).isEqualTo("Biologia")
     }
+
+    @Test
+    fun `a note with a picture is kept out of the phone gallery`() {
+        val note = store.createNote("", "Ze zdjęciem w galerii", NoteKind.HANDWRITTEN)
+
+        val name = store.writeAttachment(note.path, "rysunek.png", byteArrayOf(1, 2), "image/png")
+
+        assertThat(File(root, "${note.path}/${LibraryStore.NO_MEDIA}").isFile).isTrue()
+        // Plik dla galerii nie jest ani wpisem na liście, ani załącznikiem.
+        assertThat(store.list("").map { it.name }).containsExactly("Ze zdjęciem w galerii")
+        assertThat(store.attachmentNames(note.path)).containsExactly(name)
+        assertThat(store.readAttachment(note.path, name)).isEqualTo(byteArrayOf(1, 2))
+    }
+
+    @Test
+    fun `older notes with pictures get hidden from the gallery in one pass`() {
+        store.createFolder("", "Szkoła")
+        val withPicture = store.createNote("Szkoła", "Stara ze zdjęciem", NoteKind.TEXT)
+        val plain = store.createNote("", "Bez zdjęć", NoteKind.TEXT)
+        // Obrazek sprzed zmiany - położony obok aplikacji, bez pliku dla galerii.
+        File(root, "${withPicture.path}/assets").mkdirs()
+        File(root, "${withPicture.path}/assets/zdjecie.jpg").writeBytes(byteArrayOf(5))
+        File(root, "${withPicture.path}/assets/rysunek.strokes.json").writeText("{}")
+
+        val pass = store.keepNotesOutOfGallery()
+
+        assertThat(pass.complete).isTrue()
+        assertThat(pass.images.map { it.lastPathSegment.orEmpty() }.single()).endsWith("zdjecie.jpg")
+        assertThat(File(root, "${withPicture.path}/${LibraryStore.NO_MEDIA}").isFile).isTrue()
+        assertThat(File(root, "${plain.path}/${LibraryStore.NO_MEDIA}").exists()).isFalse()
+        assertThat(store.readNote(withPicture.path).title).isEqualTo("Stara ze zdjęciem")
+    }
 }

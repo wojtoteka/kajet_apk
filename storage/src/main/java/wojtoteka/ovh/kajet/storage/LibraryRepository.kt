@@ -236,6 +236,20 @@ class LibraryRepository(
     override suspend fun hasStore(): Boolean = store() != null
 
     /**
+     * Chowa przed galerią obrazki notatek zapisanych, zanim aplikacja zaczęła
+     * zakładać im `.nomedia`. Zwraca ścieżki obrazków do ponownego skanu
+     * i to, czy przejście objęło całą bibliotekę - albo null bez biblioteki.
+     */
+    internal suspend fun keepNotesOutOfGallery(): Pair<List<String>, Boolean>? = withContext(io) {
+        val store = store() ?: return@withContext null
+        val pass = store.keepNotesOutOfGallery()
+        pass.images.mapNotNull { DiskFiles.filePathOf(it) } to pass.complete
+    }
+
+    /** Adres wybranego katalogu notatek - po nim sprzątanie pamięta, co już zrobiło. */
+    internal suspend fun libraryUri(): String? = store()?.rootUri
+
+    /**
      * Otwiera spis i katalog notatek zawczasu, poza wątkiem rysowania.
      *
      * Pierwsze otwarcie bazy i pierwsze pytanie o wybrany katalog trwają na

@@ -203,4 +203,20 @@ class LibraryStoreSafTest : LibraryStoreTest() {
         assertThat(File(root, "Zostaje.note/content.json").isFile).isTrue()
         assertThat(File(root, ".trash").exists()).isFalse()
     }
+
+    @Test
+    fun `files from the phone storage get a real path for the media scanner`() {
+        val tree = "content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FKajet"
+        val inside = android.net.Uri.parse(
+            "$tree/document/primary%3ADocuments%2FKajet%2FA.note%2Fassets%2Fx.png",
+        )
+        val card = android.net.Uri.parse(
+            "content://com.android.externalstorage.documents/tree/1A2B-3C4D%3AKajet/document/1A2B-3C4D%3AKajet%2Fy.png",
+        )
+        val elsewhere = android.net.Uri.parse("content://inny.magazyn/tree/a/document/b")
+
+        assertThat(DiskFiles.filePathOf(inside)).isEqualTo("/storage/emulated/0/Documents/Kajet/A.note/assets/x.png")
+        assertThat(DiskFiles.filePathOf(card)).isEqualTo("/storage/1A2B-3C4D/Kajet/y.png")
+        assertThat(DiskFiles.filePathOf(elsewhere)).isNull()
+    }
 }
