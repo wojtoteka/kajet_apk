@@ -669,6 +669,9 @@ class LibraryStore(
     }
 
     fun move(path: String, targetFolder: String): String {
+        // Pusta ścieżka to cała biblioteka - przenieść jej się nie da, a próba
+        // skończyłaby się skasowaniem źródła.
+        if (path.isBlank()) throw IOException(words.cannotMoveIntoItself)
         val source = describe(path) ?: throw IOException(words.entryGone(path))
         val target = requireFolder(targetFolder)
         if (path == targetFolder || targetFolder.startsWith("$path/")) {
@@ -791,6 +794,8 @@ class LibraryStore(
      * [TrashEntry.fromServer].
      */
     fun moveToTrash(path: String, fromServer: Boolean = false) {
+        // Pusta ścieżka to cała biblioteka razem z koszem - tego się nie wyrzuca.
+        if (path.isBlank()) throw IOException(words.entryGone(path))
         val source = describe(path) ?: throw IOException(words.entryGone(path))
         val name = source.name
         val trash = trashFolder()

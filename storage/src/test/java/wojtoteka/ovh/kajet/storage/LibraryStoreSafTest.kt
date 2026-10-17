@@ -193,10 +193,14 @@ class LibraryStoreSafTest : LibraryStoreTest() {
     }
 
     @Test
-    fun `deleting the library root by an empty path is refused`() {
+    fun `the library root cannot be deleted, trashed or moved by an empty path`() {
+        store.createFolder("", "Cel")
         store.createNote("", "Zostaje", NoteKind.TEXT)
 
         assertThat(store.deleteEntry("")).isFalse()
+        assertThat(runCatching { store.moveToTrash("") }.isFailure).isTrue()
+        assertThat(runCatching { store.move("", "Cel") }.isFailure).isTrue()
         assertThat(File(root, "Zostaje.note/content.json").isFile).isTrue()
+        assertThat(File(root, ".trash").exists()).isFalse()
     }
 }
