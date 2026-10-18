@@ -73,6 +73,7 @@ import wojtoteka.ovh.kajet.editor.SaveIndicator
 import wojtoteka.ovh.kajet.editor.penWritingSurface
 import wojtoteka.ovh.kajet.ink.PenHaptics
 import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.text.TabStops
 
 @Composable
 fun TextEditor(
@@ -683,6 +684,7 @@ fun TextEditor(
                         },
                         textStyle = Kajet.type.code.copy(color = colors.text),
                         cursorBrush = SolidColor(colors.accent),
+                        visualTransformation = TabStops(columns = true),
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())

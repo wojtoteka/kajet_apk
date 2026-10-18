@@ -81,6 +81,7 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.codeFileTooLargeAbout
 import wojtoteka.ovh.kajet.core.text.nothingOpensFile
 import wojtoteka.ovh.kajet.core.text.searchFound
+import wojtoteka.ovh.kajet.core.text.TabStops
 
 @Composable
 fun CodeEditor(
@@ -334,7 +335,7 @@ fun CodeEditor(
                                     autoCorrectEnabled = false,
                                     keyboardType = KeyboardType.Ascii,
                                 ),
-                                visualTransformation = { text ->
+                                visualTransformation = TabStops(columns = true, inner = { text ->
                                     androidx.compose.ui.text.input.TransformedText(
                                         if (CodeFileLimits.shouldHighlight(text.text.length)) {
                                             SyntaxHighlight.highlight(text.text, model.language, codeColors)
@@ -343,7 +344,7 @@ fun CodeEditor(
                                         },
                                         androidx.compose.ui.text.input.OffsetMapping.Identity,
                                     )
-                                },
+                                }),
                                 modifier = Modifier
                                     .padding(start = 12.dp, end = 20.dp, top = 8.dp, bottom = 40.dp)
                                     .fillMaxWidth(),

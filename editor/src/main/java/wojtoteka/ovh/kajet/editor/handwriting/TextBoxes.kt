@@ -47,6 +47,7 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.editor.penWritingSurface
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import kotlin.math.roundToInt
+import wojtoteka.ovh.kajet.core.text.TabStops
 
 @Composable
 fun TextBoxesOnPage(
@@ -191,6 +192,7 @@ private fun TextBoxOnSheet(
                     onValueChange = { onChange(box.copy(text = it), false) },
                     textStyle = style,
                     cursorBrush = SolidColor(Kajet.colors.accent),
+                    visualTransformation = TabStops(),
                     modifier = field.focusRequester(focus),
                 )
                 LaunchedEffect(box.id) { runCatching { focus.requestFocus() } }

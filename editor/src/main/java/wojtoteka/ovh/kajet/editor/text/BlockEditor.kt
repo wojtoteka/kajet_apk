@@ -97,6 +97,7 @@ import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.percentOf
 import wojtoteka.ovh.kajet.core.text.photoOfMany
 import wojtoteka.ovh.kajet.core.text.photoNotFound
+import wojtoteka.ovh.kajet.core.text.TabStops
 
 /** Zapas pod kursorem, który ma być widać przy pisaniu - mniej więcej linia. */
 private val CURSOR_MARGIN = 56.dp
@@ -428,7 +429,7 @@ private fun TextBlock(
             onTextLayout = { layout ->
                 if (followCursor && hasFocus) {
                     followCursor = false
-                    val shown = inlineStyle.filter(AnnotatedString(field.text)).offsetMapping
+                    val shown = TabStops(inlineStyle).filter(AnnotatedString(field.text)).offsetMapping
                         .originalToTransformed(field.selection.end)
                         .coerceIn(0, layout.layoutInput.text.length)
                     val cursor = layout.getCursorRect(shown)
@@ -444,7 +445,7 @@ private fun TextBlock(
             // To jest cała rzecz, dzięki której nie ma osobnego podglądu:
             // pogrubienie widać pogrubione tam, gdzie się je pisze, a surowych
             // znaczników nie widać nigdy - także pod kursorem.
-            visualTransformation = inlineStyle,
+            visualTransformation = TabStops(inlineStyle),
             cursorBrush = SolidColor(Kajet.colors.accent),
             modifier = Modifier
                 .fillMaxWidth()
@@ -639,6 +640,7 @@ private fun CodeBlock(
                 },
                 textStyle = Kajet.type.code.copy(color = colors.text),
                 cursorBrush = SolidColor(colors.accent),
+                visualTransformation = TabStops(columns = true),
                 // Kod to nie zdanie: bez poprawiania słów i wielkich liter.
                 keyboardOptions = KeyboardOptions(
                     autoCorrectEnabled = false,
@@ -843,7 +845,7 @@ private fun TableCell(
             if (next.text != text) onText(next.text)
         },
         textStyle = style,
-        visualTransformation = inlineStyle,
+        visualTransformation = TabStops(inlineStyle),
         cursorBrush = SolidColor(Kajet.colors.accent),
         modifier = modifier
             .heightIn(min = 44.dp)
