@@ -77,6 +77,8 @@ data class TreeNode(
     val item: LibraryItem,
     val level: Int,
     val expanded: Boolean,
+    /** Czy w folderze leżą inne foldery - tylko wtedy jest co rozwijać. */
+    val hasSubfolders: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -267,17 +269,13 @@ class LibraryViewModel(
     }
 
     /*
-      Drzewo po lewej: foldery, a pod ROZWINIĘTYM folderem także jego notatki
-      i pliki.
+      Drzewo po lewej: same foldery. Notatki wybranego folderu widać
+      w spisie obok, więc w drzewie byłyby drugi raz i spychały foldery
+      w dół - trzeba by ich szukać między notatkami.
 
-      Dawniej szły tu same foldery. Strzałka stoi jednak przy każdym folderze,
-      w którym cokolwiek leży, więc folder z samymi notatkami dawał się
-      „rozwinąć" - strzałka obracała się w dół, a pod spodem nie pojawiało się
-      nic. Notatki są teraz pod folderem, jak w zwykłym drzewie plików.
-
-      Korzeń biblioteki zostaje bez notatek: tamte widać w spisie obok, a przy
-      kilkudziesięciu notatkach luzem drzewo zamieniłoby się w drugi spis
-      i foldery trzeba by w nim wyszukiwać.
+      Strzałka stoi tylko przy folderze, w którym leżą inne foldery.
+      Folder z samymi notatkami dawał się „rozwinąć", strzałka obracała
+      się w dół, a pod spodem nie pojawiało się nic.
     */
     /*
       Drzewo składa się ze spisu, nie z dysku: przy każdej zmianie budowało
@@ -287,18 +285,14 @@ class LibraryViewModel(
     */
     private suspend fun buildTree(expanded: Set<String>): List<TreeNode> {
         val result = mutableListOf<TreeNode>()
+        suspend fun foldersIn(path: String): List<LibraryItem> = runCatching {
+            repo.indexedFolder(path).filter { it.type == ItemType.FOLDER }
+        }.getOrDefault(emptyList())
         suspend fun descend(path: String, level: Int) {
-            val inside = runCatching {
-                val items = repo.indexedFolder(path)
-                if (path.isEmpty()) items.filter { it.type == ItemType.FOLDER } else items
-            }.getOrDefault(emptyList())
-            for (item in inside) {
-                if (item.type != ItemType.FOLDER) {
-                    result += TreeNode(item, level, expanded = false)
-                    continue
-                }
+            for (item in foldersIn(path)) {
                 val open = item.path in expanded
-                result += TreeNode(item, level, open)
+                val nested = item.childCount > 0 && foldersIn(item.path).isNotEmpty()
+                result += TreeNode(item, level, open, nested)
                 if (open) descend(item.path, level + 1)
             }
         }

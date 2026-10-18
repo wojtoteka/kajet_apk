@@ -57,7 +57,6 @@ import wojtoteka.ovh.kajet.core.design.component.EmptyState
 import wojtoteka.ovh.kajet.core.design.component.KajetMark
 import wojtoteka.ovh.kajet.core.design.component.marginRule
 import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
-import wojtoteka.ovh.kajet.core.design.icon.LanguageIcons
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.deleteForeverOf
 import wojtoteka.ovh.kajet.core.text.disappearsIn
@@ -71,7 +70,6 @@ import wojtoteka.ovh.kajet.core.text.trashManyWarning
 import wojtoteka.ovh.kajet.core.text.trashedAt
 import wojtoteka.ovh.kajet.core.model.ItemType
 import wojtoteka.ovh.kajet.core.model.LibraryItem
-import wojtoteka.ovh.kajet.core.model.NoteKind
 import wojtoteka.ovh.kajet.core.model.PageBackground
 import wojtoteka.ovh.kajet.core.model.PageMode
 import wojtoteka.ovh.kajet.export.ExportFormat
@@ -106,8 +104,6 @@ fun LibraryScreen(
     // Pusty spis, którego dysk jeszcze nie potwierdził, to nie pusty folder.
     val settled = current != null && (current.fromDisk || current.items.isNotEmpty())
     val tree by model.tree.collectAsStateWithLifecycle()
-    // Okna przenoszenia wskazują folder, więc notatki z drzewa nie mają tam wstępu.
-    val folderTree = remember(tree) { tree.filter { it.item.type == ItemType.FOLDER } }
     val error by model.error.collectAsStateWithLifecycle()
     val progress by model.progress.collectAsStateWithLifecycle()
     val stuckPaths by model.stuckPaths.collectAsStateWithLifecycle()
@@ -176,10 +172,6 @@ fun LibraryScreen(
                 onSelect = model::goTo,
                 onFavorites = { model.setSection(LibrarySection.FAVORITES) },
                 onToggle = model::toggleExpanded,
-                onOpen = { item ->
-                    model.rememberOpened(item)
-                    onOpenItem(item)
-                },
             )
         }
 
@@ -420,7 +412,7 @@ fun LibraryScreen(
     moving?.let { item ->
         MoveDialog(
             item = item,
-            tree = folderTree,
+            tree = tree,
             onClose = { moving = null },
             onMove = { target ->
                 model.move(item, target)
@@ -446,7 +438,7 @@ fun LibraryScreen(
     if (movingSelected) {
         MoveManyDialog(
             count = selected.size,
-            tree = folderTree,
+            tree = tree,
             onClose = { movingSelected = false },
             onMove = { target ->
                 movingSelected = false
@@ -565,7 +557,6 @@ private fun TreeColumn(
     onSelect: (String) -> Unit,
     onFavorites: () -> Unit,
     onToggle: (String) -> Unit,
-    onOpen: (LibraryItem) -> Unit,
 ) {
     val words = LocalStrings.current
     Column(
@@ -612,73 +603,19 @@ private fun TreeColumn(
 
         LazyColumn(Modifier.weight(1f)) {
             items(tree, key = { it.item.path }) { node ->
-                if (node.item.type != ItemType.FOLDER) {
-                    TreeEntryRow(
-                        item = node.item,
-                        level = node.level + 1,
-                        onClick = { onOpen(node.item) },
-                    )
-                } else {
-                    FolderRow(
-                        name = node.item.name,
-                        level = node.level + 1,
-                        color = FolderColor.fromId(node.item.colorId).color(Kajet.colors.isDark),
-                        iconId = node.item.iconId,
-                        selected = node.item.path == current && !favorites,
-                        hasArrow = node.item.childCount > 0,
-                        expanded = node.expanded,
-                        onClick = { onSelect(node.item.path) },
-                        onArrow = { onToggle(node.item.path) },
-                    )
-                }
+                FolderRow(
+                    name = node.item.name,
+                    level = node.level + 1,
+                    color = FolderColor.fromId(node.item.colorId).color(Kajet.colors.isDark),
+                    iconId = node.item.iconId,
+                    selected = node.item.path == current && !favorites,
+                    hasArrow = node.hasSubfolders,
+                    expanded = node.expanded,
+                    onClick = { onSelect(node.item.path) },
+                    onArrow = { onToggle(node.item.path) },
+                )
             }
         }
-    }
-}
-
-/**
- * Notatka albo plik pod rozwiniętym folderem w drzewie. Wcięta tak jak
- * podfolder, tylko bez strzałki - stąd puste miejsce na nią, żeby znaczki
- * stały w jednej linii z folderami tego samego poziomu.
- */
-@Composable
-private fun TreeEntryRow(
-    item: LibraryItem,
-    level: Int,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .clickable(onClick = onClick)
-            .padding(start = (6 + level * 14).dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spacer(Modifier.width(28.dp))
-        Icon(
-            imageVector = when (item.type) {
-                ItemType.NOTE -> when (item.noteKind) {
-                    NoteKind.HANDWRITTEN -> KajetIcons.HandwrittenNote
-                    NoteKind.MINDMAP -> KajetIcons.MindMapIcon
-                    else -> KajetIcons.TextNote
-                }
-                ItemType.CODE_FILE -> LanguageIcons.forLanguage(item.language)
-                else -> KajetIcons.TextNote
-            },
-            contentDescription = null,
-            tint = Kajet.colors.muted,
-            modifier = Modifier
-                .padding(end = 8.dp)
-                .size(16.dp),
-        )
-        Text(
-            text = item.name,
-            style = Kajet.type.body,
-            color = Kajet.colors.muted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
