@@ -1158,9 +1158,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private fun clampView() {
         val last = pages.lastOrNull() ?: return
         val totalHeight = topEdge(last.index) + last.height
-        val slackX = last.width * 0.5f
         val slackY = height / zoom * 0.5f
-        offsetX = offsetX.coerceIn(-slackX, last.width + slackX)
+        offsetX = DeskBounds.clampX(offsetX, last.width, width.toFloat(), zoom)
         offsetY = offsetY.coerceIn(-slackY, totalHeight + slackY)
     }
 
