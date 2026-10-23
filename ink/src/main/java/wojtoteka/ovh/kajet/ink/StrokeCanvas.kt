@@ -72,7 +72,7 @@ interface CanvasListener {
 @SuppressLint("ViewConstructor")
 class StrokeCanvas(context: Context) : FrameLayout(context) {
 
-    private val renderer: CanvasStrokeRenderer = CanvasStrokeRenderer.create()
+    private val renderer: CanvasStrokeRenderer = InkRenderer.create()
 
     var listener: CanvasListener? = null
 

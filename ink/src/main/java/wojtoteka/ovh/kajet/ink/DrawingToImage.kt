@@ -3,7 +3,6 @@ package wojtoteka.ovh.kajet.ink
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
-import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import wojtoteka.ovh.kajet.core.model.InkStroke
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
@@ -26,7 +25,7 @@ object DrawingToImage {
         val canvas = Canvas(bitmap)
         if (backgroundColor != null) canvas.drawColor(backgroundColor)
 
-        val renderer = CanvasStrokeRenderer.create()
+        val renderer = InkRenderer.create()
         val matrix = Matrix().apply { setScale(density, density) }
         // Renderer nie nakłada macierzy na canvas, dostaje ją tylko do jakości
         // teselacji - skalę trzeba nałożyć samemu, inaczej rysunek ląduje

@@ -39,6 +39,7 @@ import wojtoteka.ovh.kajet.core.model.RichTextCodec
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.TextContent
 import wojtoteka.ovh.kajet.core.text.words
+import wojtoteka.ovh.kajet.ink.InkRenderer
 import wojtoteka.ovh.kajet.ink.ShapeGeometry
 import wojtoteka.ovh.kajet.ink.ShapePainter
 import wojtoteka.ovh.kajet.ink.StrokeCanvas
@@ -79,7 +80,7 @@ object PdfExport {
         withBackground: Boolean,
     ) {
         val handwriting = document.handwriting ?: return
-        val renderer = CanvasStrokeRenderer.create()
+        val renderer = InkRenderer.create()
         val shapePainter = ShapePainter()
         val identity = Matrix()
 
@@ -794,7 +795,7 @@ object PdfExport {
         val canvas = Canvas(bitmap)
         canvas.drawColor(PaperInk.PAPER)
         canvas.scale(density, density)
-        val renderer = CanvasStrokeRenderer.create()
+        val renderer = InkRenderer.create()
         // Macierz mówi rendererowi o skali canvasa; bez niej teselacja
         // liczy się dla skali 1 i kreski wychodzą kanciaste.
         val strokeMatrix = Matrix().apply { setScale(density, density) }
