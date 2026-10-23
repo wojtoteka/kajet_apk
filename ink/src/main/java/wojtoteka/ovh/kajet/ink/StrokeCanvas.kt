@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -200,6 +201,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private var eraserX = Float.NaN
     private var eraserY = Float.NaN
+
+    // Gumka rośnie przy szybkim mazaniu. Promień z ostatniego ruchu wyciera,
+    // kółko na ekranie pokazuje, ile gumka ma teraz.
+    private val eraserReach = EraserReach(resources.displayMetrics.density)
+    private var eraserRadiusNow = 0f
 
     private var fingerIds = intArrayOf(-1, -1)
     private var lastCenterX = 0f
@@ -569,7 +575,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         eraserPaint.strokeWidth = 2f
         val point = floatArrayOf(eraserX, eraserY)
         docToView.mapPoints(point)
-        canvas.drawCircle(point[0], point[1], settings.eraserRadius * zoom, eraserPaint)
+        val radius = if (settings.eraserFollowsSpeed) {
+            val scale = eraserReach.scaleAt(SystemClock.uptimeMillis())
+            // Rysik stanął i nie przysyła ruchu: kółko i tak ma się skurczyć
+            // do zwykłej gumki, więc kartka rysuje się, dopóki nie wróci.
+            if (scale > 1.01f) postInvalidateOnAnimation()
+            EraserReach.radius(settings.eraserRadius, scale)
+        } else {
+            settings.eraserRadius
+        }
+        canvas.drawCircle(point[0], point[1], radius * zoom, eraserPaint)
     }
 
     // Touch
@@ -705,7 +720,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                 drawingPointerId = id
                 eraserX = docX
                 eraserY = docY
-                erase(docX, docY, tool == EditorTool.ERASER_STROKE && !stylusEraser)
+                eraserReach.start(event.getX(index), event.getY(index), event.eventTime)
+                eraserRadiusNow = settings.eraserRadius
+                erase(docX, docY, tool == EditorTool.ERASER_STROKE && !stylusEraser, eraserRadiusNow)
                 invalidate()
             }
 
@@ -820,9 +837,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
                 else -> {
                     // Eraser. Wipe along the way, not only where the finger is now.
+                    trackEraserSpeed(event, index)
+                    val radius = eraserRadiusNow
                     val steps = max(
                         1,
-                        (hypot(docX - eraserX, docY - eraserY) / (settings.eraserRadius / 2f)).toInt(),
+                        (hypot(docX - eraserX, docY - eraserY) / (radius / 2f)).toInt(),
                     )
                     for (i in 1..steps) {
                         val t = i / steps.toFloat()
@@ -830,6 +849,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                             eraserX + (docX - eraserX) * t,
                             eraserY + (docY - eraserY) * t,
                             tool == EditorTool.ERASER_STROKE,
+                            radius,
                         )
                     }
                     eraserX = docX
@@ -1169,11 +1189,32 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         return box.expanded(10f).contains(docX, docY - top)
     }
 
-    private fun erase(docX: Float, docY: Float, wholeStroke: Boolean) {
+    private fun erase(docX: Float, docY: Float, wholeStroke: Boolean, radius: Float) {
         val page = nearestPage(docY)
         if (page < 0) return
         val top = topEdge(page)
-        listener?.eraserPassed(page, docX, docY - top, settings.eraserRadius, wholeStroke)
+        listener?.eraserPassed(page, docX, docY - top, radius, wholeStroke)
+    }
+
+    /*
+      Szybkość ręki ustala, ile gumka wyciera w tym ruchu. Punkty z historii
+      zdarzenia idą do pomiaru po kolei - przy spakowanych zdarzeniach sam
+      bieżący punkt zawyżałby skok między klatkami.
+    */
+    private fun trackEraserSpeed(event: MotionEvent, index: Int) {
+        if (!settings.eraserFollowsSpeed) {
+            eraserRadiusNow = settings.eraserRadius
+            return
+        }
+        for (i in 0 until event.historySize) {
+            eraserReach.move(
+                event.getHistoricalX(index, i),
+                event.getHistoricalY(index, i),
+                event.getHistoricalEventTime(i),
+            )
+        }
+        eraserReach.move(event.getX(index), event.getY(index), event.eventTime)
+        eraserRadiusNow = EraserReach.radius(settings.eraserRadius, eraserReach.scaleAt(event.eventTime))
     }
 
     // Wet stroke: points go straight into the engine in page coordinates

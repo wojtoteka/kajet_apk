@@ -100,6 +100,7 @@ class HandwritingViewModel(
                             highlighterWidth = next.highlighterWidth,
                             highlighterOpacity = next.highlighterOpacity,
                             eraserRadius = next.eraserRadius,
+                            eraserFollowsSpeed = next.eraserFollowsSpeed,
                         ),
                     )
                 }
@@ -165,6 +166,10 @@ class HandwritingViewModel(
 
     fun setEraserRadius(radius: Float) = updatePen {
         it.copy(eraserRadius = radius.coerceIn(2f, 80f))
+    }
+
+    fun toggleEraserFollowsSpeed() = updatePen {
+        it.copy(eraserFollowsSpeed = !it.eraserFollowsSpeed)
     }
 
     // Kreski
@@ -774,6 +779,7 @@ class HandwritingViewModel(
                 highlighterWidth = saved.highlighterWidth ?: base.highlighterWidth,
                 highlighterOpacity = saved.highlighterOpacity ?: base.highlighterOpacity,
                 eraserRadius = saved.eraserRadius ?: base.eraserRadius,
+                eraserFollowsSpeed = saved.eraserFollowsSpeed ?: base.eraserFollowsSpeed,
             )
         }
 

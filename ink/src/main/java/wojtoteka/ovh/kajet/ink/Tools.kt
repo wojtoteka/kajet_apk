@@ -70,6 +70,8 @@ data class PenSettings(
     val highlighterWidth: Float = 16f,
     val highlighterOpacity: Float = Brushes.HIGHLIGHTER_OPACITY,
     val eraserRadius: Float = 12f,
+    /** Gumka rośnie przy szybkim mazaniu i wraca do [eraserRadius], kiedy ręka zwalnia. */
+    val eraserFollowsSpeed: Boolean = true,
 ) {
     fun toInkTool(tool: EditorTool): InkTool =
         if (tool == EditorTool.HIGHLIGHTER) InkTool.HIGHLIGHTER else penKind

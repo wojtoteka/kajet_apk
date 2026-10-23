@@ -72,6 +72,7 @@ data class RememberedPen(
     val highlighterWidth: Float? = null,
     val highlighterOpacity: Float? = null,
     val eraserRadius: Float? = null,
+    val eraserFollowsSpeed: Boolean? = null,
 )
 
 /** Czym rysowało się kształty ostatnim razem. Wraca przy następnej notatce. */
@@ -162,6 +163,7 @@ class SettingsStore(private val context: Context) {
         val highlighterWidth = floatPreferencesKey("zakreslacz_grubosc")
         val highlighterOpacity = floatPreferencesKey("zakreslacz_krycie")
         val eraserRadius = floatPreferencesKey("gumka_promien")
+        val eraserFollowsSpeed = booleanPreferencesKey("gumka_od_szybkosci")
 
         val shapeKind = stringPreferencesKey("ksztalt_rodzaj")
         val shapeColor = intPreferencesKey("ksztalt_kolor")
@@ -225,6 +227,7 @@ class SettingsStore(private val context: Context) {
                 highlighterWidth = data[Keys.highlighterWidth],
                 highlighterOpacity = data[Keys.highlighterOpacity],
                 eraserRadius = data[Keys.eraserRadius],
+                eraserFollowsSpeed = data[Keys.eraserFollowsSpeed],
             ),
             shapes = RememberedShape(
                 kind = data[Keys.shapeKind],
@@ -260,6 +263,7 @@ class SettingsStore(private val context: Context) {
             pens.highlighterWidth?.let { data[Keys.highlighterWidth] = it }
             pens.highlighterOpacity?.let { data[Keys.highlighterOpacity] = it }
             pens.eraserRadius?.let { data[Keys.eraserRadius] = it }
+            pens.eraserFollowsSpeed?.let { data[Keys.eraserFollowsSpeed] = it }
         }
     }
 

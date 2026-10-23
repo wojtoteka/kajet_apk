@@ -485,6 +485,7 @@ fun HandwritingEditor(
                     onHighlighterWidth = model::setHighlighterWidth,
                     onHighlighterOpacity = model::setHighlighterOpacity,
                     onEraserRadius = model::setEraserRadius,
+                    onEraserFollowsSpeed = model::toggleEraserFollowsSpeed,
                     onRememberColor = model::rememberColor,
                     onClose = { penPanel = false },
                     modifier = panelModifier,
@@ -1174,6 +1175,7 @@ internal fun PenPanel(
     onHighlighterWidth: (Float) -> Unit,
     onHighlighterOpacity: (Float) -> Unit,
     onEraserRadius: (Float) -> Unit,
+    onEraserFollowsSpeed: () -> Unit,
     /** Dokłada barwę do spisu „twoich kolorów" - po zamknięciu okna z tęczą. */
     onRememberColor: (Int) -> Unit,
     onClose: () -> Unit,
@@ -1207,6 +1209,12 @@ internal fun PenPanel(
                     width = pens.eraserRadius,
                     opacity = 0.2f,
                 )
+                ChoiceRow(
+                    label = words.eraserFollowsSpeed,
+                    picked = pens.eraserFollowsSpeed,
+                    onClick = onEraserFollowsSpeed,
+                )
+                Text(words.eraserFollowsSpeedAbout, style = Kajet.type.meta, color = Kajet.colors.muted)
                 Text(tool.description(words), style = Kajet.type.meta, color = Kajet.colors.muted)
             }
 

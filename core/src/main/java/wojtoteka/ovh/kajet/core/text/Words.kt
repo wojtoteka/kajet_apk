@@ -406,6 +406,8 @@ interface Strings {
     val shapeResize: String
     val shapeRemove: String
     val eraserSize: String
+    val eraserFollowsSpeed: String
+    val eraserFollowsSpeedAbout: String
     val widthLabel: String
     val highlighterColourTitle: String
     val whatYouWriteWith: String
@@ -1899,6 +1901,9 @@ object PolishStrings : Strings {
     override val shapeResize = "Zmień rozmiar kształtu"
     override val shapeRemove = "Usuń kształt"
     override val eraserSize = "Wielkość gumki"
+    override val eraserFollowsSpeed = "Gumka rośnie przy szybkim ruchu"
+    override val eraserFollowsSpeedAbout =
+        "Im szybciej mażesz, tym większa gumka. Kiedy zwalniasz, wraca do wybranej wielkości."
     override val widthLabel = "Szerokość"
     override val highlighterColourTitle = "Kolor zakreślacza"
     override val whatYouWriteWith = "Czym piszesz"
@@ -2695,6 +2700,9 @@ object EnglishStrings : Strings {
     override val shapeResize = "Resize the shape"
     override val shapeRemove = "Remove the shape"
     override val eraserSize = "Eraser size"
+    override val eraserFollowsSpeed = "Eraser grows with speed"
+    override val eraserFollowsSpeedAbout =
+        "The faster you rub, the bigger the eraser gets. Slow down and it shrinks back to the size you picked."
     override val widthLabel = "Width"
     override val highlighterColourTitle = "Highlighter colour"
     override val whatYouWriteWith = "Pen type"

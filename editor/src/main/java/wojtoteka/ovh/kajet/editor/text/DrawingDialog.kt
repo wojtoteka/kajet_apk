@@ -604,6 +604,9 @@ fun DrawingDialog(
                                     updatePens { it.copy(highlighterOpacity = opacity.coerceIn(0.05f, 1f)) }
                                 },
                                 onEraserRadius = { radius -> updatePens { it.copy(eraserRadius = radius.coerceIn(2f, 80f)) } },
+                                onEraserFollowsSpeed = {
+                                    updatePens { it.copy(eraserFollowsSpeed = !it.eraserFollowsSpeed) }
+                                },
                                 onRememberColor = onRememberColor,
                                 onClose = { penPanel = false },
                                 modifier = if (narrow) {
