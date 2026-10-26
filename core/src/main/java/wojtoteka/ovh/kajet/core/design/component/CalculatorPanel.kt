@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -143,6 +145,8 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     // Przesunięcie od prawego dolnego rogu, w pikselach. Przeżywa obrót ekranu.
     var dragX by rememberSaveable { mutableStateOf(0f) }
     var dragY by rememberSaveable { mutableStateOf(0f) }
+    // Zmierzona wysokość okienka; 0, dopóki nie zostało pierwszy raz ułożone.
+    var panelHeightPx by remember { mutableIntStateOf(0) }
     var scale by remember {
         mutableFloatStateOf(prefs.getFloat(PREF_SCALE, 1f).coerceIn(SCALE_MIN, SCALE_MAX))
     }
@@ -168,9 +172,16 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
         val shownScale = minOf(scale, fitsWidth, fitsHeight).coerceAtLeast(0.6f)
         val panelWidth = minOf(PANEL_WIDTH * shownScale, maxWidth)
         val maxShiftX = with(density) { (maxWidth - panelWidth).toPx() }.coerceAtLeast(0f)
-        // Wysokość okienka nie jest znana przed pomiarem; tyle wystarczy, by
-        // pasek z tytułem nigdy nie uciekł nad górną krawędź.
-        val maxShiftY = with(density) { (maxHeight - 120.dp).toPx() }.coerceAtLeast(0f)
+        // Okienko stoi dołem przy dolnej krawędzi, więc w górę może pojechać
+        // najwyżej o tyle, ile zostaje nad nim - inaczej pasek z tytułem,
+        // a z nim uchwyt i krzyżyk, uciekał nad ekran i nie dało się już
+        // okienka ani przesunąć, ani zamknąć. Przed pierwszym pomiarem
+        // wysokość jest liczona z tych samych stałych, z których rośnie.
+        val panelHeight = with(density) {
+            if (panelHeightPx > 0) panelHeightPx.toFloat()
+            else (FIXED_HEIGHT + SCALED_HEIGHT * shownScale).toPx()
+        }
+        val maxShiftY = (with(density) { maxHeight.toPx() } - panelHeight).coerceAtLeast(0f)
         val x = dragX.coerceIn(-maxShiftX, 0f)
         val y = dragY.coerceIn(-maxShiftY, 0f)
         val basePx = with(density) { PANEL_WIDTH.toPx() }
@@ -180,6 +191,7 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 .align(Alignment.BottomEnd)
                 .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
                 .width(panelWidth)
+                .onSizeChanged { panelHeightPx = it.height }
                 .shadow(8.dp, RoundedCornerShape(Kajet.dimens.corner))
                 .clip(RoundedCornerShape(Kajet.dimens.corner))
                 .background(colors.sheet)
