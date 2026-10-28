@@ -13,6 +13,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
+import androidx.ink.brush.Brush
 import androidx.ink.brush.InputToolType
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.ImmutableStrokeInputBatch
@@ -190,6 +191,17 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private var wetTool: EditorTool = EditorTool.PEN
     private var wetStartTime = 0L
     private val wetBuffer = MutableStrokeInputBatch()
+
+    // Pisak przyłożony do ekranu. Mokrej kreski może przy tym nie być: rysik
+    // jedzie po biurku obok kartki, a atrament czeka, aż wróci na kartkę.
+    private var penDown = false
+    private var penBrush: Brush? = null
+
+    // Poprzedni punkt pisaka w układzie dokumentu. Z niego liczy się miejsce,
+    // w którym ręka przecięła brzeg kartki.
+    private var penPrevX = Float.NaN
+    private var penPrevY = Float.NaN
+    private var penPrevTime = 0L
 
     private var lastStylusTime = 0L
     private var stylusDown = false
@@ -768,10 +780,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             }
 
             tool.writes -> {
-                val page = nearestPage(docY)
-                if (page < 0) return true
                 drawingPointerId = id
-                val brush = when (tool) {
+                penBrush = when (tool) {
                     EditorTool.HIGHLIGHTER -> Brushes.highlighter(
                         settings.highlighterColor,
                         settings.highlighterWidth,
@@ -784,14 +794,13 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                         settings.penOpacity,
                     )
                 }
-
-                val stroke = InProgressStroke()
-                stroke.start(brush)
-                wet = stroke
-                wetPage = page
                 wetTool = tool
-                wetStartTime = event.eventTime
-                enqueueWetPoints(event, index, page)
+                penDown = true
+                penPrevX = Float.NaN
+                penPrevY = Float.NaN
+                // Rysik przyłożony do biurka obok kartki nie stawia kreski.
+                // Ta zacznie się na brzegu, jeśli ręka wjedzie na kartkę.
+                followPen(event, index)
                 // Without this the system batches stylus events and the stroke loses points.
                 requestUnbufferedDispatch(event)
                 invalidate()
@@ -811,8 +820,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             val docY = docPoint[1]
 
             when {
-                wet != null -> {
-                    enqueueWetPoints(event, index, wetPage)
+                penDown -> {
+                    followPen(event, index)
                     invalidate()
                 }
 
@@ -879,9 +888,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         }
 
         if (id == drawingPointerId) {
-            if (wet != null) {
-                enqueueWetPoints(event, index, wetPage)
+            if (penDown) {
+                followPen(event, index)
                 finishWetStroke()
+                penDown = false
+                penBrush = null
             } else if (shapeDragging) {
                 finishShape()
             } else if (movingSelection) {
@@ -1219,10 +1230,14 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     // Wet stroke: points go straight into the engine in page coordinates
 
-    private fun enqueueWetPoints(event: MotionEvent, pointerIndex: Int, page: Int) {
-        val stroke = wet ?: return
-        if (page < 0) return
-        val top = topEdge(page)
+    /*
+      Punkty pisaka z jednego zdarzenia. Każdy sprawdza brzeg kartki: ręka,
+      która z niej zjechała, kończy kreskę na brzegu, a ta, która na nią
+      wjechała (z biurka albo z sąsiedniej strony), zaczyna od brzegu nową.
+      Wcześniej kreska szła dalej po biurku: kartka ją przycinała, więc nie
+      było jej widać, a w pliku i tak zostawała.
+    */
+    private fun followPen(event: MotionEvent, pointerIndex: Int) {
         val toolType = event.getToolType(pointerIndex)
         val type = when (toolType) {
             MotionEvent.TOOL_TYPE_MOUSE -> InputToolType.MOUSE
@@ -1239,53 +1254,160 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             val rawY = if (current) event.getY(pointerIndex) else event.getHistoricalY(pointerIndex, i)
             val time = if (current) event.eventTime else event.getHistoricalEventTime(i)
             val point = toDoc(rawX, rawY)
-            // Punkt, którego silnik nie przyjmie (czas stoi, duplikat), kosztuje
-            // tylko ten punkt, nie całą kreskę.
-            runCatching {
-                wetBuffer.add(
-                    type = type,
-                    x = point[0],
-                    y = point[1] - top,
-                    elapsedTimeMillis = (time - wetStartTime).coerceAtLeast(0L),
-                    pressure = if (stylus) {
-                        val raw = if (current) {
-                            event.getPressure(pointerIndex)
-                        } else {
-                            event.getHistoricalPressure(pointerIndex, i)
-                        }
-                        raw.coerceIn(0f, 1f)
+            penAt(
+                type = type,
+                docX = point[0],
+                docY = point[1],
+                time = time,
+                pressure = if (stylus) {
+                    val raw = if (current) {
+                        event.getPressure(pointerIndex)
                     } else {
-                        StrokeInput.NO_PRESSURE
-                    },
-                    tiltRadians = if (stylus) {
-                        val raw = if (current) {
-                            event.getAxisValue(MotionEvent.AXIS_TILT, pointerIndex)
-                        } else {
-                            event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, pointerIndex, i)
-                        }
-                        raw.coerceIn(0f, (Math.PI / 2).toFloat())
+                        event.getHistoricalPressure(pointerIndex, i)
+                    }
+                    raw.coerceIn(0f, 1f)
+                } else {
+                    StrokeInput.NO_PRESSURE
+                },
+                tilt = if (stylus) {
+                    val raw = if (current) {
+                        event.getAxisValue(MotionEvent.AXIS_TILT, pointerIndex)
                     } else {
-                        StrokeInput.NO_TILT
-                    },
-                    orientationRadians = if (stylus) {
-                        val raw = if (current) {
-                            event.getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex)
-                        } else {
-                            event.getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex, i)
-                        }
-                        // MotionEvent liczy od „góry" w [-PI, PI], silnik od „lewej" w [0, 2PI).
-                        (raw + 2.5f * Math.PI.toFloat()).mod(2f * Math.PI.toFloat())
+                        event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, pointerIndex, i)
+                    }
+                    raw.coerceIn(0f, (Math.PI / 2).toFloat())
+                } else {
+                    StrokeInput.NO_TILT
+                },
+                orientation = if (stylus) {
+                    val raw = if (current) {
+                        event.getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex)
                     } else {
-                        StrokeInput.NO_ORIENTATION
-                    },
-                )
-            }
+                        event.getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex, i)
+                    }
+                    // MotionEvent liczy od „góry" w [-PI, PI], silnik od „lewej" w [0, 2PI).
+                    (raw + 2.5f * Math.PI.toFloat()).mod(2f * Math.PI.toFloat())
+                } else {
+                    StrokeInput.NO_ORIENTATION
+                },
+            )
         }
+        flushWet(event.eventTime)
+    }
+
+    /** Jeden punkt pisaka w układzie dokumentu. */
+    private fun penAt(
+        type: InputToolType,
+        docX: Float,
+        docY: Float,
+        time: Long,
+        pressure: Float,
+        tilt: Float,
+        orientation: Float,
+    ) {
+        val prevX = penPrevX
+        val prevY = penPrevY
+        val prevTime = penPrevTime
+        penPrevX = docX
+        penPrevY = docY
+        penPrevTime = time
+
+        if (wet != null) {
+            val page = wetPage
+            val sheet = pages.getOrNull(page)
+            val top = topEdge(page)
+            val y = docY - top
+            if (sheet == null || PageEdge.inside(docX, y, sheet.width, sheet.height)) {
+                addWetPoint(type, docX, y, time, pressure, tilt, orientation)
+                return
+            }
+            // Ręka zjechała z kartki: kreska kończy się na brzegu.
+            val fromY = prevY - top
+            val t = PageEdge.exit(prevX, fromY, docX, y, sheet.width, sheet.height)
+            val edgeX = between(prevX, docX, t)
+            val edgeY = between(fromY, y, t)
+            val edgeTime = between(prevTime, time, t)
+            addWetPoint(type, edgeX, edgeY, edgeTime, pressure, tilt, orientation)
+            flushWet(edgeTime)
+            finishWetStroke()
+        }
+
+        // Poza kartką atramentu nie ma. Ten sam punkt mógł już jednak trafić
+        // na sąsiednią stronę - wtedy kreska zaczyna się na niej.
+        val page = pageAt(docX, docY)
+        val sheet = pages.getOrNull(page) ?: return
+        val top = topEdge(page)
+        val y = docY - top
+        var startX = docX
+        var startY = y
+        var startTime = time
+        if (!prevX.isNaN()) {
+            // Wjazd na kartkę: kreska zaczyna się na brzegu, a nie dopiero
+            // w pierwszym punkcie, który na nią trafił.
+            val fromY = prevY - top
+            val t = PageEdge.exit(docX, y, prevX, fromY, sheet.width, sheet.height)
+            startX = between(docX, prevX, t)
+            startY = between(y, fromY, t)
+            startTime = between(time, prevTime, t)
+        }
+        startWet(page, startTime)
+        if (wet == null) return
+        if (startX != docX || startY != y) {
+            addWetPoint(type, startX, startY, startTime, pressure, tilt, orientation)
+        }
+        addWetPoint(type, docX, y, time, pressure, tilt, orientation)
+    }
+
+    private fun startWet(page: Int, time: Long) {
+        val brush = penBrush ?: return
+        val stroke = InProgressStroke()
+        stroke.start(brush)
+        wet = stroke
+        wetPage = page
+        wetStartTime = time
+        wetBuffer.clear()
+    }
+
+    private fun addWetPoint(
+        type: InputToolType,
+        x: Float,
+        y: Float,
+        time: Long,
+        pressure: Float,
+        tilt: Float,
+        orientation: Float,
+    ) {
+        if (wet == null) return
+        // Punkt, którego silnik nie przyjmie (czas stoi, duplikat), kosztuje
+        // tylko ten punkt, nie całą kreskę.
         runCatching {
-            stroke.enqueueInputs(wetBuffer, ImmutableStrokeInputBatch.EMPTY)
-            stroke.updateShape((event.eventTime - wetStartTime).coerceAtLeast(0L))
+            wetBuffer.add(
+                type = type,
+                x = x,
+                y = y,
+                elapsedTimeMillis = (time - wetStartTime).coerceAtLeast(0L),
+                pressure = pressure,
+                tiltRadians = tilt,
+                orientationRadians = orientation,
+            )
         }
     }
+
+    /** Oddaje silnikowi punkty zebrane dla mokrej kreski. */
+    private fun flushWet(time: Long) {
+        val stroke = wet
+        if (stroke != null) {
+            runCatching {
+                stroke.enqueueInputs(wetBuffer, ImmutableStrokeInputBatch.EMPTY)
+                stroke.updateShape((time - wetStartTime).coerceAtLeast(0L))
+            }
+        }
+        wetBuffer.clear()
+    }
+
+    private fun between(from: Float, to: Float, t: Float): Float = from + (to - from) * t
+
+    private fun between(from: Long, to: Long, t: Float): Long = from + ((to - from) * t).toLong()
 
     private fun finishWetStroke() {
         val stroke = wet ?: return
@@ -1311,6 +1433,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private fun dropWetStroke() {
         wet = null
         wetPage = -1
+        wetBuffer.clear()
+        penDown = false
+        penBrush = null
     }
 
     override fun onDetachedFromWindow() {
