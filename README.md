@@ -14,6 +14,8 @@ Serwer, z którym się synchronizuje, leży w repo
 **Pismo odręczne.** Kreska stawiana przez `androidx.ink`, z rozpoznawaniem figur (prostuje
 koło, prostokąt, strzałkę), gumką, zaznaczaniem, ramkami na zdjęcia i polami tekstowymi
 na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmiar kartki.
+Atrament jest tylko na kartce, także w rysunku w notatce tekstowej: kreska, która zjedzie
+na biurko, kończy się na brzegu, a gdy rysik wróci, zaczyna się nowa (`PageEdge`).
 
 **Notatki tekstowe.** Pisze się jak w Wordzie: znaczników (`**`, `#`, `<span>`, płotów
 ```` ``` ````) nie widać nigdy, także pod kursorem, a Backspace i Enter nie potrafią ich
