@@ -1427,7 +1427,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         // Linijka i kształty: otwarta kreska prostuje się, zamknięta staje się
         // kołem, trójkątem albo prostokątem.
         if (wetTool == EditorTool.RULER) model = Shapes.snap(model)
-        listener?.strokeFinished(page, model)
+        // Do pliku idzie kreska bez punktów, które niczego w niej nie zmieniają -
+        // dopiero po rozpoznaniu kształtu, żeby rozpoznawanie widziało całą rękę.
+        listener?.strokeFinished(page, Strokes.thinned(model))
     }
 
     private fun dropWetStroke() {

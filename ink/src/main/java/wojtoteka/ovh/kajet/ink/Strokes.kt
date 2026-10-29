@@ -124,6 +124,127 @@ object Strokes {
         )
     }
 
+    // Thinning
+
+    /**
+     * The same stroke with fewer points, for saving.
+     *
+     * The stylus reports a few hundred samples a second and each one costs six
+     * numbers in the file, so a page of handwriting ran into megabytes. A point
+     * that lies on the line between the points around it - closer than half the
+     * brush epsilon, the distance below which the engine itself treats two
+     * points as one - and changes neither pressure nor tilt on the way adds
+     * nothing to the drawn stroke, so it is dropped (Ramer-Douglas-Peucker).
+     * The first and the last point always stay, and the points that stay keep
+     * their own times.
+     *
+     * Kept points are never more than [MAX_GAP] apart: the partial eraser cuts
+     * a stroke at its points, so a long straight run with nothing in between
+     * could not be rubbed out in the middle.
+     */
+    fun thinned(stroke: InkStroke): InkStroke {
+        val points = thinnedPoints(stroke.points, stroke.epsilon)
+        return if (points.size == stroke.points.size) stroke else stroke.copy(points = points)
+    }
+
+    internal fun thinnedPoints(points: List<Float>, epsilon: Float): List<Float> {
+        val stride = InkStroke.VALUES_PER_POINT
+        val count = points.size / stride
+        if (count < 3 || points.size % stride != 0) return points
+        val reach = (if (epsilon.isFinite() && epsilon > 0f) epsilon else Brushes.EPSILON) / 2f
+
+        val keep = BooleanArray(count)
+        keep[0] = true
+        keep[count - 1] = true
+        val spans = ArrayDeque<Pair<Int, Int>>()
+        spans.addLast(0 to count - 1)
+        while (spans.isNotEmpty()) {
+            val (from, to) = spans.removeLast()
+            if (to - from < 2) continue
+
+            var worst = 0f
+            var worstAt = -1
+            for (i in from + 1 until to) {
+                val stray = strayOf(points, from, to, i, reach)
+                if (stray > worst) {
+                    worst = stray
+                    worstAt = i
+                }
+            }
+            val split = when {
+                worst > 1f -> worstAt
+                gap(points, from, to) > MAX_GAP -> (from + to) / 2
+                else -> -1
+            }
+            if (split < 0) continue
+
+            keep[split] = true
+            spans.addLast(from to split)
+            spans.addLast(split to to)
+        }
+
+        val kept = ArrayList<Float>(points.size)
+        for (i in 0 until count) {
+            if (!keep[i]) continue
+            for (k in 0 until stride) kept += points[i * stride + k]
+        }
+        return kept
+    }
+
+    /** How far point [i] strays from the straight run [from]..[to]; above 1 it has to stay. */
+    private fun strayOf(points: List<Float>, from: Int, to: Int, i: Int, reach: Float): Float {
+        val stride = InkStroke.VALUES_PER_POINT
+        val a = from * stride
+        val b = to * stride
+        val p = i * stride
+        var stray = distanceToSegment(
+            points[p], points[p + 1],
+            points[a], points[a + 1],
+            points[b], points[b + 1],
+        ) / reach
+
+        // Pressure and tilt run along time, the same way the engine reads them.
+        val span = points[b + 2] - points[a + 2]
+        val t = if (span > 0f) {
+            ((points[p + 2] - points[a + 2]) / span).coerceIn(0f, 1f)
+        } else {
+            (i - from).toFloat() / (to - from)
+        }
+        stray = maxOf(stray, channelStray(points[a + 3], points[b + 3], points[p + 3], t) / PRESSURE_REACH)
+        stray = maxOf(stray, channelStray(points[a + 4], points[b + 4], points[p + 4], t) / ANGLE_REACH)
+        stray = maxOf(stray, channelStray(points[a + 5], points[b + 5], points[p + 5], t) / ANGLE_REACH)
+        return stray
+    }
+
+    private fun channelStray(start: Float, end: Float, value: Float, t: Float): Float {
+        val missing = (if (start == InkStroke.MISSING) 1 else 0) +
+            (if (end == InkStroke.MISSING) 1 else 0) +
+            (if (value == InkStroke.MISSING) 1 else 0)
+        if (missing == 3) return 0f
+        // A value missing at some points only: keep the point, the run is not one line.
+        if (missing > 0) return UNKNOWN_STRAY
+        return abs(value - (start + (end - start) * t))
+    }
+
+    private fun gap(points: List<Float>, from: Int, to: Int): Float {
+        val stride = InkStroke.VALUES_PER_POINT
+        return hypot(
+            points[to * stride] - points[from * stride],
+            points[to * stride + 1] - points[from * stride + 1],
+        )
+    }
+
+    /** Pressure change (0..1) too small to show in the width of the stroke. */
+    private const val PRESSURE_REACH = 0.02f
+
+    /** Tilt or orientation change in radians - about three degrees. */
+    private const val ANGLE_REACH = 0.05f
+
+    private const val UNKNOWN_STRAY = 1000f
+
+    /** Longest run between two kept points, in page units (about 0.7 mm on A4). */
+    internal const val MAX_GAP = 2f
+
     internal fun pointsForEngine(stroke: InkStroke): List<InputPoint> {
         val count = stroke.pointCount
         if (count == 0) return emptyList()

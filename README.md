@@ -16,6 +16,8 @@ koło, prostokąt, strzałkę), gumką, zaznaczaniem, ramkami na zdjęcia i pola
 na kartce. Do tego haptyka pióra i formaty stron - notatka pamięta swój rozmiar kartki.
 Atrament jest tylko na kartce, także w rysunku w notatce tekstowej: kreska, która zjedzie
 na biurko, kończy się na brzegu, a gdy rysik wróci, zaczyna się nowa (`PageEdge`).
+Do pliku idzie kreska bez punktów, które niczego w niej nie zmieniają: zostaje tylko to, co
+odbiega od linii między sąsiadami o więcej niż pół `epsilon` pędzla (`Strokes.thinned`).
 
 **Notatki tekstowe.** Pisze się jak w Wordzie: znaczników (`**`, `#`, `<span>`, płotów
 ```` ``` ````) nie widać nigdy, także pod kursorem, a Backspace i Enter nie potrafią ich
@@ -56,7 +58,8 @@ najpierw do katalogu notatek, a notatkę wypuszcza linkiem z serwera.
 
 **Chmura.** Konto, logowanie urządzenia własnym tokenem, synchronizacja notatek i folderów,
 ikona chmurki dopiero po faktycznym zapisie na serwerze, kolejka ponawiania usunięć i osłona
-przed nadpisaniem notatki skasowanej zdalnie. Synchronizację da się w ustawieniach wstrzymać
+przed nadpisaniem notatki skasowanej zdalnie. Notatka jedzie na serwer spakowana gzipem, gdy
+serwer powie nagłówkiem `X-Kajet-Upload-Encoding`, że to przyjmie. Synchronizację da się w ustawieniach wstrzymać
 na godzinę, dzień, tydzień, do wybranej chwili albo do odwołania - notatki zachowują się wtedy
 jak bez sieci („Offline", szara chmurka), a zaległe zmiany jadą same po końcu pauzy.
 
