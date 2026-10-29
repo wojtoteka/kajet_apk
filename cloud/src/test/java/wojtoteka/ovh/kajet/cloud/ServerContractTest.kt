@@ -382,6 +382,34 @@ class ServerContractTest {
         assertThat(fields.keys).doesNotContain("folderId")
     }
 
+    // --- PUT /api/v1/notes, spakowane gzipem ---
+
+    @Test
+    fun `waits for the header the server sends with every answer`() {
+        // src/lib/api.ts: UPLOAD_ENCODING_HEADER, set by json() on every response.
+        assertThat(CloudClient.UPLOAD_ENCODING_HEADER).isEqualTo("X-Kajet-Upload-Encoding")
+    }
+
+    @Test
+    fun `packs the note body into plain gzip the server can unpack`() {
+        val body = json.encodeToString(
+            OutgoingNote.serializer(),
+            OutgoingNote(
+                id = "n1",
+                title = "Fizyka",
+                kind = "HANDWRITTEN",
+                content = "{\"points\":[" + (0 until 2000).joinToString(",") { "${it * 0.47f}" } + "]}",
+                baseVersion = 3,
+            ),
+        ).toByteArray(Charsets.UTF_8)
+
+        val packed = CloudClient.gzip(body)
+        val unpacked = java.util.zip.GZIPInputStream(packed.inputStream()).use { it.readBytes() }
+
+        assertThat(unpacked).isEqualTo(body)
+        assertThat(packed.size).isLessThan(body.size / 2)
+    }
+
     // --- POST /api/v1/crash ---
 
     @Test

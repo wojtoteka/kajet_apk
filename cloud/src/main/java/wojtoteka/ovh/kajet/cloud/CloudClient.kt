@@ -7,12 +7,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
+import java.util.zip.GZIPOutputStream
 import wojtoteka.ovh.kajet.core.text.serverError
 import wojtoteka.ovh.kajet.core.text.words
 
@@ -27,6 +29,18 @@ class CloudClient(
      */
     @Volatile
     var clientId: String? = null
+
+    /**
+     * Czy serwer przyjmie notatkę spakowaną gzipem. Mówi to sam, nagłówkiem
+     * [UPLOAD_ENCODING_HEADER] w odpowiedziach - starszy serwer go nie wysyła
+     * i dostaje zwykły JSON, jak dawniej.
+     */
+    @Volatile
+    private var serverTakesGzip = false
+
+    /** Spakowana notatka raz się odbiła - do końca procesu jedzie zwykła. */
+    @Volatile
+    private var gzipRefused = false
 
     sealed interface Result<out T> {
         data class Ok<T>(val data: T) : Result<T>
@@ -115,6 +129,8 @@ class CloudClient(
         url = "${account.serverUrl()}/api/v1/notes",
         method = "PUT",
         body = json.encodeToString(note),
+        // Gęsta notatka odręczna to kilka MB tekstu - gzip skraca ją kilka razy.
+        packBody = true,
     )
 
     /** Trwałe kasowanie na serwerze - z bazy, z dysku, razem z załącznikami. */
@@ -527,8 +543,46 @@ class CloudClient(
         acceptPending: Boolean = false,
         readTimeout: Int = READ_TIMEOUT,
         optionalToken: Boolean = false,
+        /** Treść może jechać spakowana gzipem, gdy serwer powie, że to przyjmie. */
+        packBody: Boolean = false,
     ): Result<T> = withContext(Dispatchers.IO) {
-        val raw = connect(
+        val raw = exchange(
+            url = url,
+            method = method,
+            body = body,
+            withToken = withToken,
+            acceptPending = acceptPending,
+            readTimeout = readTimeout,
+            optionalToken = optionalToken,
+            packBody = packBody,
+        )
+        parse<T>(raw)
+    }
+
+    /**
+     * Jedno żądanie z treścią JSON. Z [packBody] treść jedzie spakowana gzipem -
+     * ale tylko wtedy, gdy serwer powiedział, że to przyjmie.
+     */
+    private suspend fun exchange(
+        url: String,
+        method: String,
+        body: String?,
+        withToken: Boolean,
+        acceptPending: Boolean,
+        readTimeout: Int,
+        optionalToken: Boolean,
+        packBody: Boolean,
+    ): Result<String> {
+        val bytes = body?.toByteArray(Charsets.UTF_8)
+        val packed = if (
+            bytes != null && packBody && serverTakesGzip && !gzipRefused && bytes.size >= PACK_FROM_BYTES
+        ) {
+            gzip(bytes)
+        } else {
+            null
+        }
+
+        suspend fun send(payload: ByteArray?, gzipped: Boolean): Result<String> = connect(
             url = url,
             method = method,
             contentType = "application/json",
@@ -537,11 +591,22 @@ class CloudClient(
             readTimeout = readTimeout,
             optionalToken = optionalToken,
         ) { connection ->
-            if (body != null) {
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (payload != null) {
+                if (gzipped) connection.setRequestProperty("Content-Encoding", "gzip")
+                connection.outputStream.use { it.write(payload) }
             }
         }
-        parse<T>(raw)
+
+        val first = send(packed ?: bytes, gzipped = packed != null)
+        if (packed == null) return first
+        val status = (first as? Result.Error)?.httpStatus
+        if (status != 400 && status != 415) return first
+
+        // Spakowana notatka nie przeszła: serwer wrócił do starszej wersji albo
+        // coś po drodze nie przepuszcza gzipa. Ta sama treść jeszcze raz, zwykła -
+        // i tak już zostaje do końca procesu.
+        gzipRefused = true
+        return send(bytes, gzipped = false)
     }
 
     private inline fun <reified T> parse(raw: Result<String>): Result<T> = when (raw) {
@@ -623,6 +688,9 @@ class CloudClient(
             }
 
             val status = connection.responseCode
+            if (connection.getHeaderField(UPLOAD_ENCODING_HEADER).equals("gzip", ignoreCase = true)) {
+                serverTakesGzip = true
+            }
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
@@ -729,6 +797,18 @@ class CloudClient(
     internal companion object {
         const val CONNECT_TIMEOUT = 15_000
         const val READ_TIMEOUT = 60_000
+
+        /** Nagłówek, którym serwer mówi, że przyjmie notatkę spakowaną gzipem. */
+        const val UPLOAD_ENCODING_HEADER = "X-Kajet-Upload-Encoding"
+
+        /** Krótszej treści nie warto pakować - nagłówek gzipa zjadłby zysk. */
+        const val PACK_FROM_BYTES = 1024
+
+        fun gzip(bytes: ByteArray): ByteArray {
+            val out = ByteArrayOutputStream(bytes.size / 4 + 64)
+            GZIPOutputStream(out).use { it.write(bytes) }
+            return out.toByteArray()
+        }
 
         /**
          * Asystent czeka dłużej niż serwer daje modelowi (AI_TIMEOUT_SECONDS,
