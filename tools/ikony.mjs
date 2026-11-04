@@ -111,6 +111,8 @@ const ICONS = {
   // Działania na plikach
   Move: "drive_file_move",
   Copy: "content_copy",
+  Cut: "content_cut",
+  Paste: "content_paste",
   Restore: "restore",
   FitToView: "fit_screen",
   NodeDot: "add_box",

@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +89,7 @@ import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.core.model.NoteAlign
 import wojtoteka.ovh.kajet.storage.FingerBehavior
 import wojtoteka.ovh.kajet.core.text.LocalStrings
+import wojtoteka.ovh.kajet.core.text.clipboardStrokes
 import wojtoteka.ovh.kajet.core.text.eraserSizeOf
 import wojtoteka.ovh.kajet.core.text.pagesCount
 import wojtoteka.ovh.kajet.core.text.pagesShort
@@ -137,6 +139,8 @@ fun HandwritingEditor(
     val shapes by model.shapeSettings.collectAsStateWithLifecycle()
     val selectedShape by model.selectedShape.collectAsStateWithLifecycle()
     val squareShapes by model.squareShapes.collectAsStateWithLifecycle()
+    val clipboard by model.clipboard.collectAsStateWithLifecycle()
+    val readOnly by model.readOnly.collectAsStateWithLifecycle()
 
     val colors = Kajet.colors
 
@@ -272,6 +276,26 @@ fun HandwritingEditor(
         model.rememberPhotoTarget(page, x, y)
         onPhotoFromCamera()
     }
+    /*
+      Środek tego, co widać na ekranie - tam staje wklejone. Strona i punkt
+      w JEJ układzie, jak przy polu tekstowym; resztę (dosunięcie do kartki)
+      załatwia model.
+    */
+    val onPaste = paste@{
+        val pages = handwriting?.pages ?: return@paste
+        val view = canvas.value ?: return@paste
+        val scale = view.zoom.takeIf { it > 0f } ?: return@paste
+        val docX = view.offsetX + view.width / scale / 2f
+        val docY = view.offsetY + view.height / scale / 2f
+        var top = 0f
+        for ((index, sheet) in pages.withIndex()) {
+            if (docY < top + sheet.height + StrokeCanvas.PAGE_GAP / 2f || index == pages.lastIndex) {
+                model.paste(index, docX, docY - top)
+                return@paste
+            }
+            top += sheet.height + StrokeCanvas.PAGE_GAP
+        }
+    }
     val onColorPanel = { penPanel = !penPanel; settingsPanel = false }
     val onSettingsPanel = { settingsPanel = !settingsPanel; penPanel = false }
     val penColor = Color(
@@ -328,6 +352,10 @@ fun HandwritingEditor(
                                     model.moveSelection(dx, dy, finished)
                                 }
 
+                                override fun selectionCleared() {
+                                    model.deselectStrokes()
+                                }
+
                                 override fun viewChanged(x: Float, y: Float, scale: Float) {
                                     offsetX = x
                                     offsetY = y
@@ -347,6 +375,8 @@ fun HandwritingEditor(
                                     model.editTextBox(null)
                                     model.editImage(null)
                                     model.selectShape(null)
+                                    // Stuknięcie obok ramki odkłada zaznaczenie, jak w Paincie.
+                                    model.deselectStrokes()
                                 }
 
                                 override fun shapeDrawn(page: Int, shape: ShapeElement) {
@@ -446,14 +476,24 @@ fun HandwritingEditor(
                 }
             }
 
-            if (selected.isNotEmpty()) {
+            // Pasek wraca też bez zaznaczenia, kiedy coś czeka w schowku -
+            // ale tylko przy narzędziu zaznaczania, żeby nie wisiał nad
+            // kartką przy zwykłym pisaniu. W notatce tylko do odczytu wkleić
+            // się nie da, więc sam schowek nie ma tu czego pokazywać.
+            if (selected.isNotEmpty() || (tool == EditorTool.LASSO && clipboard.isNotEmpty() && !readOnly)) {
                 SelectionPanel(
                     count = selected.size,
+                    clipboardCount = clipboard.size,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(16.dp),
+                    onCut = model::cutSelection,
+                    onCopy = model::copySelection,
+                    onPaste = onPaste,
                     onDelete = model::deleteSelection,
                     onDeselect = model::deselect,
+                    onClearClipboard = model::clearClipboard,
+                    canEdit = !readOnly,
                 )
             }
 
@@ -1114,51 +1154,109 @@ private fun SizeDot(
     }
 }
 
+/**
+ * Pasek zaznaczenia w lewym dolnym rogu kartki - to, co w Paincie robi
+ * menu wycinka.
+ *
+ * Z zaznaczeniem: licznik kresek, Wytnij, Kopiuj, Wklej i Usuń. Bez
+ * zaznaczenia, ale z kreskami w schowku ([count] równe zero): licznik schowka
+ * i samo Wklej - po wycięciu ramki już nie ma, a wycięte trzeba gdzieś wkleić.
+ * Krzyżyk odznacza, a przy samym schowku go opróżnia.
+ *
+ * [canEdit] równe false (notatka tylko do odczytu) zostawia samo Kopiuj:
+ * z cudzej notatki da się wziąć kreski do swojej, ale nie da się jej zmienić.
+ */
 @Composable
 internal fun SelectionPanel(
     count: Int,
+    clipboardCount: Int,
     modifier: Modifier,
+    onCut: () -> Unit,
+    onCopy: () -> Unit,
+    onPaste: () -> Unit,
     onDelete: () -> Unit,
     onDeselect: () -> Unit,
+    onClearClipboard: () -> Unit,
+    canEdit: Boolean = true,
 ) {
     val words = LocalStrings.current
     val shape = RoundedCornerShape(Kajet.dimens.corner)
+    // Na telefonie same ikony: z podpisami pasek nie mieścił się w szerokości
+    // ekranu i trzeba go było przewijać, żeby trafić w Usuń.
+    val withLabels = LocalConfiguration.current.screenWidthDp >= 600
+    val selecting = count > 0
     Row(
         modifier
             .clip(shape)
             .background(Kajet.colors.sheet, shape)
             .border(1.dp, Kajet.colors.line, shape)
-            // Na wąskim ekranie napis i akcja nie mieszczą się obok siebie.
             .height(44.dp)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
+            .padding(start = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(words.selectedStrokes(count), style = Kajet.type.label, color = Kajet.colors.text)
-        /*
-          Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę -
-          w ciasnej karcie 44 dp odcinał się jak niedopasowany przycisk.
-          Ten sam krój co licznik zaznaczenia, bez ramki.
-        */
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .clickable(
-                    onClick = onDelete,
-                    onClickLabel = words.delete,
-                    role = Role.Button,
-                )
-                .padding(horizontal = 6.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = words.delete,
-                style = Kajet.type.label,
-                color = Kajet.colors.danger,
-            )
+        Text(
+            text = if (selecting) words.selectedStrokes(count) else words.clipboardStrokes(clipboardCount),
+            style = Kajet.type.label,
+            color = Kajet.colors.text,
+            modifier = Modifier.padding(end = 8.dp),
+        )
+        if (selecting && canEdit) {
+            SelectionAction(KajetIcons.Cut, words.cutSelection, onCut, withLabels)
         }
-        IconAction(KajetIcons.Close, words.deselect, onDeselect, touchTarget = 44.dp)
+        if (selecting) {
+            SelectionAction(KajetIcons.Copy, words.copySelection, onCopy, withLabels)
+        }
+        if (clipboardCount > 0 && canEdit) {
+            SelectionAction(KajetIcons.Paste, words.pasteStrokes, onPaste, withLabels)
+        }
+        if (selecting && canEdit) {
+            SelectionAction(KajetIcons.Bin, words.delete, onDelete, withLabels, danger = true)
+        }
+        IconAction(
+            icon = KajetIcons.Close,
+            description = if (selecting) words.deselect else words.clearClipboard,
+            onClick = if (selecting) onDeselect else onClearClipboard,
+            touchTarget = 44.dp,
+        )
+    }
+}
+
+/*
+  Akcja paska, nie SecondaryButton. Ten ma 48 dp i obwódkę - w ciasnej
+  karcie 44 dp odcinał się jak niedopasowany przycisk. Ikona i ten sam krój
+  co licznik zaznaczenia, bez ramki; na wąskim ekranie bez podpisu.
+*/
+@Composable
+private fun SelectionAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    withLabel: Boolean,
+    danger: Boolean = false,
+) {
+    val tint = if (danger) Kajet.colors.danger else Kajet.colors.text
+    Row(
+        Modifier
+            .fillMaxHeight()
+            .widthIn(min = 40.dp)
+            .clip(RoundedCornerShape(Kajet.dimens.corner))
+            .focusProperties { canFocus = false }
+            .clickable(onClick = onClick, onClickLabel = label, role = Role.Button)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = if (withLabel) null else label,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+        if (withLabel) {
+            Text(label, style = Kajet.type.label, color = tint, maxLines = 1)
+        }
     }
 }
 

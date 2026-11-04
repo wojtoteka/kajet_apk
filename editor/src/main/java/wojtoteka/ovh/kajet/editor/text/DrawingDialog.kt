@@ -3,7 +3,11 @@ package wojtoteka.ovh.kajet.editor.text
 import androidx.compose.animation.core.animateDpAsState
 import wojtoteka.ovh.kajet.ink.ShapeSettings
 import wojtoteka.ovh.kajet.ink.Brushes
+import wojtoteka.ovh.kajet.editor.handwriting.PasteSpots
 import wojtoteka.ovh.kajet.editor.handwriting.SelectionPanel
+import wojtoteka.ovh.kajet.editor.handwriting.Sheet
+import wojtoteka.ovh.kajet.editor.handwriting.StrokeClipboard
+import wojtoteka.ovh.kajet.editor.handwriting.StrokePlacement
 import wojtoteka.ovh.kajet.editor.handwriting.PenStrip
 import wojtoteka.ovh.kajet.editor.handwriting.PenPanel
 import androidx.compose.ui.platform.LocalConfiguration
@@ -37,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -275,6 +280,57 @@ fun DrawingDialog(
     val pageWidth = initial?.width?.takeIf { it > 0f } ?: DRAWING_WIDTH
     var canvas by remember { mutableStateOf<StrokeCanvas?>(null) }
 
+    // Kreska sięgnęła dołu kartki: miejsce się kończy, więc dokładamy
+    // następny kawałek.
+    fun growFor(bottom: Float) {
+        if (bottom > pageHeight - DRAWING_GROW_MARGIN) {
+            pageHeight = (pageHeight + DRAWING_GROW_STEP).coerceAtMost(DRAWING_MAX_HEIGHT)
+        }
+    }
+
+    // Schowek jest ten sam co w notatce odręcznej: kreski wycięte tam
+    // wklejają się tutaj i odwrotnie.
+    val clipboard by StrokeClipboard.strokes.collectAsState()
+    val pasteSpots = remember { PasteSpots() }
+
+    fun copySelection() {
+        val ids = selected.map { it.id }.toSet()
+        StrokeClipboard.put(strokes.filter { it.id in ids })
+        pasteSpots.reset()
+    }
+
+    fun cutSelection() {
+        copySelection()
+        deleteSelection()
+    }
+
+    /*
+      Wklejone staje na środku tego, co widać w oknie, i od razu jest
+      zaznaczone - zostaje je przeciągnąć. Za wysokie na kartkę najpierw
+      ją wydłuża, póki starcza granicy trzech kartek.
+    */
+    fun paste() {
+        val copied = StrokeClipboard.strokes.value
+        val box = Strokes.bounds(copied) ?: return
+        while (box.height + DRAWING_GROW_MARGIN > pageHeight && pageHeight < DRAWING_MAX_HEIGHT) {
+            pageHeight = (pageHeight + DRAWING_GROW_STEP).coerceAtMost(DRAWING_MAX_HEIGHT)
+        }
+        val view = canvas
+        val scale = view?.zoom?.takeIf { it > 0f }
+        val x = if (view != null && scale != null) view.offsetX + view.width / scale / 2f else pageWidth / 2f
+        val y = if (view != null && scale != null) view.offsetY + view.height / scale / 2f else pageHeight / 2f
+        val step = pasteSpots.next(0, x, y)
+        val placed = StrokePlacement.pasted(copied, x + step, y + step, Sheet(pageWidth, pageHeight))
+        if (placed.isEmpty()) return
+        val before = strokes
+        strokes = strokes + placed
+        record(before)
+        tool = EditorTool.LASSO
+        LastDrawingTools.tool = EditorTool.LASSO
+        selected = placed
+        Strokes.bounds(placed)?.let { growFor(it.bottom) }
+    }
+
     val narrow = LocalConfiguration.current.screenWidthDp < 600
 
     // Rysunek w notatce tekstowej to też pisanie rysikiem, więc i tu rysik ma
@@ -494,12 +550,7 @@ fun DrawingDialog(
                                             val before = strokes
                                             strokes = strokes + stroke
                                             record(before)
-                                            // Kreska sięgnęła dołu kartki: miejsce się
-                                            // kończy, więc dokładamy następny kawałek.
-                                            if (stroke.bounds().bottom > pageHeight - DRAWING_GROW_MARGIN) {
-                                                pageHeight = (pageHeight + DRAWING_GROW_STEP)
-                                                    .coerceAtMost(DRAWING_MAX_HEIGHT)
-                                            }
+                                            growFor(stroke.bounds().bottom)
                                         }
 
                                         override fun eraserPassed(
@@ -532,8 +583,25 @@ fun DrawingDialog(
 
                                         override fun selectionMoved(dx: Float, dy: Float, finished: Boolean) {
                                             if (finished) {
-                                                gestureStart?.let { record(it) }
+                                                val start = gestureStart ?: return
                                                 gestureStart = null
+                                                // Puszczone za brzegiem wraca na kartkę - poza
+                                                // nią kartka kreskę przycina i nie byłoby jej widać.
+                                                val ids = selected.map { it.id }.toSet()
+                                                val landing = StrokePlacement.landing(
+                                                    strokes = strokes.filter { it.id in ids },
+                                                    page = 0,
+                                                    sheets = listOf(Sheet(pageWidth, pageHeight)),
+                                                    gap = 0f,
+                                                )
+                                                if (!landing.stays) {
+                                                    strokes = strokes.map {
+                                                        if (it.id in ids) it.translated(landing.dx, landing.dy) else it
+                                                    }
+                                                    selected = selected.map { it.translated(landing.dx, landing.dy) }
+                                                }
+                                                record(start)
+                                                Strokes.bounds(selected)?.let { growFor(it.bottom) }
                                                 return
                                             }
                                             if (gestureStart == null) gestureStart = strokes
@@ -542,9 +610,10 @@ fun DrawingDialog(
                                             selected = selected.map { it.translated(dx, dy) }
                                         }
 
+                                        override fun selectionCleared() = deselect()
                                         override fun viewChanged(x: Float, y: Float, scale: Float) = Unit
                                         override fun imageTapped(page: Int, id: String) = Unit
-                                        override fun emptyAreaTapped() = Unit
+                                        override fun emptyAreaTapped() = deselect()
                                     }
                                 }
                             },
@@ -571,15 +640,23 @@ fun DrawingDialog(
                             },
                         )
 
-                        if (selected.isNotEmpty()) {
+                        if (selected.isNotEmpty() || (tool == EditorTool.LASSO && clipboard.isNotEmpty())) {
                             SelectionPanel(
                                 count = selected.size,
+                                clipboardCount = clipboard.size,
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
                                     .penQuietSurface(context)
                                     .padding(12.dp),
+                                onCut = ::cutSelection,
+                                onCopy = ::copySelection,
+                                onPaste = ::paste,
                                 onDelete = ::deleteSelection,
                                 onDeselect = ::deselect,
+                                onClearClipboard = {
+                                    StrokeClipboard.clear()
+                                    pasteSpots.reset()
+                                },
                             )
                         }
 

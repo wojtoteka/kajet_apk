@@ -253,7 +253,7 @@ open class NoteViewModel(
         markChanged()
     }
 
-    fun undo() {
+    open fun undo() {
         if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.undo(current) ?: return
@@ -262,7 +262,7 @@ open class NoteViewModel(
         markChanged()
     }
 
-    fun redo() {
+    open fun redo() {
         if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.redo(current) ?: return

@@ -46,6 +46,20 @@ data class StrokeChange(
         }
 }
 
+/**
+ * Kilka zmian, które cofają się jednym krokiem. Zaznaczenie przeciągnięte na
+ * sąsiednią stronę to przesunięcie na starej stronie i przeprowadzka na nową -
+ * a dla człowieka jeden ruch ręką, więc i jedno „Cofnij".
+ */
+data class CompoundChange(val steps: List<Change>) : Change {
+
+    override fun applyTo(document: NoteDocument): NoteDocument =
+        steps.fold(document) { current, step -> step.applyTo(current) }
+
+    override fun revert(document: NoteDocument): NoteDocument =
+        steps.asReversed().fold(document) { current, step -> step.revert(current) }
+}
+
 data class FieldChange(
     val page: Int,
     val before: List<TextBoxElement>,
