@@ -454,7 +454,8 @@ fun TextEditor(
       Polecenie dla asystenta pisane wprost w notatce (InlinePrompt). Działa
       tylko przy koncie z asystentem i ze zgodą na wysyłanie treści - bez tego
       dwa średniki są zwykłymi średnikami. Esc (albo wstecz) przerywa: porzuca
-      pisane polecenie i zatrzymuje to, które już poszło.
+      pisane polecenie, zatrzymuje to, które już poszło, a przez 5 sekund po
+      wstawieniu wyniku - cofa go.
     */
     val inline = remember(document?.id) { InlinePrompt() }
     var inlineOpen by remember(document?.id) { mutableStateOf(false) }

@@ -72,17 +72,9 @@ internal class InlinePrompt {
             return Step.Pass
         }
 
-        var start = 0
-        val shorter = minOf(old.length, new.length)
-        while (start < shorter && old[start] == new[start]) start++
-        var oldEnd = old.length
-        var newEnd = new.length
-        while (oldEnd > start && newEnd > start && old[oldEnd - 1] == new[newEnd - 1]) {
-            oldEnd--
-            newEnd--
-        }
-        val removed = old.substring(start, oldEnd)
-        val inserted = new.substring(start, newEnd)
+        val span = TextSpan.of(old, new)
+        val removed = old.substring(span.start, span.oldEnd)
+        val inserted = new.substring(span.start, span.newEnd)
 
         if (inserted.isEmpty()) {
             if (prompt.isEmpty()) {
