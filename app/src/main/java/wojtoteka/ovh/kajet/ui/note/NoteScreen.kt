@@ -194,6 +194,7 @@ fun NoteScreen(
                     fromCamera.launch(uri)
                 },
                 onAi = if (assistant != null) ({ aiOpen = true }) else null,
+                assistant = assistant,
             )
             NoteExportOverlay(exportDialog, model.document, path, export) { exportDialog = false }
             if (assistant != null) {

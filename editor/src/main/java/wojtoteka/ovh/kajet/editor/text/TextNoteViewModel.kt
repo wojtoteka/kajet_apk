@@ -7,6 +7,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.cancellation.CancellationException
+import wojtoteka.ovh.kajet.core.ai.AiAssistant
+import wojtoteka.ovh.kajet.core.ai.AiNoteKind
+import wojtoteka.ovh.kajet.core.ai.AiOutcome
+import wojtoteka.ovh.kajet.core.live.LiveMerge
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.ImageLines
@@ -386,6 +393,100 @@ class TextNoteViewModel(
     }
 
     suspend fun attachment(name: String): ByteArray? = repo.readAttachment(path, name)
+
+    // --- Polecenie dla asystenta pisane w notatce (InlinePrompt) ---
+    //
+    // Bez panelu i bez żadnego znaku na ekranie: zmienia się sama notatka.
+    // Model, a nie ekran, bo prośba trwa kilkadziesiąt sekund i ma przetrwać
+    // obrót tabletu.
+
+    /*
+      Polecenia idą jedno po drugim. Każde zapamiętuje wersję sprzed siebie
+      (prepareForAi) - dwa naraz nadpisałyby sobie nawzajem tę wersję.
+    */
+    private val inlineTurn = Mutex()
+
+    /** Rośnie przy każdym zatrzymaniu; polecenie sprzed niego nie ma prawa nic zmienić. */
+    private var inlineStops = 0
+    private var inlinePending = 0
+
+    private val _inlineBusy = MutableStateFlow(false)
+
+    /** Czy jest co zatrzymać. Po zatrzymaniu fałsz od razu, choć prośba może jeszcze wracać. */
+    val inlineBusy: StateFlow<Boolean> = _inlineBusy.asStateFlow()
+
+    fun askInline(assistant: AiAssistant, instruction: String) {
+        val noteId = document.value?.id ?: return
+        val stops = inlineStops
+        inlinePending++
+        _inlineBusy.value = true
+        viewModelScope.launch {
+            try {
+                inlineTurn.withLock {
+                    if (stops != inlineStops) return@withLock
+                    prepareForAi()
+                    val outcome = try {
+                        assistant.ask(noteId, AiNoteKind.TEXT, instruction)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (outcome is AiOutcome.Changed) settleInline(stopped = stops != inlineStops)
+                }
+            } finally {
+                if (stops == inlineStops) {
+                    inlinePending--
+                    _inlineBusy.value = inlinePending > 0
+                }
+            }
+        }
+    }
+
+    /**
+     * Zatrzymanie (Esc): czekające polecenia przepadają, a zmiana z prośby,
+     * która już poszła, zostanie cofnięta, gdy tylko wróci - serwer i tak ją
+     * zapisze, więc samo przerwanie połączenia nic by nie dało. Zwraca, czy
+     * było co zatrzymać.
+     */
+    fun stopInline(): Boolean {
+        if (!_inlineBusy.value) return false
+        inlineStops++
+        inlinePending = 0
+        _inlineBusy.value = false
+        return true
+    }
+
+    /*
+      Zmiana asystenta wróciła. Przy poleceniu z panelu notatka po prostu
+      wczytuje się od nowa; tutaj człowiek mógł w tym czasie pisać dalej,
+      więc to, co dopisał, scala się z wynikiem tak samo jak przy edycji na
+      żywo (LiveMerge). Po zatrzymaniu scalanie idzie w drugą stronę: z tego,
+      co na ekranie, wypada tylko zmiana asystenta.
+    */
+    private suspend fun settleInline(stopped: Boolean) {
+        val before = versionBeforeAi?.text?.markdown
+        val mine = document.value?.text?.markdown
+        val fromAi = if (before == null || mine == null || mine == before) {
+            null
+        } else {
+            runCatching { repo.readNote(path) }.getOrNull()?.text?.markdown
+        }
+        if (before == null || mine == null || fromAi == null) {
+            if (stopped) undoAi() else reloadAfterAi()
+            return
+        }
+        val merged = if (stopped) {
+            LiveMerge.mergeText(fromAi, mine, before)
+        } else {
+            LiveMerge.mergeText(before, mine, fromAi)
+        }
+        // Zapis także wtedy, gdy na ekranie nic się nie zmienia: na dysku leży
+        // teraz wersja ściągnięta z serwera, a ma leżeć ta scalona.
+        editWithoutHistory { current ->
+            current.copy(text = (current.text ?: TextContent()).copy(markdown = merged))
+        }
+    }
 
     class Factory(
         private val repo: LibraryRepository,

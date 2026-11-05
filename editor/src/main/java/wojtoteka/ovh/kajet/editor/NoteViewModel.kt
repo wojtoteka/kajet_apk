@@ -407,6 +407,9 @@ open class NoteViewModel(
     /** Wersja sprzed zmiany asystenta - jedyne, na czym stoi cofanie. */
     private var beforeAi: NoteDocument? = null
 
+    /** To samo dla rodzaju notatki, który scala zmianę asystenta z pisaniem w trakcie. */
+    protected val versionBeforeAi: NoteDocument? get() = beforeAi
+
     /**
      * Zapisuje to, co na ekranie, i zapamiętuje tę wersję.
      *
