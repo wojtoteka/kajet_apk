@@ -77,6 +77,11 @@ object Routes {
     const val VIEW = "view/{path}"
     const val SHARED = "shared/{token}?folder={folder}"
 
+    /*
+      Argument wraca z nawigacji JUŻ odkodowany - biblioteka robi to sama.
+      Drugi Uri.decode psuł nazwy z procentem: „50%.note" po nim nie była
+      już tą samą ścieżką i notatka się nie otwierała.
+    */
     fun note(path: String) = "note/" + Uri.encode(path)
     fun shared(token: String, folder: String? = null) =
         "shared/" + Uri.encode(token) + (folder?.let { "?folder=" + Uri.encode(it) } ?: "")
@@ -387,8 +392,8 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
                 },
             ),
         ) { entry ->
-            val token = Uri.decode(entry.arguments?.getString("token").orEmpty())
-            val folder = entry.arguments?.getString("folder")?.let(Uri::decode)
+            val token = entry.arguments?.getString("token").orEmpty()
+            val folder = entry.arguments?.getString("folder")
             val library = shared
             if (library != null) {
                 wojtoteka.ovh.kajet.ui.shared.SharedFolderScreen(
@@ -407,7 +412,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             route = Routes.NOTE,
             arguments = listOf(navArgument("path") { type = NavType.StringType }),
         ) { entry ->
-            val path = Uri.decode(entry.arguments?.getString("path").orEmpty())
+            val path = entry.arguments?.getString("path").orEmpty()
             NoteScreen(
                 path = path,
                 repo = container.library,
@@ -425,7 +430,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             route = Routes.CODE,
             arguments = listOf(navArgument("path") { type = NavType.StringType }),
         ) { entry ->
-            val path = Uri.decode(entry.arguments?.getString("path").orEmpty())
+            val path = entry.arguments?.getString("path").orEmpty()
             val codeModel: CodeViewModel = viewModel(
                 key = "code-$path",
                 factory = CodeViewModel.Factory(
@@ -481,7 +486,7 @@ fun KajetNavigation(container: AppContainer, settings: KajetSettings) {
             route = Routes.VIEW,
             arguments = listOf(navArgument("path") { type = NavType.StringType }),
         ) { entry ->
-            val path = Uri.decode(entry.arguments?.getString("path").orEmpty())
+            val path = entry.arguments?.getString("path").orEmpty()
             FileViewer(
                 path = path,
                 repo = container.library,

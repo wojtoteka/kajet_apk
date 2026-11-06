@@ -2,7 +2,13 @@ package wojtoteka.ovh.kajet.storage
 
 object FileNames {
 
-    private val FORBIDDEN_CHARS = charArrayOf('"', '*', '/', ':', '<', '>', '?', '\\', '|')
+    /*
+      Procent nie przeszkadza żadnemu systemowi plików, ale ścieżka notatki
+      jedzie też jako adres (nawigacja, adresy dokumentów), a tam „%" zaczyna
+      kod znaku. Jedno zbędne odkodowanie po drodze i „50%.note" zamienia się
+      w ścieżkę, której nie ma - więc na dysk procent nie trafia wcale.
+    */
+    private val FORBIDDEN_CHARS = charArrayOf('"', '%', '*', '/', ':', '<', '>', '?', '\\', '|')
 
     private val RESERVED_NAMES = setOf(
         "CON", "PRN", "AUX", "NUL",

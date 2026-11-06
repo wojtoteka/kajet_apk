@@ -19,6 +19,14 @@ class FileNamesTest {
     }
 
     @Test
+    fun `a percent sign never reaches the disk`() {
+        assertThat(FileNames.safe("%")).isEqualTo("_")
+        assertThat(FileNames.safe("Rabat 50%")).isEqualTo("Rabat 50_")
+        assertThat(FileNames.safe("100%25")).isEqualTo("100_25")
+        assertThat(FileNames.unique("%", emptySet(), ".note")).isEqualTo("_.note")
+    }
+
+    @Test
     fun `a trailing dot and space disappear`() {
         assertThat(FileNames.safe("Notatka.")).isEqualTo("Notatka")
         assertThat(FileNames.safe("Notatka   ")).isEqualTo("Notatka")

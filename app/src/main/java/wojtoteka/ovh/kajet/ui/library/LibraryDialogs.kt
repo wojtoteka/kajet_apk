@@ -180,6 +180,7 @@ fun NewFolderDialog(
 
     KajetDialog(words.newFolder, onClose) {
         KajetTextField(name, { name = it }, words.folderName, autoFocus = true)
+        NameOnDisk(name)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.colour)
@@ -315,6 +316,7 @@ fun NewNoteDialog(
 
     KajetDialog(words.newNote, onClose, width = 520) {
         KajetTextField(title, { title = it }, words.titleLabel, autoFocus = true)
+        NameOnDisk(title)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.noteKindLabel)
@@ -409,6 +411,7 @@ fun NewFileDialog(
 
     KajetDialog(words.newCodeFile, onClose, width = 520) {
         KajetTextField(name, { name = it }, words.fileName, autoFocus = true)
+        NameOnDisk(name)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel(words.settingsLanguage)
@@ -462,24 +465,31 @@ fun RenameDialog(
     var name by remember { mutableStateOf(current) }
     KajetDialog(words.rename, onClose) {
         KajetTextField(name, { name = it }, words.newName, autoFocus = true)
-
-        // Dwukropka ani ukośnika nie da się wpisać w nazwę pliku - magazyn
-        // zamienia je na podkreślenie. Nazwa na liście zostaje wtedy taka, jak
-        // wpisana, a katalog na dysku nazywa się inaczej. Lepiej powiedzieć to
-        // wprost, niż zostawić dwie różne nazwy bez wyjaśnienia.
-        val onDisk = FileNames.safe(name)
-        if (name.isNotBlank() && onDisk != name.trim()) {
-            Text(
-                text = words.nameOnDiskAbout(onDisk),
-                style = Kajet.type.meta,
-                color = Kajet.colors.muted,
-            )
-        }
+        NameOnDisk(name)
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryButton(words.save, { onSave(name) }, enabled = name.isNotBlank())
             SecondaryButton(words.cancel, onClose)
         }
+    }
+}
+
+/*
+  Dwukropka, ukośnika ani procentu nie da się wpisać w nazwę pliku - magazyn
+  zamienia je na podkreślenie. Nazwa na liście zostaje wtedy taka, jak
+  wpisana, a katalog na dysku nazywa się inaczej. Lepiej powiedzieć to
+  wprost, niż zostawić dwie różne nazwy bez wyjaśnienia.
+*/
+@Composable
+private fun NameOnDisk(name: String) {
+    val words = LocalStrings.current
+    val onDisk = FileNames.safe(name)
+    if (name.isNotBlank() && onDisk != name.trim()) {
+        Text(
+            text = words.nameOnDiskAbout(onDisk),
+            style = Kajet.type.meta,
+            color = Kajet.colors.muted,
+        )
     }
 }
 
