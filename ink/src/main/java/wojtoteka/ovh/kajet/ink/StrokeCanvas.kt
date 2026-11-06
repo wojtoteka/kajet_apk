@@ -50,6 +50,9 @@ interface CanvasListener {
     fun eraserFinished()
     fun lassoFinished(page: Int, polygon: List<Float>)
     fun selectionMoved(dx: Float, dy: Float, finished: Boolean)
+
+    /** Nowy obrys lassem zaczęty poza zaznaczeniem - poprzednie przestaje obowiązywać. */
+    fun selectionCleared() = Unit
     fun viewChanged(offsetX: Float, offsetY: Float, zoom: Float)
 
     /** Palec stuknął w zdjęcie - bez ruchu i bez rysowania. */
@@ -142,6 +145,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         strokeWidth = 2f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 10f), 0f)
     }
+    // Wnętrze ramki zaznaczenia jest lekko podbarwione: widać, że to rzecz,
+    // którą da się chwycić i przeciągnąć, a nie sam obrys.
+    private val selectionFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val eraserPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -578,6 +584,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         val viewTop = (box.top + top - offsetY) * zoom
         val viewRight = (box.right - offsetX) * zoom
         val viewBottom = (box.bottom + top - offsetY) * zoom
+        selectionFillPaint.color = selectionColor
+        selectionFillPaint.alpha = SELECTION_FILL_ALPHA
+        canvas.drawRect(viewLeft - 8f, viewTop - 8f, viewRight + 8f, viewBottom + 8f, selectionFillPaint)
         selectionPaint.color = selectionColor
         canvas.drawRect(viewLeft - 8f, viewTop - 8f, viewRight + 8f, viewBottom + 8f, selectionPaint)
     }
@@ -700,6 +709,13 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             stylusDown = true
             // The stylus wins. A palm already resting on the screen stops working.
             dropFingers()
+            // Zaznaczenie niesione palcem zostaje tam, gdzie je puszczono -
+            // rysik nie przejmuje cudzego chwytu w połowie ruchu.
+            if (movingSelection && drawingPointerId != id) {
+                listener?.selectionMoved(0f, 0f, finished = true)
+                movingSelection = false
+                drawingPointerId = -1
+            }
         } else if (rejectPalm(event)) {
             return true
         }
@@ -713,6 +729,22 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         val drawing = stylus || fingerDraws || type == MotionEvent.TOOL_TYPE_MOUSE
 
         if (!drawing) {
+            /*
+              Zaznaczenie chwyta się też palcem, jak wycinek w Paincie. Palec,
+              który przewija kartkę, przesuwał wcześniej stronę spod
+              zaznaczenia, więc do przeciągania trzeba było szukać rysika.
+              Przewija dalej wszędzie poza ramką, a drugi palec i tak zamienia
+              chwyt w przesuwanie kartki.
+            */
+            if (fingerIds[0] < 0 && inSelection(docX, docY, fingerGrabReach())) {
+                drawingPointerId = id
+                movingSelection = true
+                lastX = docX
+                lastY = docY
+                tapCandidate = false
+                parent?.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
             if (fingerIds[0] < 0) {
                 tapPointerId = id
                 tapDownX = event.getX(index)
@@ -767,7 +799,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
             tool == EditorTool.LASSO -> {
                 drawingPointerId = id
-                if (selected.isNotEmpty() && inSelection(docX, docY)) {
+                val reach = if (stylus) SELECTION_REACH else fingerGrabReach()
+                if (selected.isNotEmpty() && inSelection(docX, docY, reach)) {
                     movingSelection = true
                     lastX = docX
                     lastY = docY
@@ -775,6 +808,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                     lasso.clear()
                     lasso += docX
                     lasso += docY
+                    // Pasek zaznaczenia pod spodem ma zniknąć razem z ramką,
+                    // a nie wycinać czy usuwać kresek, których już nie widać.
+                    if (selected.isNotEmpty()) listener?.selectionCleared()
                     selected = emptyList()
                 }
             }
@@ -1194,11 +1230,24 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         offsetY = offsetY.coerceIn(-slackY, totalHeight + slackY)
     }
 
-    private fun inSelection(docX: Float, docY: Float): Boolean {
+    /**
+     * Czy punkt dokumentu leży w ramce zaznaczenia albo tuż przy niej -
+     * [reach] w jednostkach kartki.
+     */
+    private fun inSelection(docX: Float, docY: Float, reach: Float): Boolean {
+        if (selected.isEmpty() || selectionPage !in pages.indices) return false
         val box = Strokes.bounds(selected) ?: return false
-        val top = topEdge(selectionPage.coerceAtLeast(0))
-        return box.expanded(10f).contains(docX, docY - top)
+        val top = topEdge(selectionPage)
+        return box.expanded(reach).contains(docX, docY - top)
     }
+
+    /*
+      Opuszek jest grubszy niż grot rysika, a małe zaznaczenie przy małym
+      przybliżeniu ma na ekranie parę punktów. Palec łapie więc ramkę z zapasem
+      liczonym na ekranie, nie na kartce.
+    */
+    private fun fingerGrabReach(): Float =
+        max(SELECTION_REACH, resources.displayMetrics.density * FINGER_GRAB_DP / zoom)
 
     private fun erase(docX: Float, docY: Float, wholeStroke: Boolean, radius: Float) {
         val page = nearestPage(docY)
@@ -1452,6 +1501,15 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
         /** Dotknięcie szersze niż tyle to dłoń, nie opuszek. */
         const val FINGERTIP_DP = 45f
+
+        /** Zapas wokół zaznaczenia, w którym rysik je chwyta, w jednostkach kartki. */
+        const val SELECTION_REACH = 10f
+
+        /** To samo dla palca, w punktach ekranu. */
+        const val FINGER_GRAB_DP = 20f
+
+        /** Krycie podbarwienia wnętrza ramki zaznaczenia (0-255). */
+        const val SELECTION_FILL_ALPHA = 28
 
         const val PAGE_GAP = 24f
         const val DESK_MARGIN = 24f

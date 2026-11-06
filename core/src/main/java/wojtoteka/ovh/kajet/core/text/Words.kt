@@ -393,6 +393,10 @@ interface Strings {
     val eraser: String
     val morePenSettings: String
     val deselect: String
+    val cutSelection: String
+    val copySelection: String
+    val pasteStrokes: String
+    val clearClipboard: String
     val penTool: String
     val highlighterTool: String
     val shapeKindLabel: String
@@ -1012,6 +1016,13 @@ fun Strings.selectedStrokes(count: Int): String = if (english) {
         else -> "kresek"
     }
     "Zaznaczono $count $noun"
+}
+
+/** Kreski czekające w schowku na wklejenie: „W schowku: 3 kreski". */
+fun Strings.clipboardStrokes(count: Int): String = if (english) {
+    if (count == 1) "1 stroke on the clipboard" else "$count strokes on the clipboard"
+} else {
+    "W schowku: $count ${strokeNoun(count)}"
 }
 
 fun Strings.pagesCount(count: Int): String = if (english) {
@@ -1886,6 +1897,10 @@ object PolishStrings : Strings {
     override val eraser = "Gumka"
     override val morePenSettings = "Więcej ustawień pisaka"
     override val deselect = "Odznacz"
+    override val cutSelection = "Wytnij"
+    override val copySelection = "Kopiuj"
+    override val pasteStrokes = "Wklej"
+    override val clearClipboard = "Opróżnij schowek"
     override val penTool = "Pisak"
     override val highlighterTool = "Zakreślacz"
     override val shapeKindLabel = "Jaki kształt"
@@ -2685,6 +2700,10 @@ object EnglishStrings : Strings {
     override val eraser = "Eraser"
     override val morePenSettings = "More pen settings"
     override val deselect = "Deselect"
+    override val cutSelection = "Cut"
+    override val copySelection = "Copy"
+    override val pasteStrokes = "Paste"
+    override val clearClipboard = "Clear clipboard"
     override val penTool = "Pen"
     override val highlighterTool = "Highlighter"
     override val shapeKindLabel = "Shape"

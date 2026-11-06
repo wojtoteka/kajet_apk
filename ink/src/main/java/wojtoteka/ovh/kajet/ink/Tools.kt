@@ -31,7 +31,7 @@ enum class EditorTool {
             HIGHLIGHTER -> "Szeroka, jasna kreska. Rysuje się pod tekstem, więc go nie zasłania."
             ERASER_PARTIAL -> "Wyciera tylko to, po czym przejedziesz."
             ERASER_STROKE -> "Usuwa całą kreskę, której dotkniesz."
-            LASSO -> "Obrysuj fragment, żeby go przesunąć albo usunąć."
+            LASSO -> "Obrysuj fragment. Zaznaczenie przeciągniesz palcem albo rysikiem, a z paska na dole wytniesz, skopiujesz, wkleisz albo usuniesz."
             RULER -> "Prostuje kreskę w linię albo łamaną, a zamkniętą zamienia w koło, owal, trójkąt albo prostokąt."
             SHAPES -> "Przeciągnij rysik, żeby wstawić kształt. Stuknięcie w kształt pozwala go poprawić."
         }
@@ -51,7 +51,7 @@ enum class EditorTool {
         HIGHLIGHTER -> "A wide, pale stroke that sits under the text."
         ERASER_PARTIAL -> "Rubs out only what you run over."
         ERASER_STROKE -> "Removes the whole stroke you touch."
-        LASSO -> "Draw around an area to move or delete it."
+        LASSO -> "Draw around an area. Drag the selection with your finger or stylus, or cut, copy, paste or delete it from the bar at the bottom."
         RULER -> "Straightens a stroke into a line or straight segments, and turns a closed one into a circle, oval, triangle or rectangle."
         SHAPES -> "Drag the stylus to place a shape. Tap a shape to edit it."
     }

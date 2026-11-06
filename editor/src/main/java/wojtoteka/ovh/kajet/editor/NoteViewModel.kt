@@ -129,6 +129,14 @@ open class NoteViewModel(
 
     private var liveHandle: LiveHandle? = null
 
+    /*
+      Ile razy edycja na żywo podmieniła treść na ekranie. Rodzaj notatki
+      porównuje to przed i po prośbie do asystenta: zmiana asystenta zrobiona
+      na serwerze potrafi wejść na ekran tą drogą, zanim prośba się skończy.
+    */
+    private var remoteEdits = 0
+    protected val remoteEditCount: Int get() = remoteEdits
+
     private val _liveStatus = MutableStateFlow(LiveStatus.OFF)
     val liveStatus: StateFlow<LiveStatus> = _liveStatus.asStateFlow()
 
@@ -153,6 +161,7 @@ open class NoteViewModel(
         override fun replaceIf(expected: NoteDocument, merged: NoteDocument, author: String): Boolean {
             if (_document.value !== expected) return false
             _document.value = merged
+            remoteEdits++
             if (author.isNotBlank()) _liveAuthor.value = author to System.currentTimeMillis()
             // Na dysk jak każda inna zmiana. Wysyłka po zapisie nic nie wyśle,
             // jeśli na ekranie nie ma nic poza tym, co właśnie przyszło.
@@ -253,7 +262,7 @@ open class NoteViewModel(
         markChanged()
     }
 
-    fun undo() {
+    open fun undo() {
         if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.undo(current) ?: return
@@ -262,7 +271,7 @@ open class NoteViewModel(
         markChanged()
     }
 
-    fun redo() {
+    open fun redo() {
         if (_readOnly.value) return
         val current = _document.value ?: return
         val after = history.redo(current) ?: return
@@ -406,6 +415,9 @@ open class NoteViewModel(
 
     /** Wersja sprzed zmiany asystenta - jedyne, na czym stoi cofanie. */
     private var beforeAi: NoteDocument? = null
+
+    /** To samo dla rodzaju notatki, który scala zmianę asystenta z pisaniem w trakcie. */
+    protected val versionBeforeAi: NoteDocument? get() = beforeAi
 
     /**
      * Zapisuje to, co na ekranie, i zapamiętuje tę wersję.

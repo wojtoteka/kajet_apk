@@ -6,7 +6,15 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.cancellation.CancellationException
+import wojtoteka.ovh.kajet.core.ai.AiAssistant
+import wojtoteka.ovh.kajet.core.ai.AiNoteKind
+import wojtoteka.ovh.kajet.core.ai.AiOutcome
 import wojtoteka.ovh.kajet.core.text.words
 import wojtoteka.ovh.kajet.core.model.DrawingSource
 import wojtoteka.ovh.kajet.core.model.ImageLines
@@ -387,6 +395,153 @@ class TextNoteViewModel(
 
     suspend fun attachment(name: String): ByteArray? = repo.readAttachment(path, name)
 
+    // --- Polecenie dla asystenta pisane w notatce (InlinePrompt) ---
+    //
+    // Bez panelu i bez żadnego znaku na ekranie: zmienia się sama notatka.
+    // Model, a nie ekran, bo prośba trwa kilkadziesiąt sekund i ma przetrwać
+    // obrót tabletu.
+
+    /*
+      Polecenia idą jedno po drugim. Każde zapamiętuje wersję sprzed siebie
+      (prepareForAi) - dwa naraz nadpisałyby sobie nawzajem tę wersję.
+    */
+    private val inlineTurn = Mutex()
+
+    /** Rośnie przy każdym zatrzymaniu; polecenie sprzed niego nie ma prawa nic zmienić. */
+    private var inlineStops = 0
+    private var inlinePending = 0
+
+    /*
+      Świeża zmiana asystenta. Przez [UNDO_WINDOW_MS] od chwili, gdy stanęła
+      w notatce, Esc ją cofa - na wypadek, gdyby trzeba było natychmiast
+      sprzątnąć wynik. Potem Esc wraca do zwykłej roli.
+    */
+    private var landed: InlineLanding.Landed? = null
+    private var landedTimer: Job? = null
+
+    private val _inlineBusy = MutableStateFlow(false)
+
+    /**
+     * Czy Esc ma co zrobić: polecenie w drodze albo świeża zmiana asystenta.
+     * Po zatrzymaniu fałsz od razu, choć prośba może jeszcze wracać.
+     */
+    val inlineBusy: StateFlow<Boolean> = _inlineBusy.asStateFlow()
+
+    private fun refreshInline() {
+        _inlineBusy.value = inlinePending > 0 || landed != null
+    }
+
+    fun askInline(assistant: AiAssistant, instruction: String) {
+        val noteId = document.value?.id ?: return
+        val stops = inlineStops
+        inlinePending++
+        refreshInline()
+        viewModelScope.launch {
+            try {
+                inlineTurn.withLock {
+                    if (stops != inlineStops) return@withLock
+                    prepareForAi()
+                    val remoteBefore = remoteEditCount
+                    val outcome = try {
+                        assistant.ask(noteId, AiNoteKind.TEXT, instruction)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (outcome is AiOutcome.Changed) {
+                        settleInline(stopped = stops != inlineStops, merged = remoteEditCount != remoteBefore)
+                    }
+                }
+            } finally {
+                if (stops == inlineStops) {
+                    inlinePending--
+                    refreshInline()
+                }
+            }
+        }
+    }
+
+    /**
+     * Esc. Czekające polecenia przepadają, a zmiana z prośby, która już
+     * poszła, zostanie cofnięta, gdy tylko wróci - serwer i tak ją zapisze,
+     * więc samo przerwanie połączenia nic by nie dało. Świeża zmiana
+     * (ostatnie [UNDO_WINDOW_MS]) znika od razu. Zwraca, czy było co robić.
+     */
+    fun stopInline(): Boolean {
+        val undo = landed
+        val working = inlinePending > 0
+        if (!working && undo == null) return false
+        if (working) {
+            inlineStops++
+            inlinePending = 0
+        }
+        if (undo != null) {
+            landed = null
+            landedTimer?.cancel()
+            document.value?.text?.markdown?.let { current ->
+                setInlineMarkdown(InlineLanding.revert(undo.shown, undo.withoutAi, current))
+            }
+        }
+        refreshInline()
+        return true
+    }
+
+    /*
+      Zmiana asystenta wróciła. Przy poleceniu z panelu notatka po prostu
+      wczytuje się od nowa; tutaj człowiek mógł w tym czasie pisać dalej,
+      a edycja na żywo mogła już wstawić wynik na ekran - InlineLanding
+      składa z tego to, co ma stanąć w notatce, i to samo bez asystenta.
+    */
+    private suspend fun settleInline(stopped: Boolean, merged: Boolean) {
+        val before = versionBeforeAi?.text?.markdown
+        val screen = document.value?.text?.markdown
+        if (before == null || screen == null) {
+            if (stopped) undoAi() else reloadAfterAi()
+            return
+        }
+        if (!merged && screen == before) {
+            if (stopped) {
+                undoAi()
+            } else {
+                reloadAfterAi()
+                document.value?.text?.markdown?.let { rememberLanded(InlineLanding.Landed(it, before)) }
+            }
+            return
+        }
+        val fromAi = runCatching { repo.readNote(path) }.getOrNull()?.text?.markdown
+        if (fromAi == null) {
+            if (stopped) undoAi() else reloadAfterAi()
+            return
+        }
+        if (stopped) {
+            setInlineMarkdown(InlineLanding.stop(before, screen, fromAi, merged))
+        } else {
+            val landing = InlineLanding.land(before, screen, fromAi, merged)
+            setInlineMarkdown(landing.shown)
+            rememberLanded(landing)
+        }
+    }
+
+    // Zapis także wtedy, gdy na ekranie nic się nie zmienia: na dysku może
+    // leżeć wersja ściągnięta z serwera, a ma leżeć ta z ekranu.
+    private fun setInlineMarkdown(markdown: String) {
+        editWithoutHistory { current ->
+            current.copy(text = (current.text ?: TextContent()).copy(markdown = markdown))
+        }
+    }
+
+    private fun rememberLanded(landing: InlineLanding.Landed) {
+        landed = landing
+        landedTimer?.cancel()
+        landedTimer = viewModelScope.launch {
+            delay(UNDO_WINDOW_MS)
+            landed = null
+            refreshInline()
+        }
+        refreshInline()
+    }
+
     class Factory(
         private val repo: LibraryRepository,
         private val settings: SettingsStore,
@@ -395,5 +550,10 @@ class TextNoteViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             TextNoteViewModel(repo, settings, path) as T
+    }
+
+    private companion object {
+        /** Tyle po wstawieniu wyniku asystenta Esc jeszcze go cofa. */
+        const val UNDO_WINDOW_MS = 5_000L
     }
 }

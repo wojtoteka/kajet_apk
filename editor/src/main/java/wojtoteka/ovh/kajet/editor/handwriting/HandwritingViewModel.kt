@@ -26,6 +26,8 @@ import wojtoteka.ovh.kajet.core.model.ShapeElement
 import wojtoteka.ovh.kajet.core.model.ShapeKind
 import wojtoteka.ovh.kajet.core.model.TextBoxElement
 import wojtoteka.ovh.kajet.editor.NoteViewModel
+import wojtoteka.ovh.kajet.editor.Change
+import wojtoteka.ovh.kajet.editor.CompoundChange
 import wojtoteka.ovh.kajet.editor.StrokeChange
 import wojtoteka.ovh.kajet.editor.FieldChange
 import wojtoteka.ovh.kajet.editor.ImageChange
@@ -39,6 +41,7 @@ import wojtoteka.ovh.kajet.ink.Brushes
 import wojtoteka.ovh.kajet.ink.PenSettings
 import wojtoteka.ovh.kajet.ink.ShapeGeometry
 import wojtoteka.ovh.kajet.ink.ShapeSettings
+import wojtoteka.ovh.kajet.ink.StrokeCanvas
 import wojtoteka.ovh.kajet.storage.SettingsStore
 import wojtoteka.ovh.kajet.storage.LibraryRepository
 import wojtoteka.ovh.kajet.storage.FingerBehavior
@@ -380,12 +383,57 @@ class HandwritingViewModel(
                 val positions = before.map { stroke ->
                     sheet.strokes.indexOfFirst { it.id == stroke.id } to stroke
                 }
-                history.record(StrokeChange(page, positions, after))
+                val moved = StrokeChange(page, positions, after)
+                val settled = settle(page, after)
+                if (settled == null) {
+                    history.record(moved)
+                } else {
+                    editWithoutHistory { settled.applyTo(it) }
+                    // Przesunięcie i dosunięcie do kartki to jeden ruch ręki,
+                    // więc i jeden krok cofania.
+                    history.record(CompoundChange(listOf(moved, settled)))
+                }
                 refreshButtons()
+                growIfNeeded(_selectionPage.value)
             }
         }
         dragTotalX = 0f
         dragTotalY = 0f
+    }
+
+    /*
+      Zaznaczenie puszczone za brzegiem kartki.
+
+      Przeciągnięte w dół albo w górę przez odstęp między stronami przechodzi
+      na sąsiednią stronę - inaczej zostawało na starej, tylko poza nią, i
+      kartka przycinała je do zera. Wyciągnięte na biurko z boku wraca na
+      kartkę. Zwraca zmianę do wykonania albo null, gdy zaznaczenie leży dobrze.
+    */
+    private fun settle(page: Int, strokes: List<InkStroke>): Change? {
+        val handwriting = document.value?.handwriting ?: return null
+        val sheets = handwriting.pages.map { Sheet(it.width, it.height) }
+        val landing = StrokePlacement.landing(strokes, page, sheets, StrokeCanvas.PAGE_GAP)
+        if (landing.stays) return null
+
+        val sheet = handwriting.pages.getOrNull(page) ?: return null
+        val ids = strokes.map { it.id }.toSet()
+        val leaving = sheet.strokes.withIndex()
+            .filter { it.value.id in ids }
+            .map { it.index to it.value }
+        val arriving = leaving.map { it.second.translated(landing.dx, landing.dy) }
+
+        _selected.value = arriving
+        _selectionPage.value = landing.page
+        return if (landing.page == page) {
+            StrokeChange(page, leaving, arriving)
+        } else {
+            CompoundChange(
+                listOf(
+                    StrokeChange(page, removed = leaving),
+                    StrokeChange(landing.page, added = arriving),
+                ),
+            )
+        }
     }
 
     fun deleteSelection() {
@@ -399,6 +447,96 @@ class HandwritingViewModel(
         if (removed.isEmpty()) return
         perform(StrokeChange(page, removed = removed))
         deselect()
+    }
+
+    /** Samo odznaczenie kresek - wybrany kształt zostaje, gdzie był. */
+    fun deselectStrokes() {
+        _selected.value = emptyList()
+        _selectionPage.value = -1
+    }
+
+    // Schowek
+
+    /** Kreski w schowku. Jeden na całą aplikację - wkleja się też w innej notatce. */
+    val clipboard: StateFlow<List<InkStroke>> = StrokeClipboard.strokes
+
+    private val pasteSpots = PasteSpots()
+
+    /** Zaznaczone kreski tak, jak leżą teraz w dokumencie, a nie jak je zapamiętano. */
+    private fun selectedNow(): List<InkStroke> {
+        val sheet = document.value?.page(_selectionPage.value) ?: return emptyList()
+        val ids = _selected.value.map { it.id }.toSet()
+        return sheet.strokes.filter { it.id in ids }
+    }
+
+    fun copySelection() {
+        val strokes = selectedNow()
+        if (strokes.isEmpty()) return
+        StrokeClipboard.put(strokes)
+        pasteSpots.reset()
+    }
+
+    /** Kopiuje i usuwa. W notatce tylko do odczytu zostaje samo kopiowanie. */
+    fun cutSelection() {
+        copySelection()
+        if (!readOnly.value) deleteSelection()
+    }
+
+    /**
+     * Wkleja schowek na stronę [page], środkiem w punkcie ([x], [y]) tej
+     * strony - tam, gdzie człowiek właśnie patrzy. Wklejone kreski są od razu
+     * zaznaczone, więc wystarczy przeciągnąć je palcem albo rysikiem na miejsce.
+     */
+    fun paste(page: Int, x: Float, y: Float) {
+        if (readOnly.value) return
+        val strokes = StrokeClipboard.strokes.value
+        if (strokes.isEmpty()) return
+        val sheet = document.value?.page(page) ?: return
+        val step = pasteSpots.next(page, x, y)
+        val placed = StrokePlacement.pasted(strokes, x + step, y + step, Sheet(sheet.width, sheet.height))
+        if (placed.isEmpty()) return
+        perform(StrokeChange(page = page, added = placed))
+        _selectedShape.value = null
+        _tool.value = EditorTool.LASSO
+        _selected.value = placed
+        _selectionPage.value = page
+        growIfNeeded(page)
+    }
+
+    fun clearClipboard() {
+        StrokeClipboard.clear()
+        pasteSpots.reset()
+    }
+
+    /*
+      Cofnięcie przesuwa kreski z powrotem, a zapamiętane zaznaczenie zostawało
+      tam, dokąd je przeciągnięto: ramka wisiała w pustym miejscu, a chwyt za
+      nią przesuwał kreski, których tam nie było. Po cofnięciu i ponowieniu
+      zaznaczenie bierze kreski z dokumentu na nowo.
+    */
+    override fun undo() {
+        super.undo()
+        refreshSelection()
+    }
+
+    override fun redo() {
+        super.redo()
+        refreshSelection()
+    }
+
+    private fun refreshSelection() {
+        if (_selected.value.isEmpty()) return
+        val ids = _selected.value.map { it.id }.toSet()
+        val pages = document.value?.handwriting?.pages.orEmpty()
+        // Kreska mogła przy cofaniu wrócić na inną stronę niż ta zapamiętana.
+        val page = pages.indexOfFirst { sheet -> sheet.strokes.any { it.id in ids } }
+        val found = pages.getOrNull(page)?.strokes?.filter { it.id in ids }.orEmpty()
+        if (found.isEmpty()) {
+            deselectStrokes()
+        } else {
+            _selected.value = found
+            _selectionPage.value = page
+        }
     }
 
     // Kształty

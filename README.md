@@ -18,6 +18,10 @@ Atrament jest tylko na kartce, także w rysunku w notatce tekstowej: kreska, kt�
 na biurko, kończy się na brzegu, a gdy rysik wróci, zaczyna się nowa (`PageEdge`).
 Do pliku idzie kreska bez punktów, które niczego w niej nie zmieniają: zostaje tylko to, co
 odbiega od linii między sąsiadami o więcej niż pół `epsilon` pędzla (`Strokes.thinned`).
+Zaznaczenie lassem działa jak wycinek w Paincie: chwyta się je palcem albo rysikiem i przeciąga,
+także na sąsiednią stronę, a pasek na dole ma Wytnij, Kopiuj, Wklej i Usuń. Schowek jest jeden
+na całą aplikację (`StrokeClipboard`), więc kreski z jednej notatki wklejają się w drugiej i w rysunku
+w notatce tekstowej - na środku tego, co widać, od razu zaznaczone do przeciągnięcia.
 
 **Notatki tekstowe.** Pisze się jak w Wordzie: znaczników (`**`, `#`, `<span>`, płotów
 ```` ``` ````) nie widać nigdy, także pod kursorem, a Backspace i Enter nie potrafią ich

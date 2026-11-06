@@ -1,5 +1,6 @@
 package wojtoteka.ovh.kajet.editor.text
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -34,6 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -47,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import wojtoteka.ovh.kajet.core.ai.AiAssistant
 import wojtoteka.ovh.kajet.core.design.component.TitleKeyboardOptions
 import wojtoteka.ovh.kajet.core.design.component.releaseFocusWithKeyboard
 import wojtoteka.ovh.kajet.core.design.component.titleKeyboardActions
@@ -84,6 +91,8 @@ fun TextEditor(
     onPhotoFromCamera: () -> Unit,
     /* Puste, gdy konto nie ma asystenta - wtedy nie ma po nim ani śladu. */
     onAi: (() -> Unit)? = null,
+    /* Asystent dla poleceń pisanych wprost w notatce (InlinePrompt); puste jak wyżej. */
+    assistant: AiAssistant? = null,
 ) {
     val words = LocalStrings.current
     val document by model.document.collectAsStateWithLifecycle()
@@ -441,12 +450,70 @@ fun TextEditor(
     /** Budowa akapitu z kursorem - świeci po niej przycisk listy albo cytatu. */
     val lineKind = if (taskUnderCursor() != null) LineKind.TASK else TextCommands.paragraphKind(cursorField)
 
+    /*
+      Polecenie dla asystenta pisane wprost w notatce (InlinePrompt). Działa
+      tylko przy koncie z asystentem i ze zgodą na wysyłanie treści - bez tego
+      dwa średniki są zwykłymi średnikami. Esc (albo wstecz) przerywa: porzuca
+      pisane polecenie, zatrzymuje to, które już poszło, a przez 5 sekund po
+      wstawieniu wyniku - cofa go.
+    */
+    val inline = remember(document?.id) { InlinePrompt() }
+    var inlineOpen by remember(document?.id) { mutableStateOf(false) }
+    val inlineBusy by model.inlineBusy.collectAsStateWithLifecycle()
+
+    fun stopInline(): Boolean {
+        val wasOpen = inline.isOpen
+        inline.close()
+        inlineOpen = false
+        return model.stopInline() || wasOpen
+    }
+
+    // Kursor w innym bloku albo zmiana widoku - polecenie przepada.
+    LaunchedEffect(focusedKey, blockMode) {
+        inline.close()
+        inlineOpen = false
+    }
+
+    /** Notatka przed kursorem: z polecenia „rozwiąż to" ma być wiadomo, co to. */
+    fun textBeforeCursor(value: TextFieldValue): String {
+        val here = value.text.substring(0, value.selection.start.coerceIn(0, value.text.length))
+        if (!blockMode) return here
+        val key = focusedKey?.let { Blocks.cellOf(it)?.first ?: it } ?: return here
+        val earlier = blocks.takeWhile { it.key != key }
+        return if (earlier.isEmpty()) here else Blocks.join(earlier) + "\n\n" + here
+    }
+
+    /** Pisanie polecenia zamiast notatki; null - to zwykłe pisanie. */
+    fun inlineTyped(previous: TextFieldValue, typed: TextFieldValue): TextFieldValue? {
+        val ai = assistant ?: return null
+        val wasOpen = inline.isOpen
+        val step = inline.onTyped(previous, typed)
+        // Sprawdzane dopiero przy dwóch średnikach, nie przy każdej literze.
+        if (!wasOpen && inline.isOpen) {
+            val fenced = !blockMode && InlinePrompt.insideFence(previous.text, previous.selection.start)
+            if (fenced || !(ai.available() && ai.consented())) {
+                inline.close()
+                return null
+            }
+        }
+        inlineOpen = inline.isOpen
+        return when (step) {
+            InlinePrompt.Step.Pass -> null
+            is InlinePrompt.Step.Keep -> step.field
+            is InlinePrompt.Step.Send -> {
+                model.askInline(ai, InlinePrompt.instruction(step.prompt, textBeforeCursor(previous)))
+                step.field
+            }
+        }
+    }
+
     /**
      * Nadaje zapamiętany format tekstowi dopiero co wpisanemu. Oddaje nowe
      * pole albo null, gdy nie ma czego zmieniać - wtedy pole zostaje takie,
      * jakie przyszło z klawiatury i nic nie gubi kursora.
      */
     fun onTyped(previous: TextFieldValue, typed: TextFieldValue): TextFieldValue? {
+        inlineTyped(previous, typed)?.let { return it }
         if (previous.text == typed.text) {
             // Sam ruch kursora: zapamiętany format przestaje obowiązywać.
             if (!pending.isEmpty) pending = PendingFormat()
@@ -504,7 +571,28 @@ fun TextEditor(
 
     val toolbarOnRight by model.toolbarOnRight.collectAsStateWithLifecycle()
 
-    Row(Modifier.fillMaxSize().background(colors.desk)) {
+    /*
+      Esc z klawiatury tabletu. Puszczenie klawisza też zostaje tutaj -
+      Android zamienia niezłapany Esc na „wstecz", a to wyrzuciłoby z notatki.
+      Bez skupienia w notatce Esc i tak przychodzi jako „wstecz", więc łapie
+      go BackHandler - ten sam, co gest wstecz na ekranie.
+    */
+    var escapeHeld by remember { mutableStateOf(false) }
+    BackHandler(enabled = inlineOpen || inlineBusy) { stopInline() }
+
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(colors.desk)
+            .onPreviewKeyEvent { event ->
+                if (event.key != Key.Escape) return@onPreviewKeyEvent false
+                when (event.type) {
+                    KeyEventType.KeyDown -> (escapeHeld || stopInline()).also { escapeHeld = it }
+                    KeyEventType.KeyUp -> escapeHeld.also { escapeHeld = false }
+                    else -> false
+                }
+            },
+    ) {
 
         // Pasek narzędzi. Domyślnie po lewej; leworęczni przestawiają go w
         // ustawieniach na prawo, żeby dłoń nie klikała go po drodze.
