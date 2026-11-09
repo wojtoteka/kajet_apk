@@ -248,6 +248,22 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private var lastCenterX = 0f
     private var lastCenterY = 0f
     private var lastSpan = 0f
+    private val fingerStarts = arrayOf(FloatArray(2), FloatArray(2))
+
+    // Czy ruch palców zdążył już przekroczyć próg. Drgania opartej ręki
+    // poniżej progu nie ruszają kartki.
+    private var panStarted = false
+
+    // Gest, który zaczął się na pustym biurku: tak wygląda dłoń oparta obok
+    // kartki, więc nie przesuwa widoku.
+    private var deskGesture = false
+
+    // Widok sprzed gestu. Dłoń kładzie się zwykle chwilę przed rysikiem,
+    // więc to, co zdążyła przesunąć, wraca na miejsce.
+    private var viewBeforeX = 0f
+    private var viewBeforeY = 0f
+    private var viewBeforeZoom = 1f
+    private var fingersDownTime = 0L
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
@@ -649,6 +665,13 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     */
     override fun onHoverEvent(event: MotionEvent): Boolean {
         PenHaptics.diagnose(event)
+        val type = event.getToolType(0)
+        if (type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER) {
+            // Rysik nad ekranem znaczy, że ręka za chwilę pisze: to, co teraz
+            // dotyka szyby, jest dłonią, nawet jeśli rysik jeszcze nie dotknął.
+            lastStylusTime = event.eventTime
+            if (event.actionMasked != MotionEvent.ACTION_HOVER_EXIT) stylusArrived(event.eventTime)
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE ->
                 PenHaptics.surfaceHover(context, true)
@@ -685,7 +708,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             MotionEvent.ACTION_MOVE -> onMove(event)
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> onUp(event, index, id)
             MotionEvent.ACTION_CANCEL -> {
-                cancel()
+                cancel(event.eventTime)
                 true
             }
             else -> false
@@ -695,6 +718,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private fun onDown(event: MotionEvent, index: Int, id: Int, type: Int): Boolean {
         val stylus = type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER
         val finger = !stylus && type != MotionEvent.TOOL_TYPE_MOUSE
+
+        if (dragDropped) clearDrag()
 
         // Rysik Lenovo gubi zamówiony profil, gdy aplikacja schodzi w tło
         // albo rysik zaśnie. Przypomnienie tuż przed kreską jest tanie (idzie
@@ -729,6 +754,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             val writing = drawingPointerId
             val writingIndex = event.findPointerIndex(writing)
             abandonStroke()
+            beginFingers(event.eventTime)
             if (writingIndex >= 0) {
                 rememberFinger(writing, event.getX(writingIndex), event.getY(writingIndex), event)
             }
@@ -740,7 +766,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         if (stylus) {
             stylusDown = true
             // The stylus wins. A palm already resting on the screen stops working.
-            dropFingers()
+            stylusArrived(event.eventTime)
             // Zaznaczenie niesione palcem zostaje tam, gdzie je puszczono -
             // rysik nie przejmuje cudzego chwytu w połowie ruchu.
             if (movingSelection && drawingPointerId != id) {
@@ -765,9 +791,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
               który przewija kartkę, przesuwał wcześniej stronę spod
               zaznaczenia, więc do przeciągania trzeba było szukać rysika.
               Przewija dalej wszędzie poza ramką, a drugi palec i tak zamienia
-              chwyt w przesuwanie kartki.
+              chwyt w przesuwanie kartki. Z biurka chwytu nie ma: zaznaczenie
+              leży na kartce, a obok niej opiera się dłoń.
             */
-            if (fingerIds[0] < 0 && inSelection(docX, docY, fingerGrabReach())) {
+            val desk = onDesk(docX, docY)
+            if (fingerIds[0] < 0 && !desk && inSelection(docX, docY, fingerGrabReach())) {
                 drawingPointerId = id
                 grabSelection(docX, docY)
                 tapCandidate = false
@@ -780,10 +808,12 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                 tapDownY = event.getY(index)
                 tapDownTime = event.eventTime
                 tapCandidate = true
+                beginFingers(event.eventTime)
             } else {
                 // Drugi palec to już chwyt kartki, nie stuknięcie.
                 tapCandidate = false
             }
+            if (desk && !panStarted) deskGesture = true
             rememberFinger(id, event.getX(index), event.getY(index), event)
             return true
         }
@@ -1003,6 +1033,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
         forgetFinger(id)
 
+        // Środek gestu wraca na palec, który został. Bez tego następny ruch
+        // liczył się od punktu między palcami i kartka skakała o pół rozstawu.
+        if (event.actionMasked == MotionEvent.ACTION_POINTER_UP && fingerIds[0] >= 0) {
+            val left = event.findPointerIndex(fingerIds[0])
+            if (left >= 0) {
+                lastCenterX = event.getX(left)
+                lastCenterY = event.getY(left)
+            }
+        }
+
         if (event.actionMasked == MotionEvent.ACTION_UP) {
             stylusDown = false
             dropFingers()
@@ -1137,7 +1177,9 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         listener?.emptyAreaTapped()
     }
 
-    private fun cancel() {
+    private fun cancel(time: Long) {
+        undoPalmPan(time)
+        stylusDown = false
         dropWetStroke()
         dropDraft()
         drawingPointerId = -1
@@ -1205,20 +1247,74 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         return event.eventTime - lastStylusTime < PALM_REJECT_MS
     }
 
+    /** Pierwszy palec na ekranie: zapamiętuje widok, do którego wróci dłoń. */
+    private fun beginFingers(time: Long) {
+        panStarted = false
+        deskGesture = false
+        viewBeforeX = offsetX
+        viewBeforeY = offsetY
+        viewBeforeZoom = zoom
+        fingersDownTime = time
+    }
+
+    /** Rysik dotarł do ekranu: palce to była dłoń i przestają działać. */
+    private fun stylusArrived(time: Long) {
+        if (fingerIds[0] < 0) return
+        undoPalmPan(time)
+        tapCandidate = false
+        dropFingers()
+    }
+
+    /** Cofa przesunięcie, jeśli ledwie się zaczęło - długi gest był zamierzony. */
+    private fun undoPalmPan(time: Long) {
+        if (!panStarted || time - fingersDownTime >= PALM_UNDO_MS) return
+        offsetX = viewBeforeX
+        offsetY = viewBeforeY
+        zoom = viewBeforeZoom
+        refreshMatrices()
+        invalidate()
+        listener?.viewChanged(offsetX, offsetY, zoom)
+    }
+
+    private fun onDesk(docX: Float, docY: Float): Boolean {
+        val last = pages.lastOrNull() ?: return false
+        val bottom = topEdge(last.index) + last.height
+        val pageWidth = pages.getOrNull(nearestPage(docY))?.width ?: last.width
+        // Kartka zepchnięta z ekranu musi dać się przyciągnąć z powrotem,
+        // a innego miejsca do chwycenia wtedy nie ma.
+        val reachable = DeskBounds.sheetReachable(
+            offsetX,
+            offsetY,
+            width / zoom,
+            height / zoom,
+            pageWidth,
+            bottom,
+            resources.displayMetrics.density * SHEET_REACH_DP / zoom,
+        )
+        return reachable && DeskBounds.isDesk(docX, docY, pageWidth, bottom)
+    }
+
     private fun rememberFinger(id: Int, x: Float, y: Float, event: MotionEvent) {
         if (fingerIds[0] < 0) {
             fingerIds[0] = id
+            fingerStarts[0][0] = x
+            fingerStarts[0][1] = y
             lastCenterX = x
             lastCenterY = y
             lastSpan = 0f
         } else if (fingerIds[1] < 0 && fingerIds[0] != id) {
             fingerIds[1] = id
+            fingerStarts[1][0] = x
+            fingerStarts[1][1] = y
             refreshFingerCenter(event)
         }
     }
 
     private fun forgetFinger(id: Int) {
-        if (fingerIds[0] == id) fingerIds[0] = fingerIds[1].also { fingerIds[1] = -1 }
+        if (fingerIds[0] == id) {
+            fingerIds[0] = fingerIds[1].also { fingerIds[1] = -1 }
+            fingerStarts[1].copyInto(fingerStarts[0])
+        }
         if (fingerIds[1] == id) fingerIds[1] = -1
         lastSpan = 0f
     }
@@ -1227,6 +1323,8 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         fingerIds[0] = -1
         fingerIds[1] = -1
         lastSpan = 0f
+        panStarted = false
+        deskGesture = false
     }
 
     private fun refreshFingerCenter(event: MotionEvent) {
@@ -1244,9 +1342,17 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         val i2 = if (fingerIds[1] >= 0) event.findPointerIndex(fingerIds[1]) else -1
 
         if (i2 < 0) {
+            if (deskGesture) return
             val dx = event.getX(i1) - lastCenterX
             val dy = event.getY(i1) - lastCenterY
-            if (abs(dx) < touchSlop && abs(dy) < touchSlop && lastSpan == 0f) return
+            if (!panStarted) {
+                if (hypot(dx, dy) < touchSlop) return
+                // Kartka rusza od tego miejsca, bez skoku o sam próg.
+                panStarted = true
+                lastCenterX = event.getX(i1)
+                lastCenterY = event.getY(i1)
+                return
+            }
             offsetX -= dx / zoom
             offsetY -= dy / zoom
             lastCenterX = event.getX(i1)
@@ -1255,6 +1361,29 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             val centerX = (event.getX(i1) + event.getX(i2)) / 2f
             val centerY = (event.getY(i1) + event.getY(i2)) / 2f
             val span = hypot(event.getX(i1) - event.getX(i2), event.getY(i1) - event.getY(i2))
+
+            if (!panStarted) {
+                val started = if (deskGesture) {
+                    DeskBounds.isPinch(
+                        fingerStarts[0],
+                        fingerStarts[1],
+                        floatArrayOf(event.getX(i1), event.getY(i1)),
+                        floatArrayOf(event.getX(i2), event.getY(i2)),
+                        touchSlop.toFloat(),
+                        resources.displayMetrics.density * DESK_PINCH_DP,
+                    )
+                } else {
+                    hypot(centerX - lastCenterX, centerY - lastCenterY) >= touchSlop ||
+                        abs(span - lastSpan) >= touchSlop
+                }
+                if (!started) return
+                panStarted = true
+                deskGesture = false
+                lastCenterX = centerX
+                lastCenterY = centerY
+                lastSpan = span
+                return
+            }
 
             if (lastSpan > 0f && span > 0f) {
                 val change = span / lastSpan
@@ -1584,5 +1713,14 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         const val MAX_ZOOM = 8f
 
         const val PALM_REJECT_MS = 400L
+
+        /** Przez tyle od położenia palców rysik cofa to, co zdążyły przesunąć. */
+        const val PALM_UNDO_MS = 700L
+
+        /** O tyle musi się zmienić rozstaw palców, żeby szczypanie ruszyło z biurka. */
+        const val DESK_PINCH_DP = 48f
+
+        /** Tyle kartki musi być widać, żeby biurko przestało przesuwać widok. */
+        const val SHEET_REACH_DP = 48f
     }
 }

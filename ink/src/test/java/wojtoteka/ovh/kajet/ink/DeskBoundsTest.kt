@@ -59,4 +59,67 @@ class DeskBoundsTest {
     fun `bez rozmiaru widoku granica prawa wraca do zapasu kartki`() {
         assertThat(DeskBounds.clampX(-10_000f, page, 0f, 1f)).isEqualTo(-page * DeskBounds.SLACK)
     }
+
+    private val tall = 1700f
+
+    @Test
+    fun `punkt na kartce nie jest biurkiem`() {
+        assertThat(DeskBounds.isDesk(300f, 400f, page, tall)).isFalse()
+    }
+
+    @Test
+    fun `szczelina miedzy stronami nie jest biurkiem`() {
+        // Punkt w odstępie między stronami, ale w szerokości kartki.
+        assertThat(DeskBounds.isDesk(300f, 850f, page, tall)).isFalse()
+    }
+
+    @Test
+    fun `obok kartki nad nia i pod nia jest biurko`() {
+        assertThat(DeskBounds.isDesk(-1f, 400f, page, tall)).isTrue()
+        assertThat(DeskBounds.isDesk(page + 1f, 400f, page, tall)).isTrue()
+        assertThat(DeskBounds.isDesk(300f, -1f, page, tall)).isTrue()
+        assertThat(DeskBounds.isDesk(300f, tall + 1f, page, tall)).isTrue()
+    }
+
+    @Test
+    fun `kartka widoczna w ekranie da sie chwycic`() {
+        assertThat(DeskBounds.sheetReachable(-100f, 0f, 800f, 500f, page, tall, 20f)).isTrue()
+    }
+
+    @Test
+    fun `kartka zepchnieta z ekranu nie da sie chwycic`() {
+        assertThat(DeskBounds.sheetReachable(page + 50f, 0f, 800f, 500f, page, tall, 20f)).isFalse()
+        assertThat(DeskBounds.sheetReachable(-900f, 0f, 800f, 500f, page, tall, 20f)).isFalse()
+    }
+
+    @Test
+    fun `sam skrawek kartki przy brzegu nie wystarcza`() {
+        // Widać 5 jednostek kartki przy zapasie 20.
+        assertThat(DeskBounds.sheetReachable(page - 5f, 0f, 800f, 500f, page, tall, 20f)).isFalse()
+    }
+
+    private fun point(x: Float, y: Float) = floatArrayOf(x, y)
+
+    private fun pinch(a: FloatArray, b: FloatArray) =
+        DeskBounds.isPinch(point(100f, 500f), point(300f, 500f), a, b, slop = 16f, reach = 96f)
+
+    @Test
+    fun `palce rozjezdzajace sie w przeciwne strony to szczypanie`() {
+        assertThat(pinch(point(40f, 500f), point(360f, 500f))).isTrue()
+    }
+
+    @Test
+    fun `dlon zsuwajaca sie obiema czesciami naraz nie jest szczypaniem`() {
+        assertThat(pinch(point(100f, 800f), point(300f, 800f))).isFalse()
+    }
+
+    @Test
+    fun `palec jadacy obok opartej dloni nie jest szczypaniem`() {
+        assertThat(pinch(point(100f, 500f), point(900f, 500f))).isFalse()
+    }
+
+    @Test
+    fun `male drgania obu czesci dloni nie sa szczypaniem`() {
+        assertThat(pinch(point(80f, 500f), point(320f, 500f))).isFalse()
+    }
 }
