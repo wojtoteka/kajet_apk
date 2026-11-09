@@ -49,7 +49,13 @@ interface CanvasListener {
 
     fun eraserFinished()
     fun lassoFinished(page: Int, polygon: List<Float>)
-    fun selectionMoved(dx: Float, dy: Float, finished: Boolean)
+
+    /**
+     * Przeciągnięte zaznaczenie puszczone o ([dx], [dy]) od miejsca startu.
+     * Zwraca false, gdy dokument się nie zmieni - kartka wraca wtedy od razu
+     * do tego, co ma, zamiast czekać na nowe strony.
+     */
+    fun selectionDropped(dx: Float, dy: Float): Boolean
 
     /** Nowy obrys lassem zaczęty poza zaznaczeniem - poprzednie przestaje obowiązywać. */
     fun selectionCleared() = Unit
@@ -84,6 +90,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     var pages: List<OnScreenPage> = emptyList()
         set(value) {
             field = value
+            if (dragDropped) forgetDrag()
             rebuildStrokes()
             // Pages arrive from the model after the view has been sized, so fitting the
             // width has to work from here too.
@@ -217,6 +224,18 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
     private var lastX = 0f
     private var lastY = 0f
 
+    // Przeciąganie zaznaczenia przesuwa gotowe kreski na ekranie, a dokument
+    // zmienia się raz, po puszczeniu. Przeliczanie punktów przy każdym ruchu
+    // ręki kosztowało przy 500 kreskach ponad pół sekundy na klatkę.
+    private val draggedIds = HashSet<String>()
+    private var dragMeshes: List<Stroke> = emptyList()
+    private var dragX = 0f
+    private var dragY = 0f
+
+    // Puszczone, a nowe strony jeszcze nie doszły: do tego czasu kreski
+    // zostają tam, gdzie je puszczono, żeby nie mignęły na starym miejscu.
+    private var dragDropped = false
+
     private var eraserX = Float.NaN
     private var eraserY = Float.NaN
 
@@ -335,6 +354,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private fun rebuildStrokes() {
         val live = HashSet<String>()
+        val dragged = ArrayList<Stroke>(draggedIds.size)
         engineStrokes.clear()
         fallbackStrokes.clear()
         for (page in pages) {
@@ -348,11 +368,16 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                         ?.takeIf { it.inputs.size > 0 }
                 }
                 // A stroke saved in the file must never disappear from the screen.
-                if (mesh != null) ready += mesh else if (stroke.pointCount > 0) fallback += stroke
+                when {
+                    mesh == null -> if (stroke.pointCount > 0) fallback += stroke
+                    stroke.id in draggedIds -> dragged += mesh
+                    else -> ready += mesh
+                }
             }
             engineStrokes[page.index] = ready
             if (fallback.isNotEmpty()) fallbackStrokes[page.index] = fallback
         }
+        dragMeshes = dragged
         meshes.retain(live)
     }
 
@@ -447,6 +472,14 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         canvas.concat(pageMatrix)
         for (stroke in engineStrokes[page.index].orEmpty()) {
             renderer.draw(canvas, stroke, pageMatrix)
+        }
+        if (page.index == selectionPage && dragMeshes.isNotEmpty()) {
+            canvas.save()
+            canvas.translate(dragX, dragY)
+            for (stroke in dragMeshes) {
+                renderer.draw(canvas, stroke, pageMatrix)
+            }
+            canvas.restore()
         }
         if (wetPage == page.index) {
             wet?.let { renderer.draw(canvas, it, pageMatrix) }
@@ -579,10 +612,10 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         // Zaznaczenie ze strony, której już nie ma, nie ma czego obrysować.
         if (selectionPage !in pages.indices) return
         val top = topEdge(selectionPage.coerceAtLeast(0))
-        val viewLeft = (box.left - offsetX) * zoom
-        val viewTop = (box.top + top - offsetY) * zoom
-        val viewRight = (box.right - offsetX) * zoom
-        val viewBottom = (box.bottom + top - offsetY) * zoom
+        val viewLeft = (box.left + dragX - offsetX) * zoom
+        val viewTop = (box.top + dragY + top - offsetY) * zoom
+        val viewRight = (box.right + dragX - offsetX) * zoom
+        val viewBottom = (box.bottom + dragY + top - offsetY) * zoom
         selectionFillPaint.color = selectionColor
         selectionFillPaint.alpha = SELECTION_FILL_ALPHA
         canvas.drawRect(viewLeft - 8f, viewTop - 8f, viewRight + 8f, viewBottom + 8f, selectionFillPaint)
@@ -711,8 +744,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             // Zaznaczenie niesione palcem zostaje tam, gdzie je puszczono -
             // rysik nie przejmuje cudzego chwytu w połowie ruchu.
             if (movingSelection && drawingPointerId != id) {
-                listener?.selectionMoved(0f, 0f, finished = true)
-                movingSelection = false
+                dropSelection()
                 drawingPointerId = -1
             }
         } else if (rejectPalm(event)) {
@@ -737,9 +769,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             */
             if (fingerIds[0] < 0 && inSelection(docX, docY, fingerGrabReach())) {
                 drawingPointerId = id
-                movingSelection = true
-                lastX = docX
-                lastY = docY
+                grabSelection(docX, docY)
                 tapCandidate = false
                 parent?.requestDisallowInterceptTouchEvent(true)
                 return true
@@ -800,9 +830,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                 drawingPointerId = id
                 val reach = if (stylus) SELECTION_REACH else fingerGrabReach()
                 if (selected.isNotEmpty() && inSelection(docX, docY, reach)) {
-                    movingSelection = true
-                    lastX = docX
-                    lastY = docY
+                    grabSelection(docX, docY)
                 } else {
                     lasso.clear()
                     lasso += docX
@@ -868,9 +896,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
                 }
 
                 movingSelection -> {
-                    listener?.selectionMoved(docX - lastX, docY - lastY, finished = false)
+                    dragX += docX - lastX
+                    dragY += docY - lastY
                     lastX = docX
                     lastY = docY
+                    invalidate()
                 }
 
                 tool == EditorTool.LASSO -> {
@@ -931,8 +961,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             } else if (shapeDragging) {
                 finishShape()
             } else if (movingSelection) {
-                listener?.selectionMoved(0f, 0f, finished = true)
-                movingSelection = false
+                dropSelection()
             } else if (tool == EditorTool.LASSO && lasso.size >= 6 && !lassoIsTap()) {
                 val page = nearestPage(lasso[1])
                 if (page >= 0) {
@@ -1112,7 +1141,11 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         dropWetStroke()
         dropDraft()
         drawingPointerId = -1
-        movingSelection = false
+        // Przerwany chwyt niczego nie przesuwa: kreski wracają na miejsce.
+        if (movingSelection) {
+            movingSelection = false
+            clearDrag()
+        }
         lasso.clear()
         dropFingers()
         eraserX = Float.NaN
@@ -1125,16 +1158,45 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
         dropWetStroke()
         dropDraft()
         drawingPointerId = -1
-        if (movingSelection) {
-            listener?.selectionMoved(0f, 0f, finished = true)
-            movingSelection = false
-        }
+        if (movingSelection) dropSelection()
         if (lasso.isNotEmpty()) lasso.clear()
         if (!eraserX.isNaN()) {
             eraserX = Float.NaN
             eraserY = Float.NaN
             listener?.eraserFinished()
         }
+        invalidate()
+    }
+
+    private fun grabSelection(docX: Float, docY: Float) {
+        movingSelection = true
+        lastX = docX
+        lastY = docY
+        dragX = 0f
+        dragY = 0f
+        dragDropped = false
+        draggedIds.clear()
+        selected.mapTo(draggedIds) { it.id }
+        rebuildStrokes()
+    }
+
+    private fun dropSelection() {
+        movingSelection = false
+        dragDropped = true
+        if (listener?.selectionDropped(dragX, dragY) != true) clearDrag()
+    }
+
+    private fun forgetDrag() {
+        draggedIds.clear()
+        dragMeshes = emptyList()
+        dragX = 0f
+        dragY = 0f
+        dragDropped = false
+    }
+
+    private fun clearDrag() {
+        forgetDrag()
+        rebuildStrokes()
         invalidate()
     }
 

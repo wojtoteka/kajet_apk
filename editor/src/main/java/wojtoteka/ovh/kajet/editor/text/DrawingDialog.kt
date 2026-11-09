@@ -238,8 +238,8 @@ fun DrawingDialog(
         redoSteps = emptyList()
     }
 
-    // Zaznaczenie lassem i początek trwającego ruchu (gumki albo przesuwania),
-    // żeby całe pociągnięcie cofało się jednym krokiem.
+    // Zaznaczenie lassem i początek trwającego ruchu gumki, żeby całe
+    // pociągnięcie cofało się jednym krokiem.
     var selected by remember { mutableStateOf(emptyList<InkStroke>()) }
     var gestureStart by remember { mutableStateOf<List<InkStroke>?>(null) }
 
@@ -581,33 +581,25 @@ fun DrawingDialog(
                                             selected = strokes.filter { Strokes.inLasso(it, polygon) }
                                         }
 
-                                        override fun selectionMoved(dx: Float, dy: Float, finished: Boolean) {
-                                            if (finished) {
-                                                val start = gestureStart ?: return
-                                                gestureStart = null
-                                                // Puszczone za brzegiem wraca na kartkę - poza
-                                                // nią kartka kreskę przycina i nie byłoby jej widać.
-                                                val ids = selected.map { it.id }.toSet()
-                                                val landing = StrokePlacement.landing(
-                                                    strokes = strokes.filter { it.id in ids },
-                                                    page = 0,
-                                                    sheets = listOf(Sheet(pageWidth, pageHeight)),
-                                                    gap = 0f,
-                                                )
-                                                if (!landing.stays) {
-                                                    strokes = strokes.map {
-                                                        if (it.id in ids) it.translated(landing.dx, landing.dy) else it
-                                                    }
-                                                    selected = selected.map { it.translated(landing.dx, landing.dy) }
-                                                }
-                                                record(start)
-                                                Strokes.bounds(selected)?.let { growFor(it.bottom) }
-                                                return
-                                            }
-                                            if (gestureStart == null) gestureStart = strokes
+                                        override fun selectionDropped(dx: Float, dy: Float): Boolean {
+                                            val before = strokes
                                             val ids = selected.map { it.id }.toSet()
-                                            strokes = strokes.map { if (it.id in ids) it.translated(dx, dy) else it }
-                                            selected = selected.map { it.translated(dx, dy) }
+                                            // Puszczone za brzegiem wraca na kartkę - poza
+                                            // nią kartka kreskę przycina i nie byłoby jej widać.
+                                            val landing = StrokePlacement.landing(
+                                                strokes = strokes.filter { it.id in ids }.map { it.translated(dx, dy) },
+                                                page = 0,
+                                                sheets = listOf(Sheet(pageWidth, pageHeight)),
+                                                gap = 0f,
+                                            )
+                                            val shiftX = dx + landing.dx
+                                            val shiftY = dy + landing.dy
+                                            if (shiftX == 0f && shiftY == 0f) return false
+                                            strokes = strokes.map { if (it.id in ids) it.translated(shiftX, shiftY) else it }
+                                            selected = strokes.filter { it.id in ids }
+                                            record(before)
+                                            Strokes.bounds(selected)?.let { growFor(it.bottom) }
+                                            return true
                                         }
 
                                         override fun selectionCleared() = deselect()

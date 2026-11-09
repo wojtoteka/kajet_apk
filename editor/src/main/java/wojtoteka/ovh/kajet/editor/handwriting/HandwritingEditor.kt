@@ -348,9 +348,8 @@ fun HandwritingEditor(
                                     model.selectWithLasso(page, polygon)
                                 }
 
-                                override fun selectionMoved(dx: Float, dy: Float, finished: Boolean) {
-                                    model.moveSelection(dx, dy, finished)
-                                }
+                                override fun selectionDropped(dx: Float, dy: Float): Boolean =
+                                    model.moveSelection(dx, dy)
 
                                 override fun selectionCleared() {
                                     model.deselectStrokes()

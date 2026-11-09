@@ -120,12 +120,10 @@ class HandwritingViewModel(
     private val _editedBox = MutableStateFlow<String?>(null)
     val editedBox: StateFlow<String?> = _editedBox.asStateFlow()
 
-    // Zbieranie jednego pociągnięcia gumki albo jednego przesunięcia zaznaczenia
+    // Zbieranie jednego pociągnięcia gumki
     private var pendingRemoved = mutableListOf<Pair<Int, InkStroke>>()
     private var pendingAdded = mutableListOf<InkStroke>()
     private var pendingPage = -1
-    private var dragTotalX = 0f
-    private var dragTotalY = 0f
 
     fun selectTool(next: EditorTool) {
         _tool.value = next
@@ -354,51 +352,45 @@ class HandwritingViewModel(
         _selectedShape.value = null
     }
 
-    fun moveSelection(dx: Float, dy: Float, finished: Boolean) {
+    /**
+     * Zaznaczenie puszczone o ([dx], [dy]) od miejsca startu. W trakcie
+     * przeciągania przesuwa je sama kartka. Zwraca false, gdy dokument się
+     * nie zmienił.
+     */
+    fun moveSelection(dx: Float, dy: Float): Boolean {
         val page = _selectionPage.value
-        if (page < 0) return
+        if (page < 0 || readOnly.value || (dx == 0f && dy == 0f)) return false
+        val sheet = document.value?.page(page) ?: return false
+        val ids = _selected.value.map { it.id }.toSet()
+        val positions = sheet.strokes.withIndex()
+            .filter { it.value.id in ids }
+            .map { it.index to it.value }
+        if (positions.isEmpty()) return false
 
-        if (!finished) {
-            dragTotalX += dx
-            dragTotalY += dy
-            val moved = _selected.value.map { it.translated(dx, dy) }
-            val oldIds = _selected.value.map { it.id }.toSet()
-            editWithoutHistory { document ->
-                val sheet = document.page(page) ?: return@editWithoutHistory document
-                val strokes = sheet.strokes.map { stroke ->
-                    if (stroke.id in oldIds) stroke.translated(dx, dy) else stroke
-                }
-                document.withPage(page) { it.copy(strokes = strokes) }
-            }
-            _selected.value = moved
-            return
-        }
-
-        if (dragTotalX != 0f || dragTotalY != 0f) {
-            val sheet = document.value?.page(page)
-            if (sheet != null) {
-                val selectedIds = _selected.value.map { it.id }.toSet()
-                val after = sheet.strokes.filter { it.id in selectedIds }
-                val before = after.map { it.translated(-dragTotalX, -dragTotalY) }
-                val positions = before.map { stroke ->
-                    sheet.strokes.indexOfFirst { it.id == stroke.id } to stroke
-                }
-                val moved = StrokeChange(page, positions, after)
-                val settled = settle(page, after)
-                if (settled == null) {
-                    history.record(moved)
-                } else {
-                    editWithoutHistory { settled.applyTo(it) }
-                    // Przesunięcie i dosunięcie do kartki to jeden ruch ręki,
-                    // więc i jeden krok cofania.
-                    history.record(CompoundChange(listOf(moved, settled)))
-                }
-                refreshButtons()
-                growIfNeeded(_selectionPage.value)
+        val after = positions.map { it.second.translated(dx, dy) }
+        val byId = after.associateBy { it.id }
+        // Kreski zostają na swoich miejscach w spisie, bo kolejność to też
+        // kolejność rysowania.
+        editWithoutHistory { document ->
+            document.withPage(page) { current ->
+                current.copy(strokes = current.strokes.map { byId[it.id] ?: it })
             }
         }
-        dragTotalX = 0f
-        dragTotalY = 0f
+        _selected.value = after
+
+        val moved = StrokeChange(page, positions, after)
+        val settled = settle(page, after)
+        if (settled == null) {
+            history.record(moved)
+        } else {
+            editWithoutHistory { settled.applyTo(it) }
+            // Przesunięcie i dosunięcie do kartki to jeden ruch ręki,
+            // więc i jeden krok cofania.
+            history.record(CompoundChange(listOf(moved, settled)))
+        }
+        refreshButtons()
+        growIfNeeded(_selectionPage.value)
+        return true
     }
 
     /*
