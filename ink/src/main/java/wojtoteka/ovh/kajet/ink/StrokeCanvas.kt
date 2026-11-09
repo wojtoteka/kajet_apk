@@ -136,7 +136,7 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
 
     private val fallbackStrokes = HashMap<Int, MutableList<InkStroke>>()
 
-    private val cache = HashMap<String, Stroke>()
+    private val meshes = MeshCache<Stroke>()
 
     private val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -342,19 +342,18 @@ class StrokeCanvas(context: Context) : FrameLayout(context) {
             val fallback = ArrayList<InkStroke>()
             for (stroke in page.strokes) {
                 live += stroke.id
-                val mesh = cache[stroke.id] ?: runCatching { Strokes.toEngine(stroke) }
-                    .getOrNull()
-                    ?.takeIf { it.inputs.size > 0 }
-                    ?.also { cache[stroke.id] = it }
+                val mesh = meshes.meshFor(stroke) { source ->
+                    runCatching { Strokes.toEngine(source) }
+                        .getOrNull()
+                        ?.takeIf { it.inputs.size > 0 }
+                }
                 // A stroke saved in the file must never disappear from the screen.
                 if (mesh != null) ready += mesh else if (stroke.pointCount > 0) fallback += stroke
             }
             engineStrokes[page.index] = ready
             if (fallback.isNotEmpty()) fallbackStrokes[page.index] = fallback
         }
-        if (cache.size > live.size) {
-            cache.keys.retainAll(live)
-        }
+        meshes.retain(live)
     }
 
     /*
