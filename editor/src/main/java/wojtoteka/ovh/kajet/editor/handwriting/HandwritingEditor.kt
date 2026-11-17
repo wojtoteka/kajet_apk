@@ -980,10 +980,6 @@ private fun TopBar(
                 onTitle = onTitle,
                 modifier = Modifier.widthIn(min = 72.dp, max = 220.dp),
             )
-            SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud, live = live)
-            if (pageCount > 1) {
-                Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
-            }
 
             VerticalDivider()
 
@@ -999,6 +995,18 @@ private fun TopBar(
                 strip()
                 swatch()
             }
+
+            /*
+              Stan zapisu na końcu paska, nie między tytułem a kolorami.
+              Napis zmienia szerokość przy każdej kresce („Zapisane 12:01" ->
+              „Zapisuję…"), a stojąc przed kolorami przesuwał je w bok
+              razem z całym paskiem. Tu zmienia się tylko jego własny kawałek.
+            */
+            VerticalDivider()
+            if (pageCount > 1) {
+                Text(words.pagesShort(pageCount), style = Kajet.type.meta, color = Kajet.colors.muted)
+            }
+            SaveIndicator(state = state, lastSave = lastSave, inCloud = inCloud, live = live)
         }
     }
 }
