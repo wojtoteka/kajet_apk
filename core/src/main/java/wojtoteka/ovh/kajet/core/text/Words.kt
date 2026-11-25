@@ -181,6 +181,14 @@ interface Strings {
     val calculatorResize: String
     val calculatorBigger: String
     val calculatorSmaller: String
+    val calculatorHistory: String
+    val calculatorHistoryEmpty: String
+    val calculatorHistoryClear: String
+    val calculatorScientific: String
+    val calculatorInverse: String
+    val calculatorAngle: String
+    val calculatorSign: String
+    val calculatorClearAll: String
     val insertDrawing: String
     val editDrawing: String
     val saveDrawingChanges: String
@@ -1679,6 +1687,14 @@ object PolishStrings : Strings {
     override val calculatorResize = "Zmień wielkość kalkulatora"
     override val calculatorBigger = "Większy kalkulator"
     override val calculatorSmaller = "Mniejszy kalkulator"
+    override val calculatorHistory = "Historia działań"
+    override val calculatorHistoryEmpty = "Tu pojawią się policzone działania. Stuknij wynik, żeby liczyć nim dalej."
+    override val calculatorHistoryClear = "Wyczyść historię"
+    override val calculatorScientific = "Funkcje naukowe"
+    override val calculatorInverse = "Funkcje odwrotne"
+    override val calculatorAngle = "Przełącz stopnie i radiany"
+    override val calculatorSign = "Zmień znak"
+    override val calculatorClearAll = "Wyczyść wszystko"
     override val insertDrawing = "Wstaw rysunek"
     override val editDrawing = "Popraw rysunek"
     override val saveDrawingChanges = "Zapisz poprawki"
@@ -2482,6 +2498,14 @@ object EnglishStrings : Strings {
     override val calculatorResize = "Resize calculator"
     override val calculatorBigger = "Larger calculator"
     override val calculatorSmaller = "Smaller calculator"
+    override val calculatorHistory = "Calculation history"
+    override val calculatorHistoryEmpty = "Finished calculations show up here. Tap a result to keep calculating with it."
+    override val calculatorHistoryClear = "Clear history"
+    override val calculatorScientific = "Scientific functions"
+    override val calculatorInverse = "Inverse functions"
+    override val calculatorAngle = "Switch degrees and radians"
+    override val calculatorSign = "Change sign"
+    override val calculatorClearAll = "Clear everything"
     override val insertDrawing = "Insert the drawing"
     override val editDrawing = "Edit the drawing"
     override val saveDrawingChanges = "Save the changes"

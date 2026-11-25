@@ -122,4 +122,209 @@ class CalculatorTest {
         assertThat(result.expression).isEqualTo("√16")
         assertThat(result.press(CalcKey.EQUALS).expression).isEqualTo("4")
     }
+
+    // --- Funkcje naukowe ---
+
+    @Test
+    fun `trygonometria w stopniach`() {
+        assertThat(eval("sin(30)")).isEqualTo("0.5")
+        assertThat(eval("cos(60)")).isEqualTo("0.5")
+        assertThat(eval("tan(45)")).isEqualTo("1")
+        // Kąty z osi liczą się dokładnie, a nie z resztkami po double.
+        assertThat(eval("cos(90)")).isEqualTo("0")
+        assertThat(eval("sin(180)")).isEqualTo("0")
+        assertThat(eval("sin(−90)")).isEqualTo("−1")
+        assertThat(eval("sin(36000030)")).isEqualTo("0.5")
+        assertThat(Calculator.evaluate("tan(90)")).isNull()
+    }
+
+    @Test
+    fun `trygonometria w radianach`() {
+        fun rad(text: String) = Calculator.evaluate(text, degrees = false)?.let(Calculator::format)
+        assertThat(rad("sin(π)")).isEqualTo("0")
+        assertThat(rad("cos(π)")).isEqualTo("−1")
+        assertThat(rad("sin(π÷6)")).isEqualTo("0.5")
+        assertThat(Calculator.evaluate("tan(π÷2)", degrees = false)).isNull()
+    }
+
+    @Test
+    fun `funkcje odwrotne`() {
+        assertThat(eval("sin⁻¹(0.5)")).isEqualTo("30")
+        assertThat(eval("cos⁻¹(0)")).isEqualTo("90")
+        assertThat(eval("tan⁻¹(1)")).isEqualTo("45")
+        assertThat(Calculator.evaluate("sin⁻¹(2)")).isNull()
+    }
+
+    @Test
+    fun `logarytmy i potegi`() {
+        assertThat(eval("log(1000)")).isEqualTo("3")
+        assertThat(eval("ln(e)")).isEqualTo("1")
+        assertThat(eval("e^(0)")).isEqualTo("1")
+        assertThat(eval("10^(3)")).isEqualTo("1000")
+        assertThat(eval("2^10")).isEqualTo("1024")
+        assertThat(eval("2^−2")).isEqualTo("0.25")
+        assertThat(eval("2^3^2")).isEqualTo("512")
+        assertThat(eval("−2^2")).isEqualTo("−4")
+        assertThat(eval("9^0.5")).isEqualTo("3")
+        assertThat(eval("5²")).isEqualTo("25")
+        assertThat(eval("2³")).isEqualTo("8")
+        assertThat(eval("4⁻¹")).isEqualTo("0.25")
+        assertThat(eval("∛27")).isEqualTo("3")
+        assertThat(eval("∛−8")).isEqualTo("−2")
+        assertThat(Calculator.evaluate("log(0)")).isNull()
+        assertThat(Calculator.evaluate("ln(−1)")).isNull()
+        assertThat(Calculator.evaluate("0⁻¹")).isNull()
+        assertThat(Calculator.evaluate("(−8)^0.5")).isNull()
+    }
+
+    @Test
+    fun `silnia`() {
+        assertThat(eval("5!")).isEqualTo("120")
+        assertThat(eval("0!")).isEqualTo("1")
+        assertThat(eval("3!!")).isEqualTo("720")
+        assertThat(Calculator.evaluate("2.5!")).isNull()
+        assertThat(Calculator.evaluate("(−3)!")).isNull()
+    }
+
+    @Test
+    fun `stale`() {
+        assertThat(eval("π")).isEqualTo("3.14159265359")
+        assertThat(eval("e")).isEqualTo("2.71828182846")
+        assertThat(eval("2×π")).isEqualTo("6.28318530718")
+    }
+
+    @Test
+    fun `duze i male liczby w zapisie naukowym`() {
+        assertThat(eval("10^(20)")).isEqualTo("1E+20")
+        assertThat(eval("25!")).isEqualTo("1.55112100433E+25")
+        assertThat(eval("10^(−12)")).isEqualTo("1E−12")
+        // Wynik w zapisie naukowym liczy się dalej.
+        assertThat(eval("1.5E+20×2")).isEqualTo("3E+20")
+        assertThat(eval("2E−7×5")).isEqualTo("0.000001")
+        val result = press(CalcKey.D2, CalcKey.D5, CalcKey.FACTORIAL, CalcKey.EQUALS)
+        assertThat(result.press(CalcKey.DIVIDE).press(CalcKey.D2).press(CalcKey.EQUALS).expression)
+            .isEqualTo("7.75560502165E+24")
+    }
+
+    // --- Klawisze naukowe ---
+
+    @Test
+    fun `funkcja po liczbie to mnozenie, a nawias domyka sie sam`() {
+        val state = press(CalcKey.D2, CalcKey.SIN, CalcKey.D3, CalcKey.D0)
+        assertThat(state.expression).isEqualTo("2×sin(30")
+        assertThat(state.preview?.let(Calculator::format)).isEqualTo("1")
+        assertThat(state.press(CalcKey.EQUALS).expression).isEqualTo("1")
+    }
+
+    @Test
+    fun `stala po liczbie i liczba po stalej to mnozenie`() {
+        assertThat(press(CalcKey.D2, CalcKey.PI).expression).isEqualTo("2×π")
+        assertThat(press(CalcKey.PI, CalcKey.D2).expression).isEqualTo("π×2")
+        assertThat(press(CalcKey.D3, CalcKey.SQUARE, CalcKey.D2).expression).isEqualTo("3²×2")
+    }
+
+    @Test
+    fun `funkcja po wyniku obejmuje wynik`() {
+        val result = press(CalcKey.D1, CalcKey.D0, CalcKey.D0, CalcKey.D0, CalcKey.EQUALS)
+        val log = result.press(CalcKey.LOG)
+        assertThat(log.expression).isEqualTo("log(1000")
+        assertThat(log.press(CalcKey.EQUALS).expression).isEqualTo("3")
+    }
+
+    @Test
+    fun `kwadrat i potega po wyniku licza dalej`() {
+        val result = press(CalcKey.D3, CalcKey.PLUS, CalcKey.D2, CalcKey.EQUALS)
+        assertThat(result.press(CalcKey.SQUARE).expression).isEqualTo("5²")
+        val power = result.press(CalcKey.POWER).press(CalcKey.D3)
+        assertThat(power.expression).isEqualTo("5^3")
+        assertThat(power.press(CalcKey.EQUALS).expression).isEqualTo("125")
+    }
+
+    @Test
+    fun `potega przyjmuje wykladnik ujemny`() {
+        val state = press(CalcKey.D2, CalcKey.POWER, CalcKey.MINUS, CalcKey.D1)
+        assertThat(state.expression).isEqualTo("2^−1")
+        assertThat(state.preview?.let(Calculator::format)).isEqualTo("0.5")
+    }
+
+    @Test
+    fun `backspace zabiera funkcje w calosci`() {
+        assertThat(press(CalcKey.D2, CalcKey.PLUS, CalcKey.ASIN).press(CalcKey.BACKSPACE).expression)
+            .isEqualTo("2+")
+        assertThat(press(CalcKey.LN).press(CalcKey.BACKSPACE).expression).isEqualTo("")
+        assertThat(press(CalcKey.D4, CalcKey.INVERSE).press(CalcKey.BACKSPACE).expression).isEqualTo("4")
+    }
+
+    @Test
+    fun `osobne nawiasy`() {
+        val state = press(
+            CalcKey.OPEN, CalcKey.D2, CalcKey.PLUS, CalcKey.D3, CalcKey.CLOSE, CalcKey.CLOSE,
+            CalcKey.TIMES, CalcKey.D4,
+        )
+        // Drugi zamykający nie ma czego zamknąć.
+        assertThat(state.expression).isEqualTo("(2+3)×4")
+        assertThat(state.press(CalcKey.EQUALS).expression).isEqualTo("20")
+    }
+
+    @Test
+    fun `zmiana znaku jak w telefonie`() {
+        assertThat(press(CalcKey.D5, CalcKey.SIGN).expression).isEqualTo("−5")
+        assertThat(press(CalcKey.D5, CalcKey.SIGN, CalcKey.SIGN).expression).isEqualTo("5")
+        val inside = press(CalcKey.D1, CalcKey.D2, CalcKey.PLUS, CalcKey.D5, CalcKey.SIGN)
+        assertThat(inside.expression).isEqualTo("12+(−5")
+        assertThat(inside.preview?.let(Calculator::format)).isEqualTo("7")
+        assertThat(inside.press(CalcKey.SIGN).expression).isEqualTo("12+5")
+        assertThat(press(CalcKey.D3, CalcKey.TIMES, CalcKey.SIGN, CalcKey.D2).expression).isEqualTo("3×(−2")
+        assertThat(press(CalcKey.SIGN, CalcKey.D4).expression).isEqualTo("(−4")
+    }
+
+    @Test
+    fun `zmiana znaku wyniku zostawia wynik`() {
+        val result = press(CalcKey.D9, CalcKey.EQUALS)
+        val negated = result.press(CalcKey.SIGN)
+        assertThat(negated.expression).isEqualTo("−9")
+        assertThat(negated.showsResult).isTrue()
+        assertThat(negated.press(CalcKey.D1).expression).isEqualTo("1")
+    }
+
+    @Test
+    fun `stopnie i radiany`() {
+        val state = press(CalcKey.SIN, CalcKey.D9, CalcKey.D0)
+        assertThat(state.preview?.let(Calculator::format)).isEqualTo("1")
+        val radians = state.toggleDegrees()
+        assertThat(radians.degrees).isFalse()
+        assertThat(radians.preview?.let(Calculator::format)).isEqualTo("0.893996663601")
+        // Czyszczenie nie przestawia jednostki kąta.
+        assertThat(radians.press(CalcKey.CLEAR).degrees).isFalse()
+    }
+
+    @Test
+    fun `po wyniku zostaje dzialanie, z ktorego wyszedl`() {
+        val result = press(CalcKey.D2, CalcKey.TIMES, CalcKey.OPEN, CalcKey.D3, CalcKey.PLUS, CalcKey.D4, CalcKey.EQUALS)
+        assertThat(result.expression).isEqualTo("14")
+        assertThat(result.previous).isEqualTo("2×(3+4)")
+        // Drugie „=" na wyniku niczego nie zmienia.
+        assertThat(result.press(CalcKey.EQUALS)).isEqualTo(result)
+    }
+
+    @Test
+    fun `liczba z historii`() {
+        assertThat(CalculatorState().withNumber("42")).isEqualTo(CalculatorState("42", showsResult = true))
+        val inside = press(CalcKey.D5, CalcKey.MINUS).withNumber("−3")
+        assertThat(inside.expression).isEqualTo("5−(−3)")
+        assertThat(inside.preview?.let(Calculator::format)).isEqualTo("8")
+        assertThat(press(CalcKey.D2).withNumber("3").expression).isEqualTo("2×3")
+    }
+
+    // --- Wyświetlacz ---
+
+    @Test
+    fun `wyswietlacz grupuje tysiace i stawia przecinek`() {
+        assertThat(CalculatorDisplay.shown("1234567.891", ',', ' ')).isEqualTo("1 234 567,891")
+        assertThat(CalculatorDisplay.shown("999+1000", ',', ' ')).isEqualTo("999+1 000")
+        assertThat(CalculatorDisplay.shown("12345.6789", '.', ',')).isEqualTo("12,345.6789")
+        // Wykładnik zapisu naukowego zostaje bez odstępów.
+        assertThat(CalculatorDisplay.shown("1.5E+1000", ',', ' ')).isEqualTo("1,5E+1000")
+        assertThat(CalculatorDisplay.shown("sin(30)×2", ',', ' ')).isEqualTo("sin(30)×2")
+    }
 }
