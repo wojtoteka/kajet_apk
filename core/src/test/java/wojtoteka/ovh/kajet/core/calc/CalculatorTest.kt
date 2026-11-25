@@ -112,15 +112,57 @@ class CalculatorTest {
     }
 
     @Test
-    fun `klawisz pierwiastka`() {
-        assertThat(press(CalcKey.D2, CalcKey.ROOT, CalcKey.D9).expression).isEqualTo("2×√9")
-        assertThat(press(CalcKey.ROOT, CalcKey.PARENS, CalcKey.D1, CalcKey.D6).expression)
-            .isEqualTo("√(16")
-        // Minus ani znak działania nie stają zaraz po pierwiastku.
-        assertThat(press(CalcKey.ROOT, CalcKey.MINUS, CalcKey.PLUS).expression).isEqualTo("√")
+    fun `klawisz pierwiastka otwiera nawias jak w telefonie`() {
+        val root = press(CalcKey.ROOT, CalcKey.D1, CalcKey.D6)
+        assertThat(root.expression).isEqualTo("√(16")
+        assertThat(root.preview?.let(Calculator::format)).isEqualTo("4")
+        // Nawias domyka się sam przy „=".
+        assertThat(root.press(CalcKey.EQUALS).expression).isEqualTo("4")
+        // Liczba przed pierwiastkiem to mnożenie.
+        assertThat(press(CalcKey.D2, CalcKey.ROOT, CalcKey.D9).expression).isEqualTo("2×√(9")
+        // Znak działania nie staje zaraz za nawiasem pierwiastka.
+        assertThat(press(CalcKey.ROOT, CalcKey.PLUS).expression).isEqualTo("√(")
         val result = press(CalcKey.D1, CalcKey.D6, CalcKey.EQUALS).press(CalcKey.ROOT)
-        assertThat(result.expression).isEqualTo("√16")
+        assertThat(result.expression).isEqualTo("√(16")
         assertThat(result.press(CalcKey.EQUALS).expression).isEqualTo("4")
+    }
+
+    @Test
+    fun `pod pierwiastkiem jest cale dzialanie w nawiasie`() {
+        // Wcześniej „√16+9" dawało 13 - pierwiastek brał tylko 16.
+        val sum = press(CalcKey.ROOT, CalcKey.D1, CalcKey.D6, CalcKey.PLUS, CalcKey.D9)
+        assertThat(sum.expression).isEqualTo("√(16+9")
+        assertThat(sum.preview?.let(Calculator::format)).isEqualTo("5")
+        // Domknięty nawias kończy pierwiastek: √(16)+9 = 13.
+        val closed = press(
+            CalcKey.ROOT, CalcKey.D1, CalcKey.D6, CalcKey.PARENS, CalcKey.PLUS, CalcKey.D9, CalcKey.EQUALS,
+        )
+        assertThat(closed.previous).isEqualTo("√(16)+9")
+        assertThat(closed.expression).isEqualTo("13")
+        assertThat(press(CalcKey.CUBE_ROOT, CalcKey.D2, CalcKey.D7, CalcKey.EQUALS).expression).isEqualTo("3")
+    }
+
+    @Test
+    fun `backspace zabiera pierwiastek razem z nawiasem`() {
+        assertThat(press(CalcKey.D4, CalcKey.PLUS, CalcKey.ROOT).press(CalcKey.BACKSPACE).expression)
+            .isEqualTo("4+")
+        assertThat(press(CalcKey.CUBE_ROOT).press(CalcKey.BACKSPACE).expression).isEqualTo("")
+    }
+
+    @Test
+    fun `zmiana znaku pod pierwiastkiem nie dokleja drugiego nawiasu`() {
+        val negative = press(CalcKey.ROOT, CalcKey.D5, CalcKey.SIGN)
+        assertThat(negative.expression).isEqualTo("√(−5")
+        assertThat(negative.preview).isNull()
+        assertThat(negative.press(CalcKey.SIGN).expression).isEqualTo("√(5")
+        // Zwykły nawias zaczęty zmianą znaku dalej schodzi w całości.
+        assertThat(press(CalcKey.D1, CalcKey.PLUS, CalcKey.D5, CalcKey.SIGN, CalcKey.SIGN).expression)
+            .isEqualTo("1+5")
+    }
+
+    @Test
+    fun `stary zapis pierwiastka bez nawiasu z historii dalej sie liczy`() {
+        assertThat(CalculatorState().withExpression("√16").press(CalcKey.EQUALS).expression).isEqualTo("4")
     }
 
     // --- Funkcje naukowe ---

@@ -124,8 +124,8 @@ private const val HISTORY_SIZE = 40
 
 /** Wysokość okienka w skali 1, rozbita na część stałą i skalowaną. */
 private val FIXED_HEIGHT = 112.dp
-private val SCALED_HEIGHT = 414.dp
-private val SCIENTIFIC_HEIGHT = SCIENTIFIC_KEY_HEIGHT * 4 + KEY_GAP * 4
+private val SCALED_HEIGHT = 462.dp
+private val SCIENTIFIC_HEIGHT = SCIENTIFIC_KEY_HEIGHT * 3 + KEY_GAP * 3
 
 /*
   Klawiatura jak w kalkulatorze telefonu: C, nawias, procent i dzielenie
@@ -150,9 +150,23 @@ private data object InverseToggle : ScienceButton
 private data object AngleToggle : ScienceButton
 
 /*
-  Funkcje naukowe - wysuwane nad zwykłą klawiaturą, jak w telefonie po
-  przekręceniu go bokiem. „INV" zamienia sinus na arcus sinus, ln na eˣ,
-  log na 10ˣ, pierwiastek na sześcienny, a kwadrat na sześcian.
+  Rząd nad cyframi, widoczny zawsze - jak w kalkulatorze telefonu, gdzie
+  pierwiastek, kwadrat, potęga i π stoją na wierzchu, a resztę wysuwa się
+  osobno. Pierwiastek nie może się chować pod f(x): to najczęściej
+  potrzebna funkcja w zeszycie.
+*/
+private val QUICK_ROW = listOf(
+    ScienceKey(CalcKey.ROOT, CalcKey.CUBE_ROOT),
+    ScienceKey(CalcKey.SQUARE, CalcKey.CUBE),
+    ScienceKey(CalcKey.POWER),
+    ScienceKey(CalcKey.PI),
+)
+
+/*
+  Pozostałe funkcje naukowe - wysuwane przyciskiem f(x) nad rzędem
+  z pierwiastkiem. „INV" zamienia sinus na arcus sinus, ln na eˣ, log na
+  10ˣ, a w rzędzie na wierzchu pierwiastek na sześcienny i kwadrat na
+  sześcian.
 */
 private val SCIENCE_PAD = listOf(
     listOf(InverseToggle, AngleToggle, ScienceKey(CalcKey.OPEN), ScienceKey(CalcKey.CLOSE)),
@@ -160,17 +174,11 @@ private val SCIENCE_PAD = listOf(
         ScienceKey(CalcKey.SIN, CalcKey.ASIN),
         ScienceKey(CalcKey.COS, CalcKey.ACOS),
         ScienceKey(CalcKey.TAN, CalcKey.ATAN),
-        ScienceKey(CalcKey.PI),
+        ScienceKey(CalcKey.E),
     ),
     listOf(
         ScienceKey(CalcKey.LN, CalcKey.EXP),
         ScienceKey(CalcKey.LOG, CalcKey.TEN_POWER),
-        ScienceKey(CalcKey.POWER),
-        ScienceKey(CalcKey.E),
-    ),
-    listOf(
-        ScienceKey(CalcKey.ROOT, CalcKey.CUBE_ROOT),
-        ScienceKey(CalcKey.SQUARE, CalcKey.CUBE),
         ScienceKey(CalcKey.FACTORIAL),
         ScienceKey(CalcKey.INVERSE),
     ),
@@ -398,6 +406,9 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     selected = scientific,
                     onClick = {
                         scientific = !scientific
+                        // Schowane INV nie może zostać włączone - w rzędzie na
+                        // wierzchu stałby wtedy ∛ zamiast √ bez widocznego powodu.
+                        if (!scientific) inverse = false
                         prefs.edit().putBoolean(PREF_SCIENTIFIC, scientific).apply()
                     },
                 )
@@ -434,24 +445,23 @@ fun CalculatorPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     Modifier.padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(KEY_GAP),
                 ) {
-                    if (scientific) {
-                        SCIENCE_PAD.forEach { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                                row.forEach { button ->
-                                    ScienceKeyButton(
-                                        button = button,
-                                        inverse = inverse,
-                                        degrees = state.degrees,
-                                        scale = shownScale,
-                                        onKey = ::press,
-                                        onInverse = { inverse = !inverse },
-                                        onAngle = {
-                                            state = state.toggleDegrees()
-                                            prefs.edit().putBoolean(PREF_DEGREES, state.degrees).apply()
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
+                    val scienceRows = if (scientific) SCIENCE_PAD + listOf(QUICK_ROW) else listOf(QUICK_ROW)
+                    scienceRows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            row.forEach { button ->
+                                ScienceKeyButton(
+                                    button = button,
+                                    inverse = inverse,
+                                    degrees = state.degrees,
+                                    scale = shownScale,
+                                    onKey = ::press,
+                                    onInverse = { inverse = !inverse },
+                                    onAngle = {
+                                        state = state.toggleDegrees()
+                                        prefs.edit().putBoolean(PREF_DEGREES, state.degrees).apply()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
                             }
                         }
                     }

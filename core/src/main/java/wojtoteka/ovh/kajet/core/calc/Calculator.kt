@@ -27,7 +27,7 @@ import kotlin.math.pow
 
   Zapis działania:
     sin( cos( tan( sin⁻¹( cos⁻¹( tan⁻¹( ln( log(  - funkcja z nawiasem,
-    √ ∛                                          - pierwiastek najbliższej liczby albo nawiasu,
+    √( ∛(                                        - pierwiastek z nawiasem, jak w telefonie,
     ^                                            - potęga (2^10, e^(…), 10^(…)),
     ² ³ ⁻¹ ! %                                   - za liczbą: kwadrat, sześcian, odwrotność, silnia, procent,
     π e                                          - stałe,
@@ -144,7 +144,7 @@ data class CalculatorState(
             when (key) {
                 // Znak liczby zmienia sam wynik i ten dalej jest wynikiem.
                 CalcKey.SIGN -> return copy(expression = sign(expression), previous = "")
-                // Pierwiastek i funkcja po wyniku biorą sam wynik: 16 = √ daje √16.
+                // Pierwiastek i funkcja po wyniku biorą sam wynik: 16 = √ daje √(16.
                 in WRAPS_RESULT -> return CalculatorState(
                     prefixOf(key) + expression,
                     degrees = degrees,
@@ -192,7 +192,7 @@ data class CalculatorState(
             CalcKey.PERCENT, CalcKey.SQUARE, CalcKey.CUBE, CalcKey.INVERSE, CalcKey.FACTORIAL,
         )
 
-        /** Klawisze, które po wyniku obejmują wynik: √16, sin(30. */
+        /** Klawisze, które po wyniku obejmują wynik: √(16, sin(30. */
         val WRAPS_RESULT = setOf(
             CalcKey.ROOT, CalcKey.CUBE_ROOT,
             CalcKey.SIN, CalcKey.COS, CalcKey.TAN,
@@ -205,12 +205,20 @@ data class CalculatorState(
          * Dłuższe przed krótszymi, bo „sin⁻¹(" kończy się tak jak „⁻¹(".
          */
         private val UNITS = listOf(
-            "sin⁻¹(", "cos⁻¹(", "tan⁻¹(", "sin(", "cos(", "tan(", "ln(", "log(", "⁻¹",
+            "sin⁻¹(", "cos⁻¹(", "tan⁻¹(", "sin(", "cos(", "tan(", "ln(", "log(", "√(", "∛(", "⁻¹",
         )
 
+        /*
+          Pierwiastek wchodzi od razu z nawiasem - tak jak w kalkulatorze
+          telefonu. Bez nawiasu nie było widać, co jest pod pierwiastkiem:
+          „√16+9" dawało 13, choć człowiek chciał √25. Teraz pisze się
+          „√(16+9" i od razu widać, że to 5; nawias domyka się sam przy „=",
+          więc „√ 1 6 =" daje 4 jak dawniej. Stary zapis bez nawiasu („√9")
+          z historii dalej się liczy.
+        */
         fun prefixOf(key: CalcKey): String = when (key) {
-            CalcKey.ROOT -> "√"
-            CalcKey.CUBE_ROOT -> "∛"
+            CalcKey.ROOT -> "√("
+            CalcKey.CUBE_ROOT -> "∛("
             CalcKey.SIN -> "sin("
             CalcKey.COS -> "cos("
             CalcKey.TAN -> "tan("
@@ -311,8 +319,14 @@ data class CalculatorState(
             return when {
                 head.isEmpty() -> "−$number"
                 head == "−" -> number
-                head.endsWith("(−") -> head.dropLast(2) + number
+                // Nawias zaczęty zmianą znaku schodzi razem z minusem: 12+(−5 → 12+5.
+                head.endsWith("(−") && (head.length == 2 || head[head.length - 3] in OPERATORS) ->
+                    head.dropLast(2) + number
+                // W nawiasie, który już był (√(, sin(, zwykły), schodzi sam minus.
+                head.endsWith("(−") -> head.dropLast(1) + number
                 head.endsWith("−") && head[head.length - 2] in "×÷^" -> head.dropLast(1) + number
+                // Zaraz za nawiasem wystarczy sam minus: √(5 → √(−5.
+                head.endsWith("(") -> "$head−$number"
                 else -> "$head(−$number"
             }
         }
