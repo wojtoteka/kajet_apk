@@ -194,6 +194,10 @@ internal class EditLine(
         headingLine = 0
     }
 
+    /** Pusty akapit bez budowy - sam odstęp między akapitami. */
+    fun isBlankParagraph(): Boolean =
+        kind == LineKind.PARAGRAPH && prefix.isEmpty() && text.isBlank()
+
     /** Pusta pozycja listy albo cytatu - Enter w niej kończy listę. */
     fun endsListOnEnter(): Boolean = prefix.isNotEmpty() && kind in listKinds
 
@@ -271,12 +275,20 @@ internal class EditLine(
          * w Wordzie. Numer stał w treści na sztywno, więc po skasowaniu pozycji
          * ze środka lista zostawała z dziurą („1. 3."), a po wypunktowaniu
          * kilku akapitów naraz każdy miał „1.". Pierwsza pozycja ciągu
-         * zachowuje swój numer; ciąg przerywa każdy wiersz spoza listy.
-         * Podlisty (głębsze wcięcie) liczą się osobno.
+         * zachowuje swój numer; ciąg przerywa każdy niepusty wiersz spoza
+         * listy. Podlisty (głębsze wcięcie) liczą się osobno.
+         *
+         * Pusty wiersz między pozycjami to tylko odstęp, a nie koniec listy -
+         * tak samo czyta to markdown i tak samo liczy serwer (rich-text.ts,
+         * ListNumbering). Wcześniej „1. punkt", pusty wiersz, „2. punkt"
+         * był na stronie dwiema listami od 1, a zapis ze strony odsyłał do
+         * tabletu „1. punkt", pusty wiersz, „1. punkt". Taka zepsuta lista
+         * wraca tu do kolejnych numerów przy najbliższej zmianie notatki.
          */
         fun renumber(lines: List<EditLine>) {
             val last = HashMap<Int, Int>()
             for (line in lines) {
+                if (line.isBlankParagraph()) continue
                 when (line.kind) {
                     LineKind.NUMBER -> {
                         val match = numberedPrefix.find(line.prefix) ?: continue

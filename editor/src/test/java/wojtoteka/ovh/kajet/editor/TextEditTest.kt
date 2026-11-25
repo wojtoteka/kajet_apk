@@ -481,4 +481,30 @@ class TextEditTest {
 
         assertThat(field.text).isEqualTo("1. raz\n2. dwa\n3. trzy")
     }
+
+    @Test
+    fun `pusty wiersz miedzy pozycjami nie zaczyna listy od nowa`() {
+        // Tak wracała lista po zapisie ze strony: każdy kawałek od 1.
+        val field = Field("1. punkt\n\n1. punkt")
+        field.type("y")
+
+        assertThat(field.text).isEqualTo("1. punkt\n\n2. punkty")
+    }
+
+    @Test
+    fun `akapit z trescia dalej przerywa numeracje`() {
+        val field = Field("1. raz\n\nakapit\n\n1. znowu")
+        field.type("!")
+
+        assertThat(field.text).isEqualTo("1. raz\n\nakapit\n\n1. znowu!")
+    }
+
+    @Test
+    fun `numery akapitow rozdzielonych pustym wierszem ida po kolei`() {
+        val field = Field("raz\n\ndwa")
+        field.select(0, TextLayout.of(field.text).visible.length)
+        field.paragraphs(LineKind.NUMBER)
+
+        assertThat(field.text).isEqualTo("1. raz\n\n2. dwa")
+    }
 }
