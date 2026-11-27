@@ -62,25 +62,24 @@ fun LiveLabel(model: NoteViewModel, modifier: Modifier = Modifier) {
         freshAuthor = null
     }
 
-    if (status == LiveStatus.OFF && !readOnly && !gone) return
+    val link = calm(status)
+    if (link == LiveCalm.Shown.NONE && !readOnly && !gone) return
 
+    val offline = link == LiveCalm.Shown.OFFLINE
     val label = when {
         gone -> words.liveGone
         readOnly -> words.liveReadOnly
-        // Kółka z inicjałami same mówią, że jesteśmy połączeni - napis mówi
-        // wtedy, czyje to kółka.
-        status == LiveStatus.LIVE && people.isNotEmpty() -> words.liveOthersHere
-        status == LiveStatus.LIVE -> words.liveNow
-        status == LiveStatus.CONNECTING -> words.liveConnecting
-        else -> words.liveOffline
+        offline -> words.liveOffline
+        else -> words.liveNow
     }
     val about = when {
         gone -> words.liveGoneAbout
-        status == LiveStatus.OFFLINE -> words.liveOfflineAbout
+        offline -> words.liveOfflineAbout
+        people.isNotEmpty() -> "$label. ${words.liveOthersHere} ${people.joinToString { it.name }}"
         else -> label
     }
     val labelColor = when {
-        gone || status == LiveStatus.OFFLINE -> colors.danger
+        gone || offline -> colors.danger
         else -> colors.muted
     }
 
@@ -136,6 +135,73 @@ fun LiveLabel(model: NoteViewModel, modifier: Modifier = Modifier) {
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/**
+ * Napis łącza, który widać - spokojniejszy niż prawdziwy stan sesji.
+ *
+ * Strumień zmian zrywa się i wraca sam (serwer, pośrednik, zmiana sieci),
+ * a po drodze sesja przechodzi przez „Offline" i „Łączę…". Pasek pokazywał
+ * każdy z tych kroków, więc „Offline" mignęło i znikało, a obok „Zapisane"
+ * stało raz to, raz tamto. Teraz napis jest jeden z dwóch: „Połączono" albo
+ * „Offline", a krótkie zerwanie (do [LiveCalm.DROP_GRACE_MS]) go nie rusza.
+ */
+@Composable
+private fun calm(status: LiveStatus): LiveCalm.Shown {
+    var shown by remember { mutableStateOf(LiveCalm.Shown.NONE) }
+    // Od kiedy sesja nie jest na żywo - nie liczy się od nowa przy każdym
+    // kroku ponownego łączenia, inaczej „Offline" nie pokazałoby się nigdy.
+    var since by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(status) {
+        val now = System.currentTimeMillis()
+        since = if (status == LiveStatus.LIVE || status == LiveStatus.OFF) null else since ?: now
+        val start = since ?: now
+        shown = LiveCalm.shown(shown, status, now - start)
+        val wait = LiveCalm.recheckIn(shown, status, now - start) ?: return@LaunchedEffect
+        delay(wait)
+        shown = LiveCalm.shown(shown, status, System.currentTimeMillis() - start)
+    }
+    return shown
+}
+
+/** Rachunek [calm] bez Compose - żeby dało się go sprawdzić testem. */
+internal object LiveCalm {
+    enum class Shown { NONE, CONNECTED, OFFLINE }
+
+    /** Tyle może trwać zerwane łącze, zanim „Połączono" zmieni się w „Offline". */
+    const val DROP_GRACE_MS = 6_000L
+
+    /** Tyle czeka pierwsze łączenie po otwarciu notatki, zanim pasek powie „Offline". */
+    const val CONNECT_GRACE_MS = 4_000L
+
+    /**
+     * Co pokazać, gdy dotąd widać [shown], sesja jest w stanie [status],
+     * a na żywo nie jest od [notLiveMs] milisekund.
+     */
+    fun shown(shown: Shown, status: LiveStatus, notLiveMs: Long): Shown = when (status) {
+        LiveStatus.LIVE -> Shown.CONNECTED
+        LiveStatus.OFF -> Shown.NONE
+        else -> when (shown) {
+            Shown.OFFLINE -> Shown.OFFLINE
+            Shown.CONNECTED -> if (notLiveMs >= DROP_GRACE_MS) Shown.OFFLINE else Shown.CONNECTED
+            // Pierwsze łączenie: bez sieci od razu „Offline", w trakcie - chwila ciszy.
+            Shown.NONE -> when {
+                status == LiveStatus.OFFLINE -> Shown.OFFLINE
+                notLiveMs >= CONNECT_GRACE_MS -> Shown.OFFLINE
+                else -> Shown.NONE
+            }
+        }
+    }
+
+    /** Za ile sprawdzić jeszcze raz, bo napis może się zmienić; null - nie zmieni się sam. */
+    fun recheckIn(shown: Shown, status: LiveStatus, notLiveMs: Long): Long? {
+        if (status == LiveStatus.LIVE || status == LiveStatus.OFF) return null
+        return when (shown) {
+            Shown.CONNECTED -> (DROP_GRACE_MS - notLiveMs).coerceAtLeast(0)
+            Shown.NONE -> (CONNECT_GRACE_MS - notLiveMs).coerceAtLeast(0)
+            Shown.OFFLINE -> null
         }
     }
 }
