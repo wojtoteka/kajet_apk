@@ -428,6 +428,85 @@ class EditorUiTest {
         assertThat(shown()).isEqualTo("Ala\nTytul")
     }
 
+    @Test
+    fun `H1 H2 H3 po kolei na tym samym wierszu i zdjecie naglowka`() {
+        val editor = open("Ala\nTytul")
+        select(0, 4, 9)
+        rule.runOnIdle { editor.heading(1) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("Ala\n# Tytul")
+
+        select(0, 4, 9)
+        rule.runOnIdle { editor.heading(2) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("Ala\n## Tytul")
+
+        select(0, 4, 9)
+        rule.runOnIdle { editor.heading(3) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("Ala\n### Tytul")
+        assertThat(shown()).isEqualTo("Ala\nTytul")
+
+        // To samo naciśnięcie zdejmuje nagłówek.
+        select(0, 4, 9)
+        rule.runOnIdle { editor.heading(3) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("Ala\nTytul")
+        assertThat(shown()).isEqualTo("Ala\nTytul")
+    }
+
+    @Test
+    fun `H2 i H1 na slowie w zdaniu podmieniaja poziom`() {
+        val editor = open("Ala ma kota")
+        select(0, 4, 6)
+        rule.runOnIdle { editor.heading(2) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("""Ala <span class="h2">ma</span> kota""")
+
+        select(0, 4, 6)
+        rule.runOnIdle { editor.heading(1) }
+        rule.waitForIdle()
+        assertThat(editor.markdown).isEqualTo("""Ala <span class="h1">ma</span> kota""")
+        assertThat(shown()).isEqualTo("Ala ma kota")
+    }
+
+    @Test
+    fun `kratka ze spacja z klawiatury dalej robi naglowek`() {
+        val editor = open("Ala")
+        cursorAt(0, 3)
+        enter()
+        type("#")
+        type(" ")
+        type("Tytul")
+
+        assertThat(editor.markdown).isEqualTo("Ala\n# Tytul")
+        assertThat(shown()).isEqualTo("Ala\nTytul")
+    }
+
+    @Test
+    fun `grawisy z klawiatury dalej robia kod`() {
+        val editor = open("Ala")
+        cursorAt(0, 3)
+        "  `ls`".forEach { type(it.toString()) }
+
+        assertThat(editor.markdown).isEqualTo("Ala  `ls`")
+        assertThat(shown()).isEqualTo("Ala  ls")
+    }
+
+    @Test
+    fun `wiersz dopisany nad lista numerowana zostawia numery od jedynki`() {
+        val editor = open("Tekst\n1. raz\n2. dwa\n3. trzy")
+        cursorAt(0, 9)
+        enter()
+        assertThat(editor.markdown).isEqualTo("Tekst\n1. \n2. raz\n3. dwa\n4. trzy")
+
+        cursorAt(0, 9)
+        backspace()
+        type("Nowy wiersz")
+
+        assertThat(editor.markdown).isEqualTo("Tekst\nNowy wiersz\n1. raz\n2. dwa\n3. trzy")
+    }
+
     // --- Budowa wielu akapitów naraz ---
 
     @Test
