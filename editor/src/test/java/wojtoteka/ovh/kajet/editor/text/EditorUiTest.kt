@@ -133,6 +133,13 @@ class EditorUiTest {
                             Shortcut.BOLD -> toggle(SpanType.BOLD)
                             Shortcut.ITALIC -> toggle(SpanType.ITALIC)
                             Shortcut.UNDERLINE -> toggle(SpanType.UNDERLINE)
+                            // Tak samo jak TextEditor.onShortcut.
+                            Shortcut.HARD_SPACE -> format { field ->
+                                val typed = TextCommands.typedAtCursor(field, TextCommands.HARD_SPACE)
+                                val outcome = TextEdit.typed(field, typed, pending)
+                                pending = outcome.pending
+                                outcome.field ?: typed
+                            }
                             else -> Unit
                         }
                         true
@@ -505,6 +512,47 @@ class EditorUiTest {
         type("Nowy wiersz")
 
         assertThat(editor.markdown).isEqualTo("Tekst\nNowy wiersz\n1. raz\n2. dwa\n3. trzy")
+    }
+
+    // --- Twarda spacja ---
+
+    @Test
+    fun `ctrl shift spacja wstawia twarda spacje`() {
+        val editor = open("Ala")
+        cursorAt(0, 3)
+        field().performKeyInput {
+            withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Spacebar) } }
+        }
+        rule.waitForIdle()
+        type("ma")
+
+        assertThat(editor.markdown).isEqualTo("Ala\u00A0ma")
+        assertThat(shown()).isEqualTo("Ala\u00A0ma")
+    }
+
+    @Test
+    fun `alt spacja tez wstawia twarda spacje, a zwykla spacja zostaje zwykla`() {
+        val editor = open("w")
+        cursorAt(0, 1)
+        field().performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Spacebar) } }
+        rule.waitForIdle()
+        type("domu jest")
+
+        assertThat(editor.markdown).isEqualTo("w\u00A0domu jest")
+    }
+
+    @Test
+    fun `twarda spacja w pogrubieniu zostaje pogrubiona`() {
+        val editor = open("**Ala**")
+        cursorAt(0, 3)
+        field().performKeyInput {
+            withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Spacebar) } }
+        }
+        rule.waitForIdle()
+        type("ma")
+
+        assertThat(editor.markdown).isEqualTo("**Ala\u00A0ma**")
+        assertThat(shown()).isEqualTo("Ala\u00A0ma")
     }
 
     // --- Budowa wielu akapitów naraz ---

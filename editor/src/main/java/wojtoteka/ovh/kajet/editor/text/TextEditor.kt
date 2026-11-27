@@ -443,6 +443,15 @@ fun TextEditor(
                 pending = PendingFormat()
                 model.redo()
             }
+
+            // Wpisana tak samo jak każdy inny znak - z formatami czekającymi na
+            // pisanie i za ukrytymi znacznikami, nie w ich środku.
+            Shortcut.HARD_SPACE -> return format { field ->
+                val typed = TextCommands.typedAtCursor(field, TextCommands.HARD_SPACE)
+                val outcome = TextEdit.typed(field, typed, pending)
+                pending = outcome.pending
+                outcome.field ?: typed
+            }
         }
         return true
     }

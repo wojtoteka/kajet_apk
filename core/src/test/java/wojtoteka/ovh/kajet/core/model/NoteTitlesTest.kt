@@ -16,6 +16,12 @@ class NoteTitlesTest {
     }
 
     @Test
+    fun `twarda spacja w tytule jest zwykla, tak jak na serwerze`() {
+        assertThat(NoteTitles.fromMarkdown("Zakupy w\u00A0domu\nmleko"))
+            .isEqualTo("Zakupy w domu")
+    }
+
+    @Test
     fun `nie nazywa notatki od wiersza pisanego w tej chwili`() {
         // Autozapis rusza ułamek sekundy po pierwszym znaku - „L" nie może
         // zostać tytułem notatki na zawsze.

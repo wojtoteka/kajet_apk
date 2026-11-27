@@ -91,7 +91,9 @@ object NoteTitles {
         .replace(strike, "$1")
         .replace(mark, "$1")
         .replace(italic, "$1")
-        .replace(Regex("""\s+"""), " ")
+        // Twarda spacja też - w note-title.ts „\s" łapie ją sam, tu trzeba ją
+        // wymienić, inaczej obie strony podpowiadałyby różny tytuł.
+        .replace(Regex("""[\s\u00A0]+"""), " ")
         .trim()
 
     /**
