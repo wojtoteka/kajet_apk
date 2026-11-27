@@ -296,11 +296,19 @@ object TextFormat {
      * [removedTo], a w to miejsce weszło [added]. Liczone od wspólnego
      * początku i wspólnego końca, więc obejmuje i dopisanie, i skasowanie,
      * i podmianę zaznaczenia. Null, gdy zapisy są takie same.
+     *
+     * [selection] to kursor (albo zaznaczenie) PRZED zmianą. Przy powtórzonych
+     * znakach sam wspólny początek bywa dwuznaczny: Enter w pustej pozycji
+     * „1. " nad „2. raz" daje ten sam zapis, co Enter przed „2. raz" - i wspólny
+     * początek wskazywał to drugie, więc zamiast końca listy rosła nowa pozycja.
+     * Klawiatura zmienia tekst tam, gdzie stoi kursor, więc najpierw sprawdzamy
+     * właśnie to miejsce.
      */
     internal class Change(val from: Int, val removedTo: Int, val added: String)
 
-    internal fun change(before: String, after: String): Change? {
+    internal fun change(before: String, after: String, selection: TextRange? = null): Change? {
         if (before == after) return null
+        if (selection != null) atCursor(before, after, selection)?.let { return it }
 
         val shorter = minOf(before.length, after.length)
         var start = 0
@@ -319,6 +327,37 @@ object TextFormat {
             removedTo = before.length - tail,
             added = after.substring(start, after.length - tail),
         )
+    }
+
+    /** Zmiana, która zgadza się z kursorem [selection]; null, gdy nie da się jej tak wyjaśnić. */
+    private fun atCursor(before: String, after: String, selection: TextRange): Change? {
+        val from = selection.min.coerceIn(0, before.length)
+        val to = selection.max.coerceIn(from, before.length)
+        val kept = before.length - to
+
+        // Pisanie w miejscu kursora albo w miejsce zaznaczenia.
+        if (after.length >= from + kept && after.startsWith(before.substring(0, from)) &&
+            after.endsWith(before.substring(to))
+        ) {
+            val added = after.substring(from, after.length - kept)
+            if (added.isNotEmpty() || to > from) return Change(from, to, added)
+        }
+        if (from != to) return null
+
+        // Backspace (znaki przed kursorem) albo Delete (za kursorem).
+        val gone = before.length - after.length
+        if (gone <= 0) return null
+        if (from >= gone && before.regionMatches(0, after, 0, from - gone) &&
+            before.regionMatches(from, after, from - gone, kept)
+        ) {
+            return Change(from - gone, from, "")
+        }
+        if (to + gone <= before.length && before.regionMatches(0, after, 0, from) &&
+            before.regionMatches(from + gone, after, from, before.length - from - gone)
+        ) {
+            return Change(from, from + gone, "")
+        }
+        return null
     }
 
     // --- Ułożenie akapitu ---

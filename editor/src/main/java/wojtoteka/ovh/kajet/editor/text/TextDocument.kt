@@ -15,6 +15,9 @@ import wojtoteka.ovh.kajet.core.model.SpanType
   krzywo.
 */
 
+/** Pozycja listy numerowanej: wcięcie (ile spacji przed numerem) i numer. */
+internal class Numbered(val indent: Int, val number: Int)
+
 /** Miejsce cięcia wiersza i to, czy cięcie zabrało znak listy. */
 internal class Cut(val index: Int, val prefixCut: Boolean)
 
@@ -41,6 +44,14 @@ internal class EditLine(
      */
     var headingLine: Int = 0,
 ) {
+    /**
+     * Numer, który ten akapit miał jako pozycja listy numerowanej, zanim
+     * w tej zmianie przestał nią być - z wcięciem, na którym stał. Przejmuje
+     * go następna pozycja na tym wcięciu (patrz [renumber]). Żyje tylko do
+     * zapisu: kolejna zmiana czyta wiersze od nowa i już go nie ma.
+     */
+    var handedNumber: Numbered? = null
+
     val visiblePrefix: Int get() = if (prefixHidden) 0 else prefix.length
 
     fun visibleLength(): Int = visiblePrefix + hidden.count { !it }
@@ -175,7 +186,15 @@ internal class EditLine(
         }
     }
 
-    fun dropPrefix() {
+    /**
+     * Zdejmuje budowę akapitu. Pozycja listy numerowanej oddaje przy tym
+     * swój numer następnej ([handedNumber]) - jak w Wordzie: po zdjęciu
+     * numeru z pierwszej pozycji reszta listy liczy się dalej od 1, a nie
+     * od 2. [handOver] = false tam, gdzie znak listy schodzi z kopii wiersza,
+     * a oryginał zostaje pozycją ze swoim numerem.
+     */
+    fun dropPrefix(handOver: Boolean = true) {
+        if (handOver && kind == LineKind.NUMBER) numbered()?.let { handedNumber = it }
         prefix = ""
         prefixHidden = false
         kind = LineKind.PARAGRAPH
@@ -192,6 +211,28 @@ internal class EditLine(
     fun clearHeading() {
         for (i in attrs.indices) attrs[i] = attrs[i].without(SpanType.HEADING)
         headingLine = 0
+    }
+
+    /** Wcięcie i numer pozycji listy numerowanej; null, gdy wiersz nią nie jest. */
+    fun numbered(): Numbered? {
+        if (kind != LineKind.NUMBER) return null
+        val match = numberedPrefix.find(prefix) ?: return null
+        return Numbered(match.groupValues[1].length, match.groupValues[2].toIntOrNull() ?: 1)
+    }
+
+    /**
+     * Ten wiersz staje w miejscu pozycji [gone], która właśnie zniknęła
+     * (zaznaczenie od jej początku skasowało ją razem z kawałkiem tego
+     * wiersza). Pozycja na tym samym wcięciu bierze jej numer, cokolwiek
+     * innego oddaje go dalej.
+     */
+    fun takeOver(gone: Numbered) {
+        val own = numbered()
+        if (own != null && own.indent == gone.indent) {
+            prefix = numberedPrefix.replace(prefix) { it.groupValues[1] + gone.number + it.groupValues[3] + " " }
+        } else if (own == null) {
+            handedNumber = gone
+        }
     }
 
     /** Pusty akapit bez budowy - sam odstęp między akapitami. */
@@ -226,7 +267,7 @@ internal class EditLine(
         val rest = slice(at, text.length)
         remove(at, text.length)
         if (!continueStructure) {
-            rest.dropPrefix()
+            rest.dropPrefix(handOver = false)
             return rest
         }
         when (kind) {
@@ -275,8 +316,10 @@ internal class EditLine(
          * w Wordzie. Numer stał w treści na sztywno, więc po skasowaniu pozycji
          * ze środka lista zostawała z dziurą („1. 3."), a po wypunktowaniu
          * kilku akapitów naraz każdy miał „1.". Pierwsza pozycja ciągu
-         * zachowuje swój numer; ciąg przerywa każdy niepusty wiersz spoza
-         * listy. Podlisty (głębsze wcięcie) liczą się osobno.
+         * zachowuje swój numer - chyba że przejmuje numer pozycji, która
+         * w tej zmianie przestała nią być ([handedNumber]); ciąg przerywa
+         * każdy niepusty wiersz spoza listy. Podlisty (głębsze wcięcie)
+         * liczą się osobno.
          *
          * Pusty wiersz między pozycjami to tylko odstęp, a nie koniec listy -
          * tak samo czyta to markdown i tak samo liczy serwer (rich-text.ts,
@@ -287,25 +330,42 @@ internal class EditLine(
          */
         fun renumber(lines: List<EditLine>) {
             val last = HashMap<Int, Int>()
+            // Numer oddany przez akapit, który przestał być pozycją listy -
+            // od niego liczy się następna pozycja na tym wcięciu. Bez tego
+            // Enter na początku „1. raz" i Backspace w pustej pozycji nad nim
+            // (czyli dopisanie czegoś nad listą) zostawiały listę od 2.
+            val handed = HashMap<Int, Int>()
             for (line in lines) {
-                if (line.isBlankParagraph()) continue
-                when (line.kind) {
-                    LineKind.NUMBER -> {
-                        val match = numberedPrefix.find(line.prefix) ?: continue
-                        val indent = match.groupValues[1].length
-                        last.keys.removeAll { it > indent }
-                        val number = last[indent]?.plus(1) ?: match.groupValues[2].toIntOrNull() ?: 1
-                        last[indent] = number
-                        line.prefix = match.groupValues[1] + number + match.groupValues[3] + " "
-                    }
+                val handOver = line.handedNumber.takeIf { line.kind != LineKind.NUMBER }
+                if (!line.isBlankParagraph()) {
+                    when (line.kind) {
+                        LineKind.NUMBER -> {
+                            val match = numberedPrefix.find(line.prefix) ?: continue
+                            val indent = match.groupValues[1].length
+                            last.keys.removeAll { it > indent }
+                            handed.keys.removeAll { it > indent }
+                            val number = last[indent]?.plus(1)
+                                ?: handed[indent]
+                                ?: match.groupValues[2].toIntOrNull()
+                                ?: 1
+                            handed.remove(indent)
+                            last[indent] = number
+                            line.prefix = match.groupValues[1] + number + match.groupValues[3] + " "
+                        }
 
-                    LineKind.BULLET, LineKind.TASK -> {
-                        val indent = line.prefix.length - line.prefix.trimStart().length
-                        last.keys.removeAll { it >= indent }
-                    }
+                        LineKind.BULLET, LineKind.TASK -> {
+                            val indent = line.prefix.length - line.prefix.trimStart().length
+                            last.keys.removeAll { it >= indent }
+                            handed.keys.removeAll { it > indent }
+                        }
 
-                    else -> last.clear()
+                        else -> {
+                            last.clear()
+                            handed.clear()
+                        }
+                    }
                 }
+                if (handOver != null) handed[handOver.indent] = handOver.number
             }
         }
 
@@ -344,6 +404,7 @@ internal class EditLine(
                 close = style.close,
                 headingLine = style.headingLine,
             )
+            merged.handedNumber = style.handedNumber
             // Nagłówek akapitu idzie za budową, jak w Wordzie: zwykły akapit
             // złączony z nagłówkiem pod spodem zostaje zwykły, a nagłówek
             // złączony z akapitem pod spodem obejmuje całość.
