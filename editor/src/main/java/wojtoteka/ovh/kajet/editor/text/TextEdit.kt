@@ -37,7 +37,7 @@ object TextEdit {
         pending: PendingFormat,
     ): Outcome {
         val before = previous.text
-        val change = TextFormat.change(before, typed.text) ?: return Outcome(null, pending)
+        val change = TextFormat.change(before, typed.text, previous.selection) ?: return Outcome(null, pending)
         val layout = TextLayout.of(before)
         val lines = EditLine.from(layout)
 
@@ -92,6 +92,9 @@ object TextEdit {
             val head = first.slice(0, cutA.index)
             val tail = last.slice(cutB.index, last.text.length)
             val merged = EditLine.styled(line, head, tail)
+            // Pierwsza pozycja zniknęła cała - jej numer nie może zniknąć
+            // z nią, bo lista zaczynałaby się od numeru drugiej.
+            if (line === last) first.numbered()?.let { merged.takeOver(it) }
             for (i in la..lb) lines.removeAt(la)
             lines.add(la, merged)
             at = head.text.length

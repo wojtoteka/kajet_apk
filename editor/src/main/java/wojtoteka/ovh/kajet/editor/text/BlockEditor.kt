@@ -47,6 +47,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -103,17 +104,26 @@ import wojtoteka.ovh.kajet.core.text.TabStops
 private val CURSOR_MARGIN = 56.dp
 
 /** Skróty klawiatury w polu notatki - jak w Wordzie. */
-enum class Shortcut { BOLD, ITALIC, UNDERLINE, UNDO, REDO }
+enum class Shortcut { BOLD, ITALIC, UNDERLINE, UNDO, REDO, HARD_SPACE }
 
 /**
  * Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Z i Ctrl+Y (albo Ctrl+Shift+Z) z klawiatury
  * podpiętej do tabletu. Bez tego Ctrl+Z nie robił nic, a Ctrl+B wstawiał
  * w notatkę literę „b".
+ *
+ * Do tego twarda spacja, jak w Wordzie: Ctrl+Shift+Spacja - spacja, na której
+ * wiersz się nie łamie („w domu", „5 kg"). Alt+Spacja robi to samo, jak
+ * Option+Spacja na Macu - na wypadek, gdyby Ctrl+Spacja przełączała akurat
+ * układ klawiatury.
  */
 private fun Modifier.shortcuts(onShortcut: (Shortcut) -> Boolean): Modifier = onPreviewKeyEvent { event ->
-    if (event.type != KeyEventType.KeyDown || !(event.isCtrlPressed || event.isMetaPressed)) {
-        return@onPreviewKeyEvent false
+    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    if (event.key == Key.Spacebar) {
+        val hard = (event.isCtrlPressed && event.isShiftPressed) ||
+            (event.isAltPressed && !event.isCtrlPressed && !event.isMetaPressed)
+        return@onPreviewKeyEvent hard && onShortcut(Shortcut.HARD_SPACE)
     }
+    if (!(event.isCtrlPressed || event.isMetaPressed)) return@onPreviewKeyEvent false
     val shortcut = when (event.key) {
         Key.B -> Shortcut.BOLD
         Key.I -> Shortcut.ITALIC

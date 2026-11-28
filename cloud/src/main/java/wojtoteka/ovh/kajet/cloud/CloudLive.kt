@@ -4,7 +4,12 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -54,6 +59,18 @@ class CloudLive(
     /** Czy tę notatkę prowadzi teraz sesja na żywo - synchronizacja ją wtedy omija. */
     fun isLive(noteId: String): Boolean =
         sessions[noteId]?.status?.value.let { it == LiveStatus.LIVE || it == LiveStatus.CONNECTING }
+
+    /**
+     * Czy serwer ma już to, co jest na ekranie tej notatki - wysłane na
+     * żywo. Kolejka synchronizacji trzyma wtedy jeszcze wpis (sesja nie
+     * wysyła całości), a ikona chmury ma mimo to mówić „na serwerze".
+     */
+    fun isDelivered(noteId: String): Boolean = sessions[noteId]?.delivered?.value == true
+
+    private val _deliveries = MutableStateFlow(0)
+
+    /** Coś się zmieniło w tym, co sesje mają już na serwerze - pora odczytać chmurę od nowa. */
+    val deliveries: StateFlow<Int> = _deliveries.asStateFlow()
 
     /** Sieć jest i synchronizacja nie jest wstrzymana - inaczej notatka stoi „Offline". */
     private fun canConnect(): Boolean = !pause.isPaused() && client.hasNetwork()
@@ -114,6 +131,13 @@ class CloudLive(
         }
         sessions.put(noteId, session)?.close()
         session.start()
+        scope.launch {
+            // Zamknięta sesja stoi na OFF - wtedy kończy się i to zbieranie.
+            combine(session.status, session.delivered) { status, delivered -> status to delivered }
+                .takeWhile { (status, _) -> status != LiveStatus.OFF }
+                .collect { _deliveries.update { it + 1 } }
+            _deliveries.update { it + 1 }
+        }
         return Handle(session, path, noteId)
     }
 

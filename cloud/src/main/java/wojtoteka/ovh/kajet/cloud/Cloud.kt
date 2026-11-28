@@ -78,6 +78,7 @@ object Cloud {
                 val live = CloudLive(appContext, repository, account, client, sync, bases, pause)
                 client.clientId = live.clientId
                 sync.liveCheck = live::isLive
+                sync.liveDelivered = live::isDelivered
                 // Edytory pytają o edycję na żywo przez repozytorium - nie znają chmury.
                 repository.live = live
                 val shared = SharedLibrary(repository, account, client, live)

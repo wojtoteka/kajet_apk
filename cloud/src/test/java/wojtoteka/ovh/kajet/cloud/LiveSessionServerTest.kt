@@ -148,7 +148,11 @@ class LiveSessionServerTest {
         // 1. Tablet dopisuje - telefon widzi.
         tablet.screen.edit { it + "Z tabletu\n" }
         tablet.session.localChanged()
+        // Nowa zmiana na ekranie: serwer jeszcze jej nie ma - chmurka szara.
+        assertThat(tablet.session.delivered.value).isFalse()
         waitFor("zmiany z tabletu na telefonie") { phone.screen.markdown.contains("Z tabletu") }
+        // Po wysyłce na żywo sesja sama mówi, że serwer ma to, co na ekranie.
+        waitFor("potwierdzenia wysyłki z tabletu") { tablet.session.delivered.value }
 
         // 2. Telefon poprawia pierwszy akapit - tablet widzi.
         phone.screen.edit { it.replace("Pierwszy akapit", "Pierwszy akapit, poprawiony") }

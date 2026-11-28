@@ -245,6 +245,22 @@ object TextCommands {
         return doc.fieldAfter(doc.write(), from, to)
     }
 
+    // --- Twarda spacja ---
+
+    /**
+     * Twarda spacja (U+00A0): wygląda jak zwykła, ale wiersz się na niej nie
+     * łamie - „w domu" nie zostawi „w" samego na końcu wiersza. W zapisie
+     * notatki stoi tym samym znakiem, tak samo czyta go strona i wydruk.
+     */
+    const val HARD_SPACE = "\u00A0"
+
+    /** Pole po wpisaniu [text] w miejsce kursora albo zaznaczenia - jak z klawiatury. */
+    fun typedAtCursor(field: TextFieldValue, text: String): TextFieldValue {
+        val from = field.selection.min
+        val next = field.text.substring(0, from) + text + field.text.substring(field.selection.max)
+        return TextFieldValue(next, TextRange(from + text.length))
+    }
+
     // --- Budowa akapitu ---
 
     /**

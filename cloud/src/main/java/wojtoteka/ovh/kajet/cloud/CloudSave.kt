@@ -40,6 +40,8 @@ class CloudSaveStatus(
             parts.sync.state.map { },
             parts.sync.stuck.map { },
             parts.pause.until.map { },
+            // Wysyłka na żywo nie rusza kolejki - sesje mówią same.
+            parts.live.deliveries.map { },
         )
     }
 

@@ -103,6 +103,16 @@ class LiveSession(
     private val _lastAuthor = MutableStateFlow<String?>(null)
     val lastAuthor: StateFlow<String?> = _lastAuthor.asStateFlow()
 
+    /*
+      Czy serwer ma dokładnie to, co jest na ekranie - potwierdzone wysyłką
+      albo sprawdzeniem, że nie ma czego wysłać. Notatka otwarta na żywo
+      zostaje w kolejce synchronizacji (sesja wysyła ją deltami), więc sama
+      kolejka mówiła „czeka na chmurę": pasek pokazywał szarą, przekreśloną
+      chmurkę obok „Połączono". Ta flaga mówi prawdę o chmurze także wtedy.
+    */
+    private val _delivered = MutableStateFlow(false)
+    val delivered: StateFlow<Boolean> = _delivered.asStateFlow()
+
     @Volatile
     var readOnly: Boolean = start.readOnly
         private set
@@ -119,7 +129,9 @@ class LiveSession(
 
     /** Edytor zapisał zmianę - wyślemy ją po krótkiej chwili (sklejając serię). */
     fun localChanged() {
-        if (active) wake.trySend(Unit)
+        if (!active) return
+        _delivered.value = false
+        wake.trySend(Unit)
     }
 
     /**
@@ -329,7 +341,11 @@ class LiveSession(
             if (inflight || _status.value != LiveStatus.LIVE) return false
             val known = base ?: return false
             val now = document.snapshot() ?: return false
-            delta = LiveMerge.diff(known, now.content) ?: return false
+            delta = LiveMerge.diff(known, now.content) ?: run {
+                // Nic do wysłania: serwer ma to, co na ekranie.
+                _delivered.value = true
+                return false
+            }
             sending = now.content
             from = version
             inflight = true

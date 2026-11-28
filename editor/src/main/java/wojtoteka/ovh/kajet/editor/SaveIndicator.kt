@@ -18,7 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -33,6 +37,7 @@ import wojtoteka.ovh.kajet.core.design.icon.KajetIcons
 import wojtoteka.ovh.kajet.core.text.LocalStrings
 import wojtoteka.ovh.kajet.core.text.Strings
 import wojtoteka.ovh.kajet.core.text.savedAt
+import kotlinx.coroutines.delay
 import java.util.Calendar
 
 @Composable
@@ -51,7 +56,8 @@ fun SaveIndicator(
 ) {
     val colors = Kajet.colors
     val words = LocalStrings.current
-    val (label, color) = when (state) {
+    val shown = calm(state)
+    val (label, color) = when (shown) {
         SaveState.LOADING -> words.loading to colors.muted
         SaveState.CHANGED -> words.changesWaiting to colors.muted
         SaveState.SAVING -> words.saving to colors.accent
@@ -65,7 +71,7 @@ fun SaveIndicator(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-            when (state) {
+            when (shown) {
                 SaveState.SAVING, SaveState.LOADING -> SpinningRing(color)
 
                 SaveState.SAVED -> Icon(
@@ -105,7 +111,7 @@ fun SaveIndicator(
         )
 
         AnimatedVisibility(
-            visible = inCloud != null && state == SaveState.SAVED,
+            visible = inCloud != null && shown == SaveState.SAVED,
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
@@ -123,6 +129,57 @@ fun SaveIndicator(
 
         if (live != null) LiveLabel(live)
     }
+}
+
+/**
+ * Stan zapisu, który widać na pasku - spokojniejszy niż ten prawdziwy.
+ *
+ * Autozapis idzie po każdej krótkiej przerwie w pisaniu, a zapis na dysk
+ * trwa ułamek sekundy, więc przy pisaniu pasek skakał co chwilę: „Zmiany
+ * czekają", „Zapisuję…", „Zapisane 12:01" i od nowa - i migał. Teraz przez
+ * całą serię pisania stoi „Zapisuję…", a „Zapisane" wraca dopiero po
+ * [SaveCalm.SETTLE_MS] bez nowych zmian. Zapis chodzi przy tym jak dotąd,
+ * zmienia się tylko napis.
+ */
+@Composable
+private fun calm(state: SaveState): SaveState {
+    var shown by remember { mutableStateOf(state) }
+    LaunchedEffect(state) {
+        shown = SaveCalm.now(shown, state)
+        val later = SaveCalm.later(state) ?: return@LaunchedEffect
+        if (shown == later) return@LaunchedEffect
+        delay(SaveCalm.waitFor(state))
+        shown = later
+    }
+    return shown
+}
+
+/** Rachunek [calm] bez Compose - żeby dało się go sprawdzić testem. */
+internal object SaveCalm {
+    /** Ile musi minąć od zapisu bez nowych zmian, zanim pasek powie „Zapisane". */
+    const val SETTLE_MS = 2_000L
+
+    /**
+     * Po tylu milisekundach „Zmiany czekają" przestaje udawać zapis: zapis,
+     * który nie ruszył (notatkę skasowano gdzie indziej), ma być widać.
+     */
+    const val STUCK_MS = 3_000L
+
+    /** Co pokazać zaraz po zmianie prawdziwego stanu na [state], gdy widać [shown]. */
+    fun now(shown: SaveState, state: SaveState): SaveState = when (state) {
+        SaveState.CHANGED, SaveState.SAVING -> SaveState.SAVING
+        SaveState.SAVED -> if (shown == SaveState.SAVING) SaveState.SAVING else SaveState.SAVED
+        else -> state
+    }
+
+    /** Co pokazać, kiedy [state] potrwa [waitFor]; null - nic się już nie zmieni. */
+    fun later(state: SaveState): SaveState? = when (state) {
+        SaveState.SAVED -> SaveState.SAVED
+        SaveState.CHANGED -> SaveState.CHANGED
+        else -> null
+    }
+
+    fun waitFor(state: SaveState): Long = if (state == SaveState.CHANGED) STUCK_MS else SETTLE_MS
 }
 
 @Composable

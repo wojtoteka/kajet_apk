@@ -507,4 +507,81 @@ class TextEditTest {
 
         assertThat(field.text).isEqualTo("1. raz\n\n2. dwa")
     }
+
+    // --- Dopisanie czegoś nad listą ---
+
+    @Test
+    fun `enter na poczatku pierwszej pozycji i backspace zostawia liste od jedynki`() {
+        // „Tekst", pod nim lista; człowiek chce wiersz między nimi.
+        val field = Field("Tekst\n1. raz\n2. dwa\n3. trzy", visibleCursor = 9)
+        field.enter()
+        assertThat(field.text).isEqualTo("Tekst\n1. \n2. raz\n3. dwa\n4. trzy")
+
+        // Wraca do pustej pozycji i zdejmuje z niej numer.
+        field.tap(9)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("Tekst\n\n1. raz\n2. dwa\n3. trzy")
+
+        field.type("Nowy akapit")
+        assertThat(field.text).isEqualTo("Tekst\nNowy akapit\n1. raz\n2. dwa\n3. trzy")
+        assertThat(field.shown).isEqualTo("Tekst\nNowy akapit\n1. raz\n2. dwa\n3. trzy")
+    }
+
+    @Test
+    fun `enter w pustej pierwszej pozycji oddaje jej numer reszcie listy`() {
+        val field = Field("1. \n2. raz\n3. dwa", visibleCursor = 3)
+        field.enter()
+
+        assertThat(field.text).isEqualTo("\n1. raz\n2. dwa")
+    }
+
+    @Test
+    fun `zdjecie numeru z pierwszej pozycji z tresca liczy reszte od jedynki`() {
+        val field = Field("1. Tytul\n2. raz\n3. dwa", visibleCursor = 3)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("Tytul\n1. raz\n2. dwa")
+    }
+
+    @Test
+    fun `zdjecie numeru ze srodka liczy dalej po kolei`() {
+        val field = Field("1. raz\n2. dwa\n3. trzy", visibleCursor = 10)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("1. raz\ndwa\n2. trzy")
+    }
+
+    @Test
+    fun `numer z paska zdjety z pierwszej pozycji przechodzi na nastepna`() {
+        val field = Field("1. raz\n2. dwa\n3. trzy", visibleCursor = 4)
+        field.paragraphs(LineKind.NUMBER)
+
+        assertThat(field.text).isEqualTo("raz\n1. dwa\n2. trzy")
+    }
+
+    @Test
+    fun `lista od piatki zostaje od piatki po zdjeciu pierwszej pozycji`() {
+        val field = Field("5. raz\n6. dwa", visibleCursor = 3)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("raz\n5. dwa")
+    }
+
+    @Test
+    fun `skasowanie od poczatku pierwszej pozycji w glab drugiej zostawia jedynke`() {
+        val field = Field("1. raz\n2. dwa\n3. trzy")
+        field.select(3, 11)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("1. wa\n2. trzy")
+    }
+
+    @Test
+    fun `numer oddany nad lista nie przechodzi przez akapit z trescia`() {
+        val field = Field("1. raz\nakapit\n4. dalej", visibleCursor = 3)
+        field.backspace()
+
+        assertThat(field.text).isEqualTo("raz\nakapit\n4. dalej")
+    }
 }

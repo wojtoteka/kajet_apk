@@ -63,6 +63,13 @@ class Sync(
     private fun isLive(noteId: String): Boolean =
         runCatching { liveCheck?.invoke(noteId) == true }.getOrDefault(false)
 
+    /** Czy sesja na żywo potwierdziła, że serwer ma to, co na ekranie tej notatki. */
+    @Volatile
+    var liveDelivered: ((noteId: String) -> Boolean)? = null
+
+    private fun isDeliveredLive(noteId: String): Boolean =
+        runCatching { liveDelivered?.invoke(noteId) == true }.getOrDefault(false)
+
     /**
      * Czy synchronizacja jest wstrzymana w ustawieniach ([SyncPause]). Wtedy
      * wszystko zachowuje się jak bez sieci: zmiany czekają w kolejce.
@@ -161,7 +168,10 @@ class Sync(
         val known = !id.isNullOrBlank() && knownVersion(id) > 0
         // Wstrzymana synchronizacja wygląda w notatce jak brak sieci: szara chmura.
         if (signedIn && isPaused()) return false
-        return cloudSaveState(signedIn = signedIn, inQueue = queued, knownOnServer = known)
+        // Notatka otwarta na żywo stoi w kolejce, choć jej zmiany już pojechały
+        // deltami - wtedy liczy się potwierdzenie z sesji, nie sama kolejka.
+        val sentLive = !id.isNullOrBlank() && isDeliveredLive(id)
+        return cloudSaveState(signedIn = signedIn, inQueue = queued && !sentLive, knownOnServer = known || sentLive)
     }
 
     fun reportChange(path: String, noteId: String) {
